@@ -1,0 +1,59 @@
+{
+  "company": {
+    "name": "Acme Inc.",
+    "domain": "acme.com"
+  },
+  "users": [
+    {
+      "first_name": "Jane",
+      "last_name": "Doe",
+      "email": "jane@acme.com",
+      "password": "PutTheirPasswordHere1!",
+      "role": "admin",
+      "department": "Engineering",
+      "job_title": "CTO"
+    },
+    {
+      "first_name": "John",
+      "last_name": "Smith",
+      "email": "john@acme.com",
+      "password": "PutTheirPasswordHere1!",
+      "role": "manager",
+      "department": "Engineering",
+      "job_title": "Engineering Manager"
+    },
+    {
+      "first_name": "Ana",
+      "last_name": "Garcia",
+      "email": "ana@acme.com",
+      "password": "PutTheirPasswordHere1!",
+      "role": "employee",
+      "department": "Sales",
+      "job_title": "Account Executive"
+    }
+  ],
+  "teams": [
+    {
+      "name": "Core Platform",
+      "department": "Engineering",
+      "manager": "john@acme.com",
+      "members": ["jane@acme.com", "john@acme.com"]
+    }
+  ],
+  "channels": [
+    {
+      "name": "general",
+      "description": "Company-wide conversation",
+      "team": null,
+      "creator": "jane@acme.com",
+      "members": "all"
+    },
+    {
+      "name": "releases",
+      "description": "Release coordination",
+      "team": "Core Platform",
+      "creator": "john@acme.com",
+      "members": ["jane@acme.com", "john@acme.com"]
+    }
+  ]
+}

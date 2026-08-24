@@ -1,0 +1,13 @@
+{
+  "name": "kneachat",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "client": "npm --prefix client start",
+    "server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix client test",
+    "install:client": "npm --prefix client install",
+    "install:server": "npm --prefix server install"
+  }
+}
