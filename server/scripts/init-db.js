@@ -480,6 +480,189 @@ async function applyMigrations(admin) {
     );
     console.log('📁 Created shared_files, file_versions, file_permissions tables (migration 013).');
   }
+
+  // Migration 015: meeting enhancements — fix participaints typo, add calendar,
+  // recording, and per-user meeting reminders + notes tables.
+  const [meetingTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'meetings'`,
+    [DB_NAME],
+  );
+  if (meetingTables[0].count > 0) {
+    const [partCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'meetings' AND column_name = 'participants'`,
+      [DB_NAME],
+    );
+    const [badCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'meetings' AND column_name = 'participaints'`,
+      [DB_NAME],
+    );
+    if (partCols[0].count === 0 && badCols[0].count > 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE meetings CHANGE participaints participants JSON NOT NULL COMMENT 'Array of user_id integer';`,
+      );
+      console.log('📅 Fixed meetings.participaints typo (migration 015).');
+    }
+
+    const [statusCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'meetings' AND column_name = 'status'`,
+      [DB_NAME],
+    );
+    if (statusCols[0].count > 0) {
+      const [badEnum] = await admin.query(
+        `SELECT COUNT(*) AS count FROM information_schema.columns
+         WHERE table_schema = ? AND table_name = 'meetings'
+         AND column_name = 'status'
+         AND column_type LIKE '%schecduled%'`,
+        [DB_NAME],
+      );
+      if (badEnum[0].count > 0) {
+        await admin.query(
+          `USE \`${DB_NAME}\`; UPDATE meetings SET status = 'scheduled' WHERE status = 'schecduled';`,
+        );
+        await admin.query(
+          `USE \`${DB_NAME}\`; ALTER TABLE meetings MODIFY status ENUM('scheduled', 'completed', 'cancelled') DEFAULT 'scheduled';`,
+        );
+        console.log('📅 Fixed meetings.status ENUM typo (migration 015).');
+      }
+    }
+
+    const [recordingUrlCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'meetings' AND column_name = 'recording_url'`,
+      [DB_NAME],
+    );
+    if (recordingUrlCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE meetings
+         ADD COLUMN recording_url VARCHAR(500) NULL AFTER status,
+         ADD COLUMN recording_status ENUM('none','recording','processed','failed') NOT NULL DEFAULT 'none' AFTER recording_url,
+         ADD COLUMN calendar_event_id VARCHAR(255) NULL AFTER recording_status,
+         ADD COLUMN calendar_provider ENUM('google','outlook','ical') NULL AFTER calendar_event_id,
+         ADD COLUMN meeting_link VARCHAR(500) NULL AFTER calendar_provider,
+         ADD COLUMN remind_before_minutes INT NOT NULL DEFAULT 15 AFTER meeting_link;`,
+      );
+      console.log('📅 Added meeting enhancements columns (migration 015).');
+    }
+    // Migration 015 (file): recurring meetings — add recurrence fields.
+    const [recurrenceCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'meetings' AND column_name = 'recurrence_pattern'`,
+      [DB_NAME],
+    );
+    if (recurrenceCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE meetings
+         ADD COLUMN recurrence_pattern ENUM('none', 'daily', 'weekly', 'monthly') NOT NULL DEFAULT 'none' AFTER remind_before_minutes,
+         ADD COLUMN recurrence_interval INT NOT NULL DEFAULT 1 AFTER recurrence_pattern,
+         ADD COLUMN recurrence_end_date DATE NULL AFTER recurrence_interval,
+         ADD COLUMN recurrence_days JSON NULL COMMENT 'Array of weekday integers for weekly recurrence' AFTER recurrence_end_date;`,
+      );
+      console.log('🔁 Added recurring meetings columns (migration 015).');
+    }
+
+    // Migration 014 (file): meeting attendees (RSVP).
+    const [attendeeTables] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.tables
+       WHERE table_schema = ? AND table_name = 'meeting_attendees'`,
+      [DB_NAME],
+    );
+    if (attendeeTables[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; CREATE TABLE meeting_attendees (
+          id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+          meeting_id BIGINT UNSIGNED NOT NULL,
+          user_id BIGINT UNSIGNED NOT NULL,
+          rsvp_status ENUM('pending', 'accepted', 'declined', 'maybe') NOT NULL DEFAULT 'pending',
+          responded_at DATETIME NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_meeting_user (meeting_id, user_id),
+          FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_meeting_attendees_meeting (meeting_id),
+          INDEX idx_meeting_attendees_user (user_id),
+          INDEX idx_meeting_attendees_status (rsvp_status)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+      );
+      console.log('🙋 Created meeting_attendees table (migration 014).');
+    }
+
+    // Migration 016 (file): meeting attachments.
+    const [meetingAttachmentTables] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.tables
+       WHERE table_schema = ? AND table_name = 'meeting_attachments'`,
+      [DB_NAME],
+    );
+    if (meetingAttachmentTables[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; CREATE TABLE meeting_attachments (
+          id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+          meeting_id BIGINT UNSIGNED NOT NULL,
+          uploaded_by BIGINT UNSIGNED NOT NULL,
+          file_name VARCHAR(255) NOT NULL,
+          file_url VARCHAR(500) NOT NULL,
+          file_type VARCHAR(100),
+          file_size BIGINT UNSIGNED,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+          FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+          FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE,
+          INDEX idx_meeting_attachments_meeting (meeting_id),
+          INDEX idx_meeting_attachments_uploader (uploaded_by)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+      );
+      console.log('📎 Created meeting_attachments table (migration 016).');
+    }
+  }
+
+  const [noteTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'meeting_notes'`,
+    [DB_NAME],
+  );
+  if (noteTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE meeting_notes (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        meeting_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        content TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_meeting_notes_meeting (meeting_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('📝 Created meeting_notes table (migration 015).');
+  }
+
+  const [meetingReminderTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'meeting_reminders'`,
+    [DB_NAME],
+  );
+  if (meetingReminderTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE meeting_reminders (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        meeting_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        remind_at DATETIME NOT NULL,
+        is_sent TINYINT(1) NOT NULL DEFAULT 0,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (meeting_id) REFERENCES meetings(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        UNIQUE KEY uq_meeting_user_reminder (meeting_id, user_id),
+        INDEX idx_meeting_reminders_remind_at (remind_at, is_sent)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('⏰ Created meeting_reminders table (migration 015).');
+  }
 }
 
 main().catch(async (error) => {

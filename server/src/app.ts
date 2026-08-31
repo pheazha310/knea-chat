@@ -22,14 +22,25 @@ import { createReminderRouter } from './routes/reminder.routes';
 import { createBookmarkMessageRouter, createBookmarkListRouter } from './routes/bookmark.routes';
 import { createSharedFileRouter } from './routes/sharedFile.routes';
 import { errorHandler } from './middleware/error.middleware';
+import { createMeetingRouter } from './routes/meeting.routes';
 
 export const app = express();
 
 // ============ MIDDLEWARE ============
 // CORS configuration
+const defaultOrigins = ['http://localhost:3000', 'http://localhost:3001'];
+const allowedOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
+  : defaultOrigins;
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -77,6 +88,7 @@ app.use('/api/notifications', container.auth.authenticate, createNotificationRou
 app.use('/api/companies', container.auth.authenticate, createCompanyRouter(container.companyController, container.auth));
 app.use('/api/departments', container.auth.authenticate, createDepartmentRouter(container.departmentController, container.auth));
 app.use('/api/announcements', container.auth.authenticate, createAnnouncementRouter(container.announcementController, container.auth));
+app.use('/api/meetings', container.auth.authenticate, createMeetingRouter(container.meetingController, container.auth));
 // Settings has its own auth handling: GET /api/settings/public is open so the
 // login page can render maintenance/registration state pre-auth.
 app.use('/api/settings', createSystemSettingRouter(container.systemSettingController, container.auth));

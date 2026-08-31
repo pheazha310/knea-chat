@@ -1,58 +1,16 @@
 {
-  "name": "client",
-  "version": "0.1.0",
+  "name": "kneachat",
   "private": true,
-  "dependencies": {
-    "@testing-library/dom": "^10.4.1",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.2",
-    "@testing-library/user-event": "^13.5.0",
-    "axios": "^1.19.0",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2",
-    "react-scripts": "5.0.1",
-    "socket.io-client": "^4.8.3",
-    "web-vitals": "^2.1.4",
-    "ws": "^8.21.2",
-    "zustand": "^5.0.15"
-  },
+  "version": "1.0.0",
   "scripts": {
-    "start": "react-scripts start",
-    "build": "react-scripts build",
-    "test": "react-scripts test",
-    "eject": "react-scripts eject"
-  },
-  "eslintConfig": {
-    "extends": [
-      "react-app",
-      "react-app/jest"
-    ]
-  },
-  "jest": {
-    "moduleNameMapper": {
-      "^react-router/dom$": "<rootDir>/node_modules/react-router/dist/development/dom-export.js"
-    }
-  },
-  "browserslist": {
-    "production": [
-      ">0.2%",
-      "not dead",
-      "not op_mini all"
-    ],
-    "development": [
-      "last 1 chrome version",
-      "last 1 firefox version",
-      "last 1 safari version"
-    ]
+    "client": "npm --prefix client start",
+    "server": "npm --prefix server run dev",
+    "build": "npm --prefix client run build",
+    "test": "npm --prefix client test",
+    "install:client": "npm --prefix client install",
+    "install:server": "npm --prefix server install"
   },
   "devDependencies": {
-    "@types/jest": "^27.5.2",
-    "@types/node": "^20.17.0",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.4",
-    "autoprefixer": "^10.5.4",
-    "postcss": "^8.5.26",
-    "tailwindcss": "^3.4.19"
+    "concurrently": "^10.0.5"
   }
 }

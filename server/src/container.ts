@@ -26,6 +26,11 @@ import { AnnouncementRepository } from './repositories/announcementRepository';
 import { ReminderRepository } from './repositories/reminderRepository';
 import { BookmarkRepository } from './repositories/bookmarkRepository';
 import { SharedFileRepository } from './repositories/sharedFileRepository';
+import { MeetingRepository } from './repositories/meetingRepository';
+import { MeetingNoteRepository } from './repositories/meetingNoteRepository';
+import { MeetingReminderRepository } from './repositories/meetingReminderRepository';
+import { MeetingAttendeeRepository } from './repositories/meetingAttendeeRepository';
+import { MeetingAttachmentRepository } from './repositories/meetingAttachmentRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -43,6 +48,7 @@ import { AnnouncementService } from './services/Announcement.service';
 import { ReminderService } from './services/Reminder.service';
 import { BookmarkService } from './services/Bookmark.service';
 import { SharedFileService } from './services/SharedFile.service';
+import { MeetingService } from './services/Meeting.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -60,6 +66,7 @@ import { AnnouncementController } from './controllers/announcement.controller';
 import { ReminderController } from './controllers/reminder.controller';
 import { BookmarkController } from './controllers/bookmark.controller';
 import { SharedFileController } from './controllers/sharedFile.controller';
+import { MeetingController } from './controllers/meeting.controller';
 
 // Middleware
 import { createAuthMiddleware } from './middleware/auth.middleware';
@@ -92,6 +99,11 @@ const announcementRepository = new AnnouncementRepository(db);
 const reminderRepository = new ReminderRepository(db);
 const bookmarkRepository = new BookmarkRepository(db);
 const sharedFileRepository = new SharedFileRepository(db);
+const meetingRepository = new MeetingRepository(db);
+const meetingNoteRepository = new MeetingNoteRepository(db);
+const meetingReminderRepository = new MeetingReminderRepository(db);
+const meetingAttendeeRepository = new MeetingAttendeeRepository(db);
+const meetingAttachmentRepository = new MeetingAttachmentRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -152,6 +164,15 @@ const bookmarkService = new BookmarkService(
 const sharedFileService = new SharedFileService(
   sharedFileRepository,
 );
+const meetingService = new MeetingService(
+  meetingRepository,
+  meetingNoteRepository,
+  meetingReminderRepository,
+  meetingAttendeeRepository,
+  meetingAttachmentRepository,
+  notificationRepository,
+  userRepository,
+);
 
 // ---------------------------------------------------------------------------
 // WebSocket handlers (receive their services/repositories)
@@ -198,6 +219,7 @@ const announcementController = new AnnouncementController(announcementService);
 const reminderController = new ReminderController(reminderService);
 const bookmarkController = new BookmarkController(bookmarkService);
 const sharedFileController = new SharedFileController(sharedFileService);
+const meetingController = new MeetingController(meetingService);
 
 // ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks)
@@ -225,6 +247,11 @@ export const container = {
   reminderRepository,
   bookmarkRepository,
   sharedFileRepository,
+  meetingRepository,
+  meetingNoteRepository,
+  meetingReminderRepository,
+  meetingAttendeeRepository,
+  meetingAttachmentRepository,
   // services
   systemSettingService,
   notificationService,
@@ -241,6 +268,7 @@ export const container = {
   reminderService,
   bookmarkService,
   sharedFileService,
+  meetingService,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -264,6 +292,7 @@ export const container = {
   reminderController,
   bookmarkController,
   sharedFileController,
+  meetingController,
   // middleware
   auth,
 };

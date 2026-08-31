@@ -7,7 +7,7 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "start": "node dist/src/server.js",
-    "dev": "tsc && (tsc -w & nodemon dist/src/server.js)",
+    "dev": "tsc && (tsc -w & nodemon --watch dist dist/src/server.js)",
     "daemon": "python3 scripts/kneachat-daemon.py start",
     "daemon:stop": "python3 scripts/kneachat-daemon.py stop",
     "daemon:status": "python3 scripts/kneachat-daemon.py status",

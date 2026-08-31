@@ -34,6 +34,14 @@ setInterval(async () => {
   }
 }, REMINDER_POLL_INTERVAL_MS).unref();
 
+setInterval(async () => {
+  try {
+    await container.meetingService.processDueMeetingReminders(new Date());
+  } catch {
+    // Scheduler failures are non-fatal; the next tick will retry.
+  }
+}, REMINDER_POLL_INTERVAL_MS).unref();
+
 // ============ SERVER START ============
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || 'localhost';
