@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Chat UI</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+  body {
+    background: #f3f4f6;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 40px 20px;
+  }
+
+  .chat-container {
+    width: 100%;
+    max-width: 420px;
+    background: #ffffff;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.12);
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    max-width: 85%;
+    animation: pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275) both;
+  }
+
+  .message.sent {
+    align-self: flex-end;
+    align-items: flex-end;
+  }
+
+  .message.received {
+    align-self: flex-start;
+    align-items: flex-start;
+  }
+
+  @keyframes pop {
+    from { transform: scale(0.85); opacity: 0; }
+    to { transform: scale(1); opacity: 1; }
+  }
+
+  .bubble {
+    padding: 12px 16px;
+    border-radius: 18px;
+    font-size: 14px;
+    line-height: 1.45;
+    position: relative;
+    word-wrap: break-word;
+  }
+
+  .message.sent .bubble {
+    background: linear-gradient(135deg, #6c5ce7, #a29bfe);
+    color: #fff;
+    border-bottom-right-radius: 4px;
+  }
+
+  .message.received .bubble {
+    background: #ffffff;
+    color: #1f2937;
+    border: 1px solid #e5e7eb;
+    border-bottom-left-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+  }
+
+  .message-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    width: 100%;
+  }
+
+  .message-row.received { flex-direction: row; }
+  .message-row.sent { flex-direction: row-reverse; }
+
+  .avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #f9a825, #f57f17);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-weight: 700;
+    font-size: 13px;
+    flex-shrink: 0;
+  }
+
+  .meta {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .message.sent .meta { flex-direction: row-reverse; }
+
+  .emojis {
+    display: flex;
+    gap: 4px;
+    font-size: 18px;
+    padding: 4px 8px;
+    background: rgba(108, 92, 231, 0.08);
+    border-radius: 20px;
+    border: 1px solid rgba(108, 92, 231, 0.15);
+  }
+
+  .voice-bubble {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f1f8e9;
+    border: 1px solid #dcedc8;
+    padding: 14px 16px;
+    border-radius: 18px;
+    border-bottom-right-radius: 4px;
+  }
+
+  .play-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #43a047, #66bb6a);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    cursor: pointer;
+    flex-shrink: 0;
+    border: none;
+    box-shadow: 0 4px 12px rgba(67, 160, 71, 0.3);
+    transition: transform 0.15s ease;
+  }
+
+  .play-btn:hover { transform: scale(1.08); }
+  .play-btn:active { transform: scale(0.95); }
+
+  .waveform {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    height: 32px;
+  }
+
+  .bar {
+    width: 3px;
+    background: #81c784;
+    border-radius: 2px;
+    transition: height 0.15s ease;
+  }
+
+  .voice-info {
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .duration {
+    font-size: 14px;
+    font-weight: 600;
+    color: #2e7d32;
+  }
+
+  .voice-meta {
+    font-size: 11px;
+    color: #7cb342;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .reply-badge {
+    font-size: 11px;
+    color: #9ca3af;
+    margin-bottom: 2px;
+    padding-left: 4px;
+  }
+
+  .timestamp {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #9ca3af;
+  }
+
+  .check { color: #43a047; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="chat-container">
+
+  <!-- Voice Message -->
+  <div class="message-row sent">
+    <div class="message sent" style="max-width:100%;flex:1;">
+      <div class="voice-bubble">
+        <button class="play-btn" onclick="togglePlay(this)">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+        <div class="waveform" id="waveform1"></div>
+        <div class="voice-info">
+          <div class="duration">0:05</div>
+          <div class="voice-meta">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>
+            87.1 KB
+          </div>
+          <div class="voice-meta">voice-1787283977681</div>
+        </div>
+      </div>
+      <div class="meta"><span class="timestamp">10:58</span> <span class="check">✓✓</span></div>
+    </div>
+  </div>
+
+  <!-- Emoji Reactions -->
+  <div class="message-row sent">
+    <div class="emojis">
+      <span>🤦</span>
+      <span>🤦</span>
+    </div>
+  </div>
+
+  <!-- Purple Messages -->
+  <div class="message-row sent">
+    <div class="message sent">
+      <div class="bubble">nkl</div>
+      <div class="meta"><span class="timestamp">10:58</span> <span class="check">✓✓</span></div>
+    </div>
+  </div>
+
+  <div class="message-row sent">
+    <div class="message sent">
+      <div class="bubble">nm ,</div>
+      <div class="meta"><span class="timestamp">10:58</span> <span class="check">✓✓</span></div>
+    </div>
+  </div>
+
+  <!-- Received Messages -->
+  <div class="message-row received">
+    <div class="avatar">NS</div>
+    <div class="message received">
+      <div class="reply-badge">Nuna Su · 8m</div>
+      <div class="bubble">k;.,vfdb</div>
+      <div class="meta"><span class="timestamp">10:58</span></div>
+    </div>
+  </div>
+
+  <div class="message-row received">
+    <div class="avatar">NS</div>
+    <div class="message received">
+      <div class="bubble">gbgm g</div>
+      <div class="meta"><span class="timestamp">10:58</span></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+  function generateWaveform(id, count) {
+    const container = document.getElementById(id);
+    if (!container) return;
+    for (let i = 0; i < count; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'bar';
+      const h = Math.floor(Math.random() * 20) + 6;
+      bar.style.height = h + 'px';
+      container.appendChild(bar);
+    }
+  }
+
+  generateWaveform('waveform1', 28);
+
+  let playing = false;
+  function togglePlay(btn) {
+    playing = !playing;
+    const icon = btn.querySelector('svg');
+    if (playing) {
+      icon.innerHTML = '<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>';
+      animateWaveform();
+    } else {
+      icon.innerHTML = '<path d="M8 5v14l11-7z"/>';
+    }
+  }
+
+  let animFrame;
+  function animateWaveform() {
+    const bars = document.querySelectorAll('.bar');
+    function tick() {
+      if (!playing) return;
+      bars.forEach(bar => {
+        const h = Math.floor(Math.random() * 22) + 4;
+        bar.style.height = h + 'px';
+      });
+      animFrame = requestAnimationFrame(tick);
+    }
+    tick();
+  }
+</script>
+
+</body>
+</html>

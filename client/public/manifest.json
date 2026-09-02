@@ -1,0 +1,16 @@
+{
+  "short_name": "KneaChat",
+  "name": "KneaChat — Connect. Communicate. Work Together.",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#635bdb",
+  "background_color": "#ffffff"
+}
