@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store';
-import { ChannelModel, TeamModel, UserModel } from '../models';
+import { ChannelModel, DepartmentModel, TeamModel, UserModel } from '../models';
 import ConfirmButton from '../components/common/ConfirmButton';
 import Icon from '../components/common/Icon';
 import type { IconName } from '../components/common/Icon';
@@ -9,7 +9,10 @@ import CreateTeamModal from '../components/modals/CreateTeamModal';
 import TeamModal from '../components/modals/TeamModal';
 import { SkeletonTable } from '../components/common/Skeleton';
 import { roleLabel } from '../utils/roles';
-import type { Channel, Team, User } from '../models';
+import type { Channel, Department, Team, User } from '../models';
+import ManagerAttendanceView from '../components/views/ManagerAttendanceView';
+
+type ManageTab = 'teams' | 'attendance';
 
 const MANAGER_ROLES = ['manager', 'admin', 'super_admin'];
 
@@ -44,6 +47,8 @@ const Manager = () => {
   const [editForm, setEditForm] = useState({ name: '', description: '' });
   const [viewingTeam, setViewingTeam] = useState<Team | null>(null);
   const [showCreate, setShowCreate] = useState(false);
+  const [tab, setTab] = useState<ManageTab>('teams');
+  const [departments, setDepartments] = useState<Department[]>([]);
 
   const role = user?.role || 'employee';
   const isManager = role === 'manager';
@@ -51,18 +56,21 @@ const Manager = () => {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [teamRes, userRes, chanRes] = await Promise.all([
+      const [teamRes, userRes, chanRes, deptRes] = await Promise.all([
         TeamModel.getAll(),
         UserModel.getAll({ limit: 200 }),
         ChannelModel.getAll(),
+        DepartmentModel.getAll(),
       ]);
       setTeams(teamRes.data.data.teams || []);
       setUsers(userRes.data.data.users || []);
       setChannels(chanRes.data.data.channels || []);
+      setDepartments(deptRes.data.data.departments || []);
     } catch {
       setTeams([]);
       setUsers([]);
       setChannels([]);
+      setDepartments([]);
     } finally {
       setLoading(false);
     }
@@ -134,6 +142,31 @@ const Manager = () => {
       </header>
 
       <main className="manager-content">
+        <div className="manager-tabs" role="tablist" aria-label="Management area">
+          <button
+            role="tab"
+            aria-selected={tab === 'teams'}
+            className={`manager-tab ${tab === 'teams' ? 'active' : ''}`}
+            onClick={() => setTab('teams')}
+          >
+            Teams
+          </button>
+          <button
+            role="tab"
+            aria-selected={tab === 'attendance'}
+            className={`manager-tab ${tab === 'attendance' ? 'active' : ''}`}
+            onClick={() => setTab('attendance')}
+          >
+            Attendance
+          </button>
+        </div>
+
+        {tab === 'attendance' && (
+          <ManagerAttendanceView departments={departments} users={users} />
+        )}
+
+        {tab === 'teams' && (
+        <>
         <div className="manager-hero">
           <div>
             <span className="manager-eyebrow">Team workspace</span>
@@ -254,9 +287,11 @@ const Manager = () => {
           )}
         </div>
 
-        <p className="manager-team-note">
-          Member management and team channels open in the “Manage” panel. Deleting a team is permanent.
-        </p>
+          <p className="manager-team-note">
+            Member management and team channels open in the “Manage” panel. Deleting a team is permanent.
+          </p>
+        </>
+        )}
       </main>
 
       {viewingTeam && (

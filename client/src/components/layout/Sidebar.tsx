@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../common/Icon';
 import type { IconName } from '../common/Icon';
@@ -6,19 +6,67 @@ import Avatar from '../common/Avatar';
 import Modal from '../modals/Modal';
 import type { User } from '../../models';
 
-export type AppView = 'home' | 'messages' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'notifs' | 'bookmarks' | 'files' | 'settings';
+export type AppView = 'home' | 'messages' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'attendance' | 'notifs' | 'bookmarks' | 'files' | 'settings';
 
-const NAV_ITEMS: Array<{ id: AppView; label: string; icon: IconName }> = [
-  { id: 'home', label: 'Home', icon: 'home' },
-  { id: 'messages', label: 'Messages', icon: 'message' },
-  { id: 'channels', label: 'Channels', icon: 'hash' },
-  { id: 'teams', label: 'Teams', icon: 'grid' },
-  { id: 'announcements', label: 'Announcements', icon: 'megaphone' },
-  { id: 'notifs', label: 'Notifs', icon: 'bell' },
-  { id: 'bookmarks', label: 'Bookmarks', icon: 'bookmark' },
-  { id: 'files', label: 'Files', icon: 'file' },
-  { id: 'settings', label: 'Settings', icon: 'gear' },
-  { id: 'meetings', label: 'Meetings', icon: 'calendar' },
+interface NavItemBase {
+  label: string;
+  icon: IconName;
+}
+
+/** Item that switches the active workspace view. */
+interface ViewNavItem extends NavItemBase {
+  kind: 'view';
+  id: AppView;
+}
+
+/** Item that navigates to a separate route. */
+interface LinkNavItem extends NavItemBase {
+  kind: 'link';
+  to: string;
+}
+
+type NavItem = ViewNavItem | LinkNavItem;
+
+interface NavGroup {
+  title?: string;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    items: [{ kind: 'view', id: 'home', label: 'Home', icon: 'home' }],
+  },
+  {
+    title: 'Communication',
+    items: [
+      { kind: 'view', id: 'messages', label: 'Messages', icon: 'message' },
+      { kind: 'view', id: 'channels', label: 'Channels', icon: 'hash' },
+      { kind: 'view', id: 'teams', label: 'Teams', icon: 'grid' },
+      { kind: 'view', id: 'announcements', label: 'Announcements', icon: 'megaphone' },
+      { kind: 'view', id: 'notifs', label: 'Notifs', icon: 'bell' },
+    ],
+  },
+  {
+    title: 'Meetings & Attendance',
+    items: [
+      { kind: 'view', id: 'meetings', label: 'Meetings', icon: 'calendar' },
+      { kind: 'view', id: 'attendance', label: 'Attendance', icon: 'clock' },
+    ],
+  },
+  {
+    title: 'Library',
+    items: [
+      { kind: 'view', id: 'bookmarks', label: 'Bookmarks', icon: 'bookmark' },
+      { kind: 'view', id: 'files', label: 'Files', icon: 'file' },
+    ],
+  },
+  {
+    title: 'User Settings',
+    items: [
+      { kind: 'link', to: '/profile', label: 'Profile', icon: 'user' },
+      { kind: 'view', id: 'settings', label: 'Settings', icon: 'gear' },
+    ],
+  },
 ];
 
 /** Rows shown in the Help & resources dialog. */
@@ -37,8 +85,88 @@ interface SidebarProps {
   user?: User | null;
 }
 
+const STORAGE_KEY = 'kneachat.sidebar.collapsedGroups';
+
+const readCollapsed = (): Set<string> => {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set();
+  } catch {
+    return new Set();
+  }
+};
+
 const Sidebar = ({ view, onSelectView, unreadCounts, user }: SidebarProps) => {
   const [showHelp, setShowHelp] = useState(false);
+  const [collapsed, setCollapsed] = useState<Set<string>>(readCollapsed);
+
+  // If the active view moves into a collapsed group, expand it so the
+  // current page is never hidden.
+  useEffect(() => {
+    const activeTitle = NAV_GROUPS.find((g) =>
+      g.items.some((i) => i.kind === 'view' && i.id === view),
+    )?.title;
+    if (activeTitle && collapsed.has(activeTitle)) {
+      setCollapsed((prev) => {
+        const next = new Set(prev);
+        next.delete(activeTitle);
+        return next;
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view]);
+
+  const toggleGroup = (title: string) => {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(title)) next.delete(title);
+      else next.add(title);
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(next)));
+      } catch {
+        // Storage may be unavailable (private mode) — ignore.
+      }
+      return next;
+    });
+  };
+
+  const badgeFor = (id: AppView): number =>
+    id === 'messages'
+      ? unreadCounts.messages
+      : id === 'channels'
+        ? unreadCounts.channels
+        : id === 'notifs'
+          ? unreadCounts.notifs
+          : 0;
+
+  const renderItem = (item: NavItem) => {
+    const icon = (
+      <span className="nav-icon">
+        <Icon name={item.icon} size={16} />
+      </span>
+    );
+    if (item.kind === 'link') {
+      return (
+        <Link key={item.to} to={item.to} className="nav-item">
+          {icon}
+          <span className="nav-label">{item.label}</span>
+        </Link>
+      );
+    }
+    const badge = badgeFor(item.id);
+    return (
+      <button
+        key={item.id}
+        className={`nav-item ${view === item.id ? 'active' : ''}`}
+        onClick={() => onSelectView(item.id)}
+        aria-current={view === item.id ? 'page' : undefined}
+      >
+        {icon}
+        <span className="nav-label">{item.label}</span>
+        {badge > 0 && <span className="nav-badge">{badge > 9 ? '9+' : badge}</span>}
+      </button>
+    );
+  };
 
   return (
     <aside className="sidebar">
@@ -61,37 +189,29 @@ const Sidebar = ({ view, onSelectView, unreadCounts, user }: SidebarProps) => {
       )}
 
       <nav className="sidebar-nav" aria-label="Workspace">
-        {NAV_ITEMS.map((item) => {
-          const badge =
-            item.id === 'messages'
-              ? unreadCounts.messages
-              : item.id === 'channels'
-                ? unreadCounts.channels
-                : item.id === 'notifs'
-                  ? unreadCounts.notifs
-                  : 0;
+        {NAV_GROUPS.map((group, gi) => {
+          const title = group.title;
+          const isCollapsed = title ? collapsed.has(title) : false;
           return (
-            <button
-              key={item.id}
-              className={`nav-item ${view === item.id ? 'active' : ''}`}
-              onClick={() => onSelectView(item.id)}
-              aria-current={view === item.id ? 'page' : undefined}
+            <div
+              className={`sidebar-nav-group${isCollapsed ? ' collapsed' : ''}`}
+              key={title ?? `group-${gi}`}
             >
-              <span className="nav-icon"><Icon name={item.icon} size={16} /></span>
-              <span className="nav-label">{item.label}</span>
-              {badge > 0 && <span className="nav-badge">{badge > 9 ? '9+' : badge}</span>}
-            </button>
+              {title && (
+                <button
+                  type="button"
+                  className="sidebar-nav-group-title"
+                  onClick={() => toggleGroup(title)}
+                  aria-expanded={!isCollapsed}
+                >
+                  <span>{title}</span>
+                  <Icon name="chevron-down" size={12} />
+                </button>
+              )}
+              {!isCollapsed && group.items.map(renderItem)}
+            </div>
           );
         })}
-      </nav>
-
-      <div className="sidebar-divider" />
-
-      <nav className="sidebar-nav" aria-label="Account">
-        <Link to="/profile" className="nav-item">
-          <span className="nav-icon"><Icon name="user" size={16} /></span>
-          <span className="nav-label">Profile</span>
-        </Link>
       </nav>
 
       <div className="sidebar-footer">

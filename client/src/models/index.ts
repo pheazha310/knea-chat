@@ -19,3 +19,4 @@ export * from './Search';
 export * from './Pagination';
 export * from './SharedFile';
 export * from './Meeting';
+export * from './Attendance';

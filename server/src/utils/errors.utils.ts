@@ -28,3 +28,12 @@ export const getSafeErrorMessage = (error: unknown): string => {
   }
   return error instanceof Error && error.message ? error.message : 'Internal server error';
 };
+
+/**
+ * A client-facing validation / business-rule rejection (HTTP 400). Services
+ * throw these instead of plain Errors so the global error handler responds
+ * 400 with the safe message instead of a generic 500.
+ */
+export const badRequest = (message: string): Error => {
+  return Object.assign(new Error(message), { statusCode: 400 });
+};

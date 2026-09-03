@@ -1,5 +1,6 @@
 /** Domain types — barrel export. */
 export * from './Announcement';
+export * from './Attendance';
 export * from './Auth';
 export * from './Bookmark';
 export * from './Channel';

@@ -28,6 +28,8 @@ const FORCE = process.argv.includes('--force');
 // Connection used by main(); also closed on failure so the process always exits.
 let admin = null;
 
+// Tables that FK-reference users/attendance rows must be dropped BEFORE their
+// parents, otherwise --force fails with foreign-key constraint errors.
 const TABLES = [
   'system_settings',
   'password_resets',
@@ -43,6 +45,13 @@ const TABLES = [
   'channels',
   'team_members',
   'teams',
+  // attendance feature (migration 017) — children before parents
+  'overtime_records',
+  'break_records',
+  'attendance_records',
+  'work_schedules',
+  'leave_requests',
+  'holidays',
   'users',
   'departments',
   'companies',
@@ -616,6 +625,55 @@ async function applyMigrations(admin) {
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
       );
       console.log('📎 Created meeting_attachments table (migration 016).');
+    }
+  }
+
+  // Migration 017: Employee Working Time & Attendance — work schedules,
+  // attendance records, breaks, leave requests, public holidays, overtime.
+  const [workScheduleTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'work_schedules'`,
+    [DB_NAME],
+  );
+  if (workScheduleTables[0].count === 0) {
+    const attendanceSql = fs.readFileSync(
+      path.join(__dirname, '..', 'database', 'migrations', '017_attendance.sql'),
+      'utf8',
+    );
+    const statements = attendanceSql
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n')
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    for (const statement of statements) {
+      await admin.query(`USE \`${DB_NAME}\`; ${statement};`);
+    }
+    console.log('⏱️  Created attendance tables (migration 017).');
+  }
+
+  // Migration 018: overtime_records.date — the work date an overtime request
+  // belongs to (independent of attendance_id, which may be null when the
+  // employee never clocked in that day).
+  const [overtimeTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'overtime_records'`,
+    [DB_NAME],
+  );
+  if (overtimeTables[0].count > 0) {
+    const [dateCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'overtime_records' AND column_name = 'date'`,
+      [DB_NAME],
+    );
+    if (dateCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE overtime_records
+         ADD COLUMN date DATE NULL AFTER employee_id,
+         ADD INDEX idx_overtime_records_date (date);`,
+      );
+      console.log('⏱️  Added overtime_records.date (migration 018).');
     }
   }
 

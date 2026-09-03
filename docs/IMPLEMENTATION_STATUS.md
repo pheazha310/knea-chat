@@ -123,6 +123,60 @@ Enforcement notes:
       another view
 - [x] Authenticated WebSocket connections
 
+### Employee Working Time & Attendance (Calendar)
+- [x] **Work schedules** — per-employee weekly schedule stored in MySQL
+      (`work_schedules`); defaults (Mon–Fri 08:00–17:00, 60 min break,
+      480 required minutes, Sat/Sun off) are materialized lazily, so nothing
+      is hard-coded at request time; managers customize any employee's week
+      via the Work Schedule editor (`GET/POST /api/work-schedules`)
+- [x] **Clock In / Clock Out** — server-generated timestamps only, one record
+      per employee per date (unique key), clock-out requires clock-in,
+      duplicate clock-ins/outs rejected, rate-limited endpoints; optional
+      Start/End Break with `break_records`
+- [x] **Attendance calculation on the backend** — late (from scheduled start),
+      early leave (from scheduled end), under-time, overtime (above required
+      minutes), and the status (present / late / absent / leave / holiday /
+      day_off / early_leave / under_time / overtime) are computed in
+      `AttendanceService`, never on the client
+- [x] **Employee calendar** — current month with working days / day off /
+      holiday / leave / attendance status per day, required vs actual hours,
+      overtime, late & early-leave minutes; clicking a date opens a detail
+      panel; monthly summary (working days, present/late/absent/leave, hours,
+      under-time, overtime, attendance rate)
+- [x] **Leave management** — employees submit annual / sick / personal / unpaid
+      requests; managers approve or reject; approved leave overrides normal
+      attendance and is never counted as absence; overlapping requests blocked
+- [x] **Overtime requests** — employees request overtime for a work date
+      (minutes + reason, linked to the day's attendance record when one
+      exists); managers approve / reject from the attendance console
+      (`POST/GET /api/overtime`, `PUT /api/overtime/:id/approve|reject`, table
+      `overtime_records` with a `date` column added in migration 018)
+- [x] **Holiday management** — managers create public holidays (e.g. Pchum Ben);
+      holidays override attendance with 0 required hours and block clock-in
+- [x] **Manager dashboard + employee×day table** — today's totals (present /
+      late / absent / on leave / day off / currently working / on break),
+      filters by department & status, per-employee drill-down calendar and
+      schedule editor, monthly report endpoint
+- [x] **WebSocket real-time** — `attendance:clocked_in/clocked_out/status_changed/break_started/break_ended`
+      events update the manager dashboard without a page refresh; the flow is
+      Employee → Express → MySQL → Redis Pub/Sub → WebSocket → dashboard
+- [x] **Redis** — attendance event pub/sub fan-out across server instances and
+      a short-TTL dashboard cache (invalidated on clock/break events), with a
+      transparent in-memory fallback when Redis is down; MySQL remains the
+      source of truth
+- [x] **Database (migration 017)** — `work_schedules`, `attendance_records`,
+      `break_records`, `leave_requests`, `holidays`, `overtime_records` with
+      foreign keys and indexes
+- [x] **Tests** — `server/test/attendance.service.test.ts` (35 tests: schedule
+      defaults/customization, clock-in/out calculations, breaks, month
+      summary, manager dashboard roll-up, employee×day table + report, leave &
+      holiday rules); client store + view tests
+      (`client/src/store/attendanceStore.test.ts`,
+      `client/src/components/views/attendanceViews.test.tsx`); live E2E script
+      (`server/e2e/attendance.e2e.js`, `npm run test:e2e:attendance` — 52
+      checks covering clock in/out, WebSocket events, schedules, leave
+      approval, holidays, overtime and permissions)
+
 ### Real company data
 - [x] **Company importer** (`npm run import:company -- <file.json|csv>`,
       template at `server/scripts/data/real-company.example.json`) — creates a

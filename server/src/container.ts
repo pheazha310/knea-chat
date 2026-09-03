@@ -31,6 +31,10 @@ import { MeetingNoteRepository } from './repositories/meetingNoteRepository';
 import { MeetingReminderRepository } from './repositories/meetingReminderRepository';
 import { MeetingAttendeeRepository } from './repositories/meetingAttendeeRepository';
 import { MeetingAttachmentRepository } from './repositories/meetingAttachmentRepository';
+import { WorkScheduleRepository } from './repositories/workScheduleRepository';
+import { AttendanceRepository } from './repositories/attendanceRepository';
+import { LeaveRequestRepository } from './repositories/leaveRequestRepository';
+import { HolidayRepository } from './repositories/holidayRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -49,6 +53,10 @@ import { ReminderService } from './services/Reminder.service';
 import { BookmarkService } from './services/Bookmark.service';
 import { SharedFileService } from './services/SharedFile.service';
 import { MeetingService } from './services/Meeting.service';
+import { WorkScheduleService } from './services/WorkSchedule.service';
+import { AttendanceService } from './services/Attendance.service';
+import { LeaveService } from './services/Leave.service';
+import { HolidayService } from './services/Holiday.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -67,6 +75,10 @@ import { ReminderController } from './controllers/reminder.controller';
 import { BookmarkController } from './controllers/bookmark.controller';
 import { SharedFileController } from './controllers/sharedFile.controller';
 import { MeetingController } from './controllers/meeting.controller';
+import { AttendanceController } from './controllers/attendance.controller';
+import { WorkScheduleController } from './controllers/workSchedule.controller';
+import { LeaveRequestController } from './controllers/leaveRequest.controller';
+import { HolidayController } from './controllers/holiday.controller';
 
 // Middleware
 import { createAuthMiddleware } from './middleware/auth.middleware';
@@ -78,6 +90,7 @@ import { TypingHandler } from './websocket/typing.handler';
 import { PresenceHandler } from './websocket/presence.handler';
 import { CallHandler } from './websocket/call.handler';
 import { ChatWebSocketServer } from './websocket/websocket.server';
+import { attendanceEventPublisher } from './websocket/attendance.events';
 
 // ---------------------------------------------------------------------------
 // Repositories (each receives the shared pool-backed Db)
@@ -104,6 +117,10 @@ const meetingNoteRepository = new MeetingNoteRepository(db);
 const meetingReminderRepository = new MeetingReminderRepository(db);
 const meetingAttendeeRepository = new MeetingAttendeeRepository(db);
 const meetingAttachmentRepository = new MeetingAttachmentRepository(db);
+const workScheduleRepository = new WorkScheduleRepository(db);
+const attendanceRepository = new AttendanceRepository(db);
+const leaveRequestRepository = new LeaveRequestRepository(db);
+const holidayRepository = new HolidayRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -173,6 +190,18 @@ const meetingService = new MeetingService(
   notificationRepository,
   userRepository,
 );
+const workScheduleService = new WorkScheduleService(workScheduleRepository, userRepository);
+const attendanceService = new AttendanceService(
+  attendanceRepository,
+  workScheduleService,
+  workScheduleRepository,
+  holidayRepository,
+  leaveRequestRepository,
+  userRepository,
+  attendanceEventPublisher,
+);
+const leaveService = new LeaveService(leaveRequestRepository, userRepository);
+const holidayService = new HolidayService(holidayRepository);
 
 // ---------------------------------------------------------------------------
 // WebSocket handlers (receive their services/repositories)
@@ -220,6 +249,10 @@ const reminderController = new ReminderController(reminderService);
 const bookmarkController = new BookmarkController(bookmarkService);
 const sharedFileController = new SharedFileController(sharedFileService);
 const meetingController = new MeetingController(meetingService);
+const attendanceController = new AttendanceController(attendanceService);
+const workScheduleController = new WorkScheduleController(workScheduleService);
+const leaveRequestController = new LeaveRequestController(leaveService);
+const holidayController = new HolidayController(holidayService);
 
 // ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks)
@@ -252,6 +285,10 @@ export const container = {
   meetingReminderRepository,
   meetingAttendeeRepository,
   meetingAttachmentRepository,
+  workScheduleRepository,
+  attendanceRepository,
+  leaveRequestRepository,
+  holidayRepository,
   // services
   systemSettingService,
   notificationService,
@@ -269,6 +306,10 @@ export const container = {
   bookmarkService,
   sharedFileService,
   meetingService,
+  workScheduleService,
+  attendanceService,
+  leaveService,
+  holidayService,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -293,6 +334,11 @@ export const container = {
   bookmarkController,
   sharedFileController,
   meetingController,
+  attendanceController,
+  workScheduleController,
+  leaveRequestController,
+  holidayController,
+  attendanceEventPublisher,
   // middleware
   auth,
 };

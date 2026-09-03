@@ -47,6 +47,8 @@ import { avatarClass } from "../utils/avatar";
 import { conversationIdOf } from "../utils/notifications";
 import { roleLabel } from "../utils/roles";
 import MeetingsView from "../components/views/MeetingsView";
+import AttendanceView from "../components/views/AttendanceView";
+import ManagerAttendanceView from "../components/views/ManagerAttendanceView";
 
 /** Shape used by the members panel (conversation members or user fallback). */
 type PanelMember = {
@@ -1130,6 +1132,15 @@ const Dashboard = () => {
               departments={departments}
               users={users}
             />
+          ) : view === "attendance" ? (
+            canManage ? (
+              <ManagerAttendanceView
+                departments={departments}
+                users={users}
+              />
+            ) : (
+              <AttendanceView />
+            )
           ) : view === "notifs" ? (
             <NotifsView
               notifications={notifications}

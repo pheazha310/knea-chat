@@ -46,9 +46,12 @@ const MessagesView = ({
   );
 
   const previewOf = (conv: Conversation) => {
+    // Prefer the live cache when this conversation was opened this session.
     const list = messages[conv.id];
-    if (!list || list.length === 0) return 'No messages yet';
-    return list[list.length - 1].content;
+    if (list && list.length > 0) return list[list.length - 1].content;
+    // After a page refresh the cache only holds the restored conversation, so
+    // fall back to the server-side last-message preview (it survives reloads).
+    return conv.last_message_content || 'No messages yet';
   };
 
   return (

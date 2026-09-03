@@ -144,6 +144,32 @@ export interface WsEventMap {
     timestamp?: string;
   };
   notification: { type: 'notification'; data?: any };
+  // --- Attendance (employee working time) ---
+  'attendance:clocked_in': {
+    type: 'attendance:clocked_in';
+    data: { record?: any; date?: string };
+    timestamp?: string;
+  };
+  'attendance:clocked_out': {
+    type: 'attendance:clocked_out';
+    data: { record?: any; date?: string };
+    timestamp?: string;
+  };
+  'attendance:status_changed': {
+    type: 'attendance:status_changed';
+    data: { employeeId?: number; date?: string; status?: string; record?: any };
+    timestamp?: string;
+  };
+  'attendance:break_started': {
+    type: 'attendance:break_started';
+    data: { breakId?: number; attendanceId?: number; startedAt?: string; date?: string };
+    timestamp?: string;
+  };
+  'attendance:break_ended': {
+    type: 'attendance:break_ended';
+    data: { breakId?: number; attendanceId?: number; durationMinutes?: number; date?: string };
+    timestamp?: string;
+  };
   announcement_created: {
     type: 'announcement_created';
     data: { announcement: Announcement };

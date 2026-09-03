@@ -23,6 +23,11 @@ import { createBookmarkMessageRouter, createBookmarkListRouter } from './routes/
 import { createSharedFileRouter } from './routes/sharedFile.routes';
 import { errorHandler } from './middleware/error.middleware';
 import { createMeetingRouter } from './routes/meeting.routes';
+import { createAttendanceRouter } from './routes/attendance.routes';
+import { createOvertimeRouter } from './routes/overtime.routes';
+import { createWorkScheduleRouter } from './routes/workSchedule.routes';
+import { createLeaveRequestRouter } from './routes/leaveRequest.routes';
+import { createHolidayRouter } from './routes/holiday.routes';
 
 export const app = express();
 
@@ -42,7 +47,7 @@ app.use(
       }
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   }),
 );
@@ -89,6 +94,11 @@ app.use('/api/companies', container.auth.authenticate, createCompanyRouter(conta
 app.use('/api/departments', container.auth.authenticate, createDepartmentRouter(container.departmentController, container.auth));
 app.use('/api/announcements', container.auth.authenticate, createAnnouncementRouter(container.announcementController, container.auth));
 app.use('/api/meetings', container.auth.authenticate, createMeetingRouter(container.meetingController, container.auth));
+app.use('/api/attendance', createAttendanceRouter(container.attendanceController, container.auth));
+app.use('/api/overtime', createOvertimeRouter(container.attendanceController, container.auth));
+app.use('/api/work-schedules', createWorkScheduleRouter(container.workScheduleController, container.auth));
+app.use('/api/leave-requests', createLeaveRequestRouter(container.leaveRequestController, container.auth));
+app.use('/api/holidays', createHolidayRouter(container.holidayController, container.auth));
 // Settings has its own auth handling: GET /api/settings/public is open so the
 // login page can render maintenance/registration state pre-auth.
 app.use('/api/settings', createSystemSettingRouter(container.systemSettingController, container.auth));

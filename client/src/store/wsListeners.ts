@@ -16,6 +16,7 @@ import { useAnnouncementStore } from './announcementStore';
 import { useCallStore } from './callStore';
 import { useMeetingStore } from './meetingStore';
 import { useSharedFileStore } from './sharedFileStore';
+import { useAttendanceStore } from './attendanceStore';
 import { toNumber } from './utils';
 
 export function registerWsListeners(): () => void {
@@ -489,6 +490,25 @@ export function registerWsListeners(): () => void {
       useMeetingStore.getState().loadAttachments(meetingId);
     }),
   );
+
+  // --- Attendance ------------------------------------------------------------
+  // Server pushes attendance:clocked_in / clocked_out / status_changed /
+  // break_started / break_ended; refresh the today card + manager dashboard
+  // so the UI updates without a page refresh.
+  const attendanceTypes = [
+    'attendance:clocked_in',
+    'attendance:clocked_out',
+    'attendance:status_changed',
+    'attendance:break_started',
+    'attendance:break_ended',
+  ] as const;
+  for (const type of attendanceTypes) {
+    unsubs.push(
+      wsService.on(type, () => {
+        useAttendanceStore.getState().handleAttendanceEvent(type);
+      }),
+    );
+  }
 
   return () => unsubs.forEach((unsub) => unsub());
 }

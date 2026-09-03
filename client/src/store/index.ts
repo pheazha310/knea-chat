@@ -11,6 +11,7 @@ export * from './notificationStore';
 export * from './companyStore';
 export * from './announcementStore';
 export * from './meetingStore';
+export * from './attendanceStore';
 export * from './callStore';
 export * from './sharedFileStore';
 export * from './wsListeners';

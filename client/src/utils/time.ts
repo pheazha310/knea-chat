@@ -1,5 +1,15 @@
 /** Time formatting helpers shared by the calendar views. */
 
+/** Minutes (e.g. 450) -> "7h 30m" (attendance durations). */
+export const formatMinutes = (minutes: number): string => {
+  const abs = Math.max(0, Math.round(minutes));
+  const h = Math.floor(abs / 60);
+  const m = abs % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+};
+
 /** "14:30" or "14:30:00" -> "2:30 PM" */
 export const formatTime12 = (time: string): string => {
   const [h, m] = time.split(":").map(Number);

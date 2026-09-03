@@ -16,14 +16,23 @@ export class MessageRepository {
 
   async findAll(filters: { conversationId: number; page?: number; limit?: number }): Promise<MessageRow[]> {
     const { conversationId, page = 1, limit = 30 } = filters;
+    const offset = (parseInt(String(page)) - 1) * parseInt(String(limit));
+    // Chat windows open at the LATEST message, so page 1 must be the most
+    // recent `limit` messages — not the oldest. Fetch the newest page in
+    // descending order, then reverse it so the caller receives a
+    // chronological list (newest last), which is what the UI renders.
+    // Older pages return progressively older history for infinite scroll.
     return this.db.query<MessageRow[]>(
-      `SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture
-       FROM messages m
-       JOIN users u ON m.sender_id = u.id
-       WHERE m.conversation_id = ? AND m.deleted_at IS NULL
-       ORDER BY m.created_at ASC
-       LIMIT ? OFFSET ?`,
-      [conversationId, parseInt(String(limit)), (parseInt(String(page)) - 1) * parseInt(String(limit))],
+      `SELECT * FROM (
+         SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture
+         FROM messages m
+         JOIN users u ON m.sender_id = u.id
+         WHERE m.conversation_id = ? AND m.deleted_at IS NULL
+         ORDER BY m.created_at DESC
+         LIMIT ? OFFSET ?
+       ) t
+       ORDER BY t.created_at ASC`,
+      [conversationId, parseInt(String(limit)), offset],
     );
   }
 

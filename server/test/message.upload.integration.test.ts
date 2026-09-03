@@ -218,7 +218,7 @@ describe('POST /api/messages/upload — integration', () => {
 
     assert.equal(status, 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
     assert.equal(json.success, true);
-    assert.equal(json.data.message.type, 'file');
+    assert.equal(json.data.message.type, 'voice');
     assert.equal(json.data.message.attachments[0].file_type, 'audio/webm');
   });
 
@@ -241,7 +241,7 @@ describe('POST /api/messages/upload — integration', () => {
 
     assert.equal(status, 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
     assert.equal(json.success, true);
-    assert.equal(json.data.message.type, 'file');
+    assert.equal(json.data.message.type, 'voice');
     assert.equal(json.data.message.attachments[0].file_name, 'voice-1234567890.m4a');
     assert.equal(json.data.message.attachments[0].file_type, 'audio/mp4');
   });
@@ -265,7 +265,7 @@ describe('POST /api/messages/upload — integration', () => {
 
     assert.equal(status, 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
     assert.equal(json.success, true);
-    assert.equal(json.data.message.type, 'file');
+    assert.equal(json.data.message.type, 'voice');
     assert.equal(json.data.message.attachments[0].file_name, 'voice-1234567890.webm');
     // multer normalizes the MIME type, stripping codec parameters
     assert.equal(json.data.message.attachments[0].file_type, 'audio/webm');

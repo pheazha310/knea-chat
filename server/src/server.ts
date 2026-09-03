@@ -11,6 +11,11 @@ import WebSocket from 'ws';
 import { app } from './app';
 import { container } from './container';
 import { ChatWebSocketServer } from './websocket/websocket.server';
+import { startAttendanceEventRelay } from './websocket/attendance.events';
+
+// Attendance real-time relay: subscribes to the Redis attendance channel so
+// clock-in/out events from other server instances fan out to local sockets.
+void startAttendanceEventRelay();
 
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
