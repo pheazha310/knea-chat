@@ -95,13 +95,11 @@ const dayLabel = (value?: string) => {
   const key = date.toDateString();
   if (key === today) return "Today";
   if (key === yesterday) return "Yesterday";
-  const sameYear = date.getFullYear() === now.getFullYear();
-  return date.toLocaleDateString(
-    [],
-    sameYear
-      ? { weekday: "long", month: "long", day: "numeric" }
-      : { weekday: "long", month: "long", day: "numeric", year: "numeric" },
-  );
+  return date.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+  });
 };
 
 /** Group reactions by emoji: { emoji, count, mine } */

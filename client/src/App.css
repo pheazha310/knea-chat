@@ -12141,12 +12141,10 @@ textarea:focus-visible,
   display: flex;
   flex-direction: column;
   background:
-    radial-gradient(
-      circle at 90% -10%,
-      color-mix(in srgb, var(--accent) 8%, transparent) 0%,
-      transparent 45%
-    ),
-    var(--surface);
+    radial-gradient(circle at 85% 0%, color-mix(in srgb, var(--accent) 6%, transparent), transparent 50%),
+    radial-gradient(circle at 15% 100%, color-mix(in srgb, var(--accent) 3%, transparent), transparent 40%),
+    var(--bg);
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
 }
 
 .meetings-fullscreen {
@@ -12164,91 +12162,80 @@ textarea:focus-visible,
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  overflow: hidden;
 }
 
 .meetings-toolbar {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 16px 20px;
+  gap: 10px;
+  padding: 14px 18px 12px;
   border-bottom: 1px solid var(--border);
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
-  backdrop-filter: blur(12px) saturate(1.2);
-  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  background: var(--surface-2);
 }
 
 .meetings-toolbar-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 12px;
   flex-wrap: wrap;
+  min-height: 42px;
 }
 
 .meetings-toolbar-bottom {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .meetings-toolbar-left {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px;
   min-width: 0;
+  flex-wrap: wrap;
 }
 
 .meetings-toolbar-title {
   margin: 0;
-  font-size: 20px;
-  font-weight: 750;
-  letter-spacing: -0.4px;
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
   color: var(--text);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  background: linear-gradient(135deg, var(--text) 0%, var(--accent-text) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
 }
 
-/* Joined segmented control: [◀ | Today | ▶] */
 .meetings-toolbar-nav {
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
   flex: 0 0 auto;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 10px;
-  box-shadow: var(--shadow-sm);
   overflow: hidden;
-  transition: box-shadow 0.2s, border-color 0.2s;
-}
-
-.meetings-toolbar-nav:hover {
-  border-color: var(--border-strong);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
 }
 
 .meetings-toolbar-nav button {
-  height: 36px;
+  height: 38px;
   padding: 0 14px;
   border: none;
   border-radius: 0;
   background: transparent;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 8px;
   transition:
     background 0.15s,
-    color 0.15s,
-    transform 0.12s;
+    color 0.15s;
 }
 
 .meetings-toolbar-nav button + button {
@@ -12257,55 +12244,40 @@ textarea:focus-visible,
 
 .meetings-toolbar-nav button:hover {
   background: var(--hover);
-  color: var(--text);
-}
-
-.meetings-toolbar-nav button:active {
-  background: var(--hover-accent);
-  transform: scale(0.97);
 }
 
 .meetings-toolbar-nav .nav-arrow {
   width: 36px;
   padding: 0;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-.meetings-toolbar-nav .nav-arrow:hover {
-  transform: scale(1.05);
+  font-size: 14px;
+  color: var(--text-muted);
 }
 
 .meetings-toolbar-nav .today-btn {
-  color: var(--accent-text);
-  background: var(--accent-soft);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
   font-weight: 700;
   padding: 0 16px;
-  transition: background 0.15s, color 0.15s, transform 0.12s;
 }
 
 .meetings-toolbar-nav .today-btn:hover {
-  background: var(--hover-accent);
-  color: var(--accent-text-strong);
-  transform: translateY(-1px);
+  background: var(--hover);
 }
 
-.meetings-toolbar-nav .today-btn:active {
-  transform: translateY(0) scale(0.97);
-}
-
-/* Right cluster: view tabs + primary action */
 .meetings-toolbar-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   flex-wrap: wrap;
+  margin-left: auto;
 }
 
 .meetings-body {
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 1fr 300px;
+  grid-template-columns: 1fr 320px;
   overflow: hidden;
 }
 
@@ -12315,6 +12287,7 @@ textarea:focus-visible,
   min-height: 0;
   border-right: 1px solid var(--border);
   background: var(--surface);
+  overflow: hidden;
 }
 
 /* ── Calendar grid ─────────────────────────────────────────────────── */
@@ -12327,20 +12300,20 @@ textarea:focus-visible,
 }
 
 .calendar-weekday {
-  padding: 12px 0;
+  padding: 14px 0;
   text-align: center;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 750;
   color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
-  transition: color 0.15s, background 0.15s;
+  letter-spacing: 0.8px;
+  transition: color 0.15s;
 }
 
 .calendar-weekday:first-child,
 .calendar-weekday:last-child {
   color: var(--danger);
-  opacity: 0.7;
+  opacity: 0.65;
 }
 
 .calendar-grid {
@@ -12355,55 +12328,57 @@ textarea:focus-visible,
 
 .calendar-day {
   position: relative;
-  border-right: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  padding: 10px;
-  min-height: 100px;
+  border-right: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
+  padding: 8px 10px;
+  min-height: 110px;
   background: var(--surface);
-  transition: background 0.15s, box-shadow 0.15s;
+  transition: background 0.2s, box-shadow 0.2s;
   cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
+  border-radius: 0;
 }
 
 .calendar-day:hover {
-  background: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
+  background: color-mix(in srgb, var(--hover) 80%, var(--surface));
+  box-shadow: inset 0 0 0 1.5px var(--border-strong);
+  z-index: 1;
 }
 
 .calendar-day.weekend {
-  background: var(--surface-2);
+  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
 }
 
 .calendar-day.weekend:hover {
   background: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .calendar-day.other-month {
-  background: color-mix(in srgb, var(--surface-2) 50%, var(--surface));
+  background: color-mix(in srgb, var(--surface-2) 30%, var(--surface));
   color: var(--text-faint);
 }
 
 .calendar-day.other-month .calendar-day-number {
-  opacity: 0.5;
+  opacity: 0.45;
 }
 
 .calendar-day.other-month:hover {
   background: var(--hover);
-  box-shadow: inset 0 0 0 1px var(--border-strong);
 }
 
 .calendar-day.today {
-  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
-  box-shadow: inset 0 0 0 1px var(--accent-border);
+  background: color-mix(in srgb, var(--accent-soft) 28%, var(--surface));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, var(--accent-border));
 }
 
 .calendar-day.today:hover {
-  background: color-mix(in srgb, var(--accent-soft) 50%, var(--surface));
-  box-shadow: inset 0 0 0 1px var(--accent-border), 0 0 12px color-mix(in srgb, var(--accent) 15%, transparent);
+  background: color-mix(in srgb, var(--accent-soft) 40%, var(--surface));
+  box-shadow:
+    inset 0 0 0 1.5px var(--accent-border),
+    0 0 20px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 /* Quick-add button, revealed on hover */
@@ -12455,29 +12430,29 @@ textarea:focus-visible,
   height: 28px;
   display: grid;
   place-items: center;
-  border-radius: 50%;
+  border-radius: 999px;
   font-size: 13px;
   font-weight: 600;
   color: var(--text-muted);
   flex-shrink: 0;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.18s, background 0.18s;
 }
 
 .calendar-day:hover .calendar-day-number {
-  transform: scale(1.05);
+  transform: scale(1.06);
 }
 
 .calendar-day.today .calendar-day-number {
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: #fff;
-  box-shadow: 0 3px 10px rgba(99, 91, 219, 0.3);
+  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.35);
   font-weight: 700;
 }
 
 .calendar-day-events {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   flex: 1;
   min-height: 0;
   overflow: hidden;
@@ -12488,31 +12463,29 @@ textarea:focus-visible,
 .calendar-event-chip {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
+  gap: 5px;
+  padding: 4px 8px;
   border-radius: 8px;
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   cursor: pointer;
-  transition:
-    background 0.12s,
-    transform 0.12s,
-    box-shadow 0.12s;
+  transition: background 0.15s, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
   position: relative;
   border-left: 3px solid transparent;
+  letter-spacing: -0.01em;
 }
 
 .calendar-event-chip.scheduled {
-  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 85%, var(--accent-hover)) 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 80%, var(--accent-hover)) 100%);
   color: #ffffff;
-  border-left-color: color-mix(in srgb, #ffffff 30%, transparent);
-  box-shadow: 0 1px 4px rgba(99, 91, 219, 0.2);
+  border-left-color: color-mix(in srgb, #ffffff 35%, transparent);
+  box-shadow: 0 1px 3px rgba(99, 91, 219, 0.2);
 }
 
 .calendar-event-chip.scheduled .calendar-event-chip-time {
-  color: color-mix(in srgb, #ffffff 85%, transparent);
+  color: color-mix(in srgb, #ffffff 80%, transparent);
 }
 
 .calendar-event-chip.scheduled .calendar-event-chip-title {
@@ -12520,33 +12493,34 @@ textarea:focus-visible,
 }
 
 .calendar-event-chip.scheduled:hover {
-  box-shadow: 0 3px 10px rgba(99, 91, 219, 0.3);
-  transform: translateX(2px);
+  box-shadow: 0 3px 12px rgba(99, 91, 219, 0.3);
+  transform: translateY(-1px) scale(1.01);
 }
 
 .calendar-event-chip.completed {
   background: var(--success-soft);
   color: var(--success);
   border-left-color: var(--success);
+  box-shadow: 0 1px 2px rgba(20, 133, 92, 0.08);
 }
 
 .calendar-event-chip.completed:hover {
   background: var(--success-border);
-  transform: translateX(2px);
-  box-shadow: 0 2px 8px rgba(20, 133, 92, 0.12);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(20, 133, 92, 0.15);
 }
 
 .calendar-event-chip.cancelled {
   background: var(--surface-2);
-  color: var(--text-muted);
+  color: var(--text-faint);
   border-left-color: var(--border-strong);
-  opacity: 0.7;
+  opacity: 0.65;
   text-decoration: line-through;
 }
 
 .calendar-event-chip.cancelled:hover {
-  opacity: 0.9;
-  transform: translateX(2px);
+  opacity: 0.85;
+  transform: translateY(-1px);
 }
 
 .calendar-event-chip-time {
@@ -12571,16 +12545,16 @@ textarea:focus-visible,
   font-size: 11px;
   color: var(--accent-text);
   font-weight: 700;
-  padding: 3px 6px;
+  padding: 3px 8px;
   cursor: pointer;
   border-radius: 6px;
-  transition: background 0.12s, color 0.12s;
+  transition: background 0.15s, color 0.15s;
+  letter-spacing: -0.01em;
 }
 
 .calendar-more:hover {
   background: var(--accent-soft);
   color: var(--accent-text-strong);
-  text-decoration: none;
 }
 
 /* ── Sidebar ───────────────────────────────────────────────────────── */
@@ -12588,11 +12562,12 @@ textarea:focus-visible,
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface-3) 100%);
+  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
+  overflow: hidden;
 }
 
 .sidebar-section {
-  padding: 18px;
+  padding: 20px;
   border-bottom: 1px solid var(--border);
 }
 
@@ -12608,13 +12583,13 @@ textarea:focus-visible,
   font-weight: 800;
   color: var(--text-faint);
   text-transform: uppercase;
-  letter-spacing: 0.6px;
+  letter-spacing: 0.8px;
 }
 
 .upcoming-list {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .upcoming-item {
@@ -12625,11 +12600,7 @@ textarea:focus-visible,
   border: 1px solid var(--border);
   border-left: 3px solid var(--accent);
   cursor: pointer;
-  transition:
-    background 0.15s,
-    transform 0.15s,
-    box-shadow 0.15s,
-    border-color 0.15s;
+  transition: background 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s, border-color 0.2s;
   position: relative;
   overflow: hidden;
 }
@@ -12638,16 +12609,16 @@ textarea:focus-visible,
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, transparent 60%);
+  background: linear-gradient(135deg, var(--accent-soft) 0%, transparent 50%);
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.25s;
   pointer-events: none;
 }
 
 .upcoming-item:hover {
   background: var(--hover);
-  transform: translateY(-2px);
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
+  transform: translateY(-2px) translateX(2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
   border-color: var(--border-strong);
 }
 
@@ -12676,7 +12647,7 @@ textarea:focus-visible,
 }
 
 .upcoming-item-time {
-  font-weight: 600;
+  font-weight: 650;
   color: var(--accent-text);
 }
 
@@ -12696,33 +12667,34 @@ textarea:focus-visible,
 }
 
 .upcoming-empty {
-  padding: 36px 20px;
+  padding: 40px 20px;
   text-align: center;
   color: var(--text-faint);
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
 }
 
 .upcoming-empty svg {
-  opacity: 0.4;
+  opacity: 0.35;
   color: var(--text-faint);
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .upcoming-empty:hover svg {
-  transform: scale(1.1);
+  transform: scale(1.12) rotate(5deg);
 }
 
 .upcoming-empty p {
   margin: 0;
   font-size: 13px;
   line-height: 1.5;
+  color: var(--text-muted);
 }
 
 .upcoming-empty-btn {
-  margin-top: 6px;
+  margin-top: 8px;
 }
 
 /* ── Calendar responsive ───────────────────────────────────────────── */
@@ -12753,226 +12725,54 @@ textarea:focus-visible,
   .meetings-toolbar-title {
     font-size: 18px;
   }
-
-  .year-view {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    padding: 12px;
-  }
-
-  .year-month {
-    border-radius: 12px;
-  }
-
-  .year-month-header {
-    padding: 8px 10px;
-  }
-
-  .year-month-name {
-    font-size: 11px;
-  }
-
-  .year-month-weekdays {
-    padding: 6px 6px 2px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 8px;
-  }
-
-  .year-month-grid {
-    padding: 2px 6px 6px;
-  }
-
-  .year-month-day {
-    height: 26px;
-    font-size: 10px;
-  }
-}
-
-@media (max-width: 640px) {
-  .calendar-grid {
-    font-size: 12px;
-  }
-
-  .calendar-day {
-    min-height: 60px;
-    padding: 6px;
-  }
-
-  .calendar-day-number {
-    width: 26px;
-    height: 26px;
-    font-size: 12px;
-  }
-
-  .calendar-event-chip {
-    font-size: 9px;
-    padding: 1px 4px;
-  }
-
-  .meetings-toolbar {
-    padding: 12px 14px;
-  }
-
-  .meetings-toolbar-nav button {
-    height: 32px;
-    font-size: 12px;
-  }
-
-  .meetings-toolbar-nav .nav-arrow {
-    width: 32px;
-  }
-
-  .meetings-toolbar-nav .today-btn {
-    padding: 0 12px;
-  }
-
-  .meetings-toolbar-actions {
-    width: 100%;
-    justify-content: space-between;
-  }
-
-  .meetings-toolbar-bottom {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .meetings-toolbar-controls {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .meetings-search {
-    width: 100%;
-    max-width: none;
-  }
-
-  .meetings-filters {
-    flex-direction: column;
-    align-items: stretch;
-  }
-
-  .meetings-filters select {
-    width: 100%;
-    min-width: 0;
-  }
-
-  .year-view {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .year-month {
-    border-radius: 10px;
-  }
-
-  .year-month-header {
-    padding: 6px 8px;
-  }
-
-  .year-month-name {
-    font-size: 10px;
-  }
-
-  .year-month-weekdays {
-    padding: 4px 4px 1px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 7px;
-  }
-
-  .year-month-grid {
-    padding: 1px 4px 4px;
-  }
-
-  .year-month-day {
-    height: 24px;
-    font-size: 9px;
-  }
-}
-
-@media (max-width: 480px) {
-  .year-view {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .year-month {
-    border-radius: 10px;
-  }
-
-  .year-month-header {
-    padding: 6px 8px;
-  }
-
-  .year-month-name {
-    font-size: 10px;
-  }
-
-  .year-month-weekdays {
-    padding: 4px 4px 1px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 7px;
-  }
-
-  .year-month-grid {
-    padding: 1px 4px 4px;
-  }
-
-  .year-month-day {
-    height: 24px;
-    font-size: 9px;
-  }
 }
 
 /* Meetings view tabs, search, filters, and new view modes */
 .meetings-view-tabs {
   display: inline-flex;
-  gap: 3px;
-  padding: 4px;
+  gap: 0;
+  padding: 3px;
   border-radius: 10px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .meetings-view-tab {
-  padding: 6px 14px;
+  padding: 7px 12px;
   border-radius: 8px;
-  border: none;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 700;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.12s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    transform 0.12s;
   position: relative;
+  min-width: 58px;
 }
 
 .meetings-view-tab:hover {
   background: var(--hover);
   color: var(--text);
-  transform: translateY(-1px);
+  transform: none;
 }
 
 .meetings-view-tab.active {
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
-  color: var(--accent-text-strong);
-  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: none;
   font-weight: 700;
-  border: 1px solid var(--border);
+  border-color: var(--border);
 }
 
 .meetings-toolbar-controls {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
   flex: 1;
   min-width: 0;
@@ -12980,9 +12780,9 @@ textarea:focus-visible,
 
 .meetings-search {
   position: relative;
-  flex: 1 1 240px;
+  flex: 1 1 260px;
   min-width: 180px;
-  max-width: 360px;
+  max-width: 420px;
 }
 
 .meetings-search > svg {
@@ -12997,26 +12797,34 @@ textarea:focus-visible,
 
 .meetings-search input {
   width: 100%;
-  height: 34px;
-  padding: 0 12px 0 32px;
-  border-radius: 10px;
+  height: 40px;
+  padding: 0 14px 0 36px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--input-bg);
+  background: var(--surface);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 14px;
+  font-weight: 400;
   outline: none;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+  transition:
+    border-color 0.2s,
+    box-shadow 0.2s,
+    background 0.2s;
+}
+
+.meetings-search input::placeholder {
+  color: var(--text-faint);
 }
 
 .meetings-search input:focus {
-  border-color: var(--accent-border);
+  border-color: var(--border-strong);
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 2px 8px rgba(99, 91, 219, 0.08);
+  box-shadow: none;
 }
 
 .meetings-search input:focus + svg,
 .meetings-search:focus-within > svg {
-  color: var(--accent-text);
+  color: var(--text-muted);
 }
 
 .meetings-filters {
@@ -13027,31 +12835,44 @@ textarea:focus-visible,
 }
 
 .meetings-filters select {
-  height: 34px;
-  padding: 0 12px;
-  border-radius: 10px;
+  height: 40px;
+  padding: 0 30px 0 12px;
+  border-radius: 999px;
   border: 1px solid var(--border);
-  background: var(--input-bg);
+  background: var(--surface);
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: 14px;
+  font-weight: 600;
   outline: none;
-  min-width: 120px;
-  max-width: 180px;
+  min-width: 140px;
+  max-width: 200px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s, transform 0.12s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-muted) 50%),
+    linear-gradient(135deg, var(--text-muted) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 10px) calc(50% - 2px);
+  background-size:
+    5px 5px,
+    5px 5px;
+  background-repeat: no-repeat;
+  transition:
+    border-color 0.2s,
+    background-color 0.2s;
 }
 
 .meetings-filters select:hover {
   border-color: var(--border-strong);
-  background: var(--surface);
-  transform: translateY(-1px);
+  background-color: var(--surface);
 }
 
 .meetings-filters select:focus {
-  border-color: var(--accent-border);
-  background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  border-color: var(--border-strong);
+  background-color: var(--surface);
+  box-shadow: none;
 }
 
 .meeting-form {
@@ -13066,7 +12887,9 @@ textarea:focus-visible,
   background: var(--surface);
   overflow: hidden;
   box-shadow: var(--shadow-sm);
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s;
 }
 
 .meeting-form-section:hover {
@@ -13370,8 +13193,14 @@ textarea:focus-visible,
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .meeting-detail-header {
@@ -13388,7 +13217,9 @@ textarea:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition:
+    box-shadow 0.2s,
+    border-color 0.2s;
 }
 
 .meeting-detail-section:hover {
@@ -13412,7 +13243,11 @@ textarea:focus-visible,
   height: 36px;
   place-items: center;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    var(--accent-border) 100%
+  );
   color: var(--accent-text);
   flex-shrink: 0;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -13459,7 +13294,10 @@ textarea:focus-visible,
   border-radius: 8px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-border);
-  transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    transform 0.12s,
+    box-shadow 0.15s;
 }
 
 .meeting-detail-link:hover {
@@ -13483,7 +13321,11 @@ textarea:focus-visible,
   color: var(--text-muted);
   font-size: 12.5px;
   font-weight: 600;
-  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s,
+    transform 0.12s;
 }
 
 .meeting-detail-chips .participant-chip:hover {
@@ -13507,7 +13349,10 @@ textarea:focus-visible,
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
-  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s,
+    transform 0.12s;
 }
 
 .attendee-row:hover {
@@ -13571,7 +13416,11 @@ textarea:focus-visible,
   left: 0;
   right: 0;
   height: 3px;
-  background: linear-gradient(90deg, var(--accent) 0%, var(--accent-hover) 100%);
+  background: linear-gradient(
+    90deg,
+    var(--accent) 0%,
+    var(--accent-hover) 100%
+  );
   opacity: 0;
   transition: opacity 0.2s;
 }
@@ -13629,7 +13478,7 @@ textarea:focus-visible,
 
   .calendar-day {
     min-height: 72px;
-    padding: 8px;
+    padding: 6px 8px;
   }
 
   .calendar-event-chip {
@@ -13639,45 +13488,11 @@ textarea:focus-visible,
 
   .meetings-toolbar {
     flex-wrap: wrap;
+    padding: 16px 18px 12px;
   }
 
   .meetings-toolbar-title {
     font-size: 18px;
-  }
-
-  .year-view {
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-    padding: 12px;
-  }
-
-  .year-month {
-    border-radius: 12px;
-  }
-
-  .year-month-header {
-    padding: 8px 10px;
-  }
-
-  .year-month-name {
-    font-size: 11px;
-  }
-
-  .year-month-weekdays {
-    padding: 6px 6px 2px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 8px;
-  }
-
-  .year-month-grid {
-    padding: 2px 6px 6px;
-  }
-
-  .year-month-day {
-    height: 26px;
-    font-size: 10px;
   }
 }
 
@@ -13688,13 +13503,13 @@ textarea:focus-visible,
 
   .calendar-day {
     min-height: 60px;
-    padding: 6px;
+    padding: 4px 6px;
   }
 
   .calendar-day-number {
-    width: 26px;
-    height: 26px;
-    font-size: 12px;
+    width: 24px;
+    height: 24px;
+    font-size: 11px;
   }
 
   .calendar-event-chip {
@@ -13707,16 +13522,16 @@ textarea:focus-visible,
   }
 
   .meetings-toolbar-nav button {
-    height: 32px;
-    font-size: 12px;
+    height: 36px;
+    font-size: 13px;
   }
 
   .meetings-toolbar-nav .nav-arrow {
-    width: 32px;
+    width: 36px;
   }
 
   .meetings-toolbar-nav .today-btn {
-    padding: 0 12px;
+    padding: 0 14px;
   }
 
   .meetings-toolbar-actions {
@@ -13739,6 +13554,11 @@ textarea:focus-visible,
     max-width: none;
   }
 
+  .meetings-search input {
+    height: 38px;
+    font-size: 13px;
+  }
+
   .meetings-filters {
     flex-direction: column;
     align-items: stretch;
@@ -13747,78 +13567,8 @@ textarea:focus-visible,
   .meetings-filters select {
     width: 100%;
     min-width: 0;
-  }
-
-  .year-view {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .year-month {
-    border-radius: 10px;
-  }
-
-  .year-month-header {
-    padding: 6px 8px;
-  }
-
-  .year-month-name {
-    font-size: 10px;
-  }
-
-  .year-month-weekdays {
-    padding: 4px 4px 1px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 7px;
-  }
-
-  .year-month-grid {
-    padding: 1px 4px 4px;
-  }
-
-  .year-month-day {
-    height: 24px;
-    font-size: 9px;
-  }
-}
-
-@media (max-width: 480px) {
-  .year-view {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-    padding: 10px;
-  }
-
-  .year-month {
-    border-radius: 10px;
-  }
-
-  .year-month-header {
-    padding: 6px 8px;
-  }
-
-  .year-month-name {
-    font-size: 10px;
-  }
-
-  .year-month-weekdays {
-    padding: 4px 4px 1px;
-  }
-
-  .year-month-weekdays span {
-    font-size: 7px;
-  }
-
-  .year-month-grid {
-    padding: 1px 4px 4px;
-  }
-
-  .year-month-day {
-    height: 24px;
-    font-size: 9px;
+    height: 38px;
+    font-size: 12px;
   }
 }
 
@@ -13827,37 +13577,40 @@ textarea:focus-visible,
   display: inline-flex;
   gap: 3px;
   padding: 4px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
 }
 
 .meetings-view-tab {
-  padding: 6px 14px;
-  border-radius: 8px;
-  border: none;
+  padding: 7px 16px;
+  border-radius: 9px;
+  border: 1px solid transparent;
   background: transparent;
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, box-shadow 0.15s, transform 0.12s;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s, transform 0.12s, border-color 0.18s;
   position: relative;
+  min-width: 72px;
+  letter-spacing: -0.01em;
 }
 
 .meetings-view-tab:hover {
   background: var(--hover);
   color: var(--text);
-  transform: translateY(-1px);
 }
 
 .meetings-view-tab.active {
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
-  color: var(--accent-text-strong);
-  box-shadow: 0 2px 6px rgba(16, 24, 40, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  background: var(--surface);
+  color: var(--accent-text);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.08),
+    inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, var(--border));
   font-weight: 700;
-  border: 1px solid var(--border);
+  border-color: var(--accent-border);
 }
 
 .meetings-toolbar-controls {
@@ -13871,38 +13624,43 @@ textarea:focus-visible,
 
 .meetings-search {
   position: relative;
-  flex: 1 1 240px;
-  min-width: 180px;
-  max-width: 360px;
+  flex: 1 1 260px;
+  min-width: 220px;
+  max-width: 420px;
 }
 
 .meetings-search > svg {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-faint);
   pointer-events: none;
-  transition: color 0.15s;
+  transition: color 0.2s;
 }
 
 .meetings-search input {
   width: 100%;
-  height: 34px;
-  padding: 0 12px 0 32px;
+  height: 42px;
+  padding: 0 16px 0 40px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input-bg);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13.5px;
+  font-weight: 500;
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
 }
 
+.meetings-search input::placeholder {
+  color: var(--text-faint);
+}
+
 .meetings-search input:focus {
-  border-color: var(--accent-border);
+  border-color: var(--accent);
   background: var(--surface);
-  box-shadow: 0 0 0 3px var(--accent-soft), 0 2px 8px rgba(99, 91, 219, 0.08);
+  box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
 .meetings-search input:focus + svg,
@@ -13913,35 +13671,46 @@ textarea:focus-visible,
 .meetings-filters {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .meetings-filters select {
-  height: 34px;
-  padding: 0 12px;
+  height: 42px;
+  padding: 0 34px 0 14px;
   border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--input-bg);
   color: var(--text);
-  font-size: 12.5px;
-  font-weight: 550;
+  font-size: 13px;
+  font-weight: 600;
   outline: none;
-  min-width: 120px;
-  max-width: 180px;
+  min-width: 160px;
+  max-width: 200px;
   cursor: pointer;
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s, transform 0.12s;
+  appearance: none;
+  -webkit-appearance: none;
+  background-image:
+    linear-gradient(45deg, transparent 50%, var(--text-faint) 50%),
+    linear-gradient(135deg, var(--text-faint) 50%, transparent 50%);
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 10px) calc(50% - 2px);
+  background-size:
+    4px 4px,
+    4px 4px;
+  background-repeat: no-repeat;
+  transition: border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
 .meetings-filters select:hover {
   border-color: var(--border-strong);
-  background: var(--surface);
-  transform: translateY(-1px);
+  background-color: var(--surface);
 }
 
 .meetings-filters select:focus {
-  border-color: var(--accent-border);
-  background: var(--surface);
+  border-color: var(--accent);
+  background-color: var(--surface);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
@@ -13999,6 +13768,7 @@ textarea:focus-visible,
   background: var(--surface);
   min-height: 0;
   position: relative;
+  border-radius: 0;
 }
 
 .week-grid-header {
@@ -14030,8 +13800,8 @@ textarea:focus-visible,
   padding: 12px 4px 10px;
   border-right: 1px solid var(--border);
   cursor: pointer;
-  transition: background 0.15s;
-  gap: 5px;
+  transition: background 0.2s;
+  gap: 6px;
 }
 
 .week-grid-header-day:last-child {
@@ -14039,11 +13809,11 @@ textarea:focus-visible,
 }
 
 .week-grid-header-day:hover {
-  background: var(--hover);
+  background: color-mix(in srgb, var(--hover) 80%, var(--surface));
 }
 
 .week-grid-header-day.today {
-  background: color-mix(in srgb, var(--accent-soft) 45%, var(--surface));
+  background: color-mix(in srgb, var(--accent-soft) 35%, var(--surface));
 }
 
 .week-grid-header-weekday {
@@ -14070,14 +13840,14 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 28px;
-  height: 28px;
-  padding: 0 5px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0 6px;
   border-radius: 999px;
   font-size: 14px;
   font-weight: 600;
   color: var(--text);
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
 }
 
 .week-grid-header-day:hover .week-grid-date-number {
@@ -14088,7 +13858,7 @@ textarea:focus-visible,
   background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
   color: #ffffff;
   font-weight: 700;
-  box-shadow: 0 3px 10px rgba(99, 91, 219, 0.3);
+  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.35);
 }
 
 .week-grid-body {
@@ -14215,25 +13985,25 @@ textarea:focus-visible,
 
 .week-grid-meeting {
   position: absolute;
-  left: 5px;
-  right: 7px;
+  left: 4px;
+  right: 6px;
   border-radius: 8px;
   background: var(--calendar-bg);
-  padding: 5px 9px;
+  padding: 5px 8px;
   cursor: pointer;
   z-index: 2;
   overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 1px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-  transition: box-shadow 0.15s, transform 0.15s, background 0.15s;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: box-shadow 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.2s;
   border-left: 3px solid var(--calendar-border);
 }
 
 .week-grid-meeting:hover {
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
-  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px) scale(1.01);
   z-index: 4;
 }
 
@@ -14245,13 +14015,13 @@ textarea:focus-visible,
 }
 
 .week-grid-meeting.scheduled {
-  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 85%, #4f47c9) 100%);
-  border-left-color: color-mix(in srgb, #ffffff 30%, transparent);
-  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.25);
+  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 80%, #4f47c9) 100%);
+  border-left-color: color-mix(in srgb, #ffffff 35%, transparent);
+  box-shadow: 0 2px 6px rgba(99, 91, 219, 0.25);
 }
 
 .week-grid-meeting.scheduled:hover {
-  box-shadow: 0 6px 20px rgba(99, 91, 219, 0.35);
+  box-shadow: 0 6px 22px rgba(99, 91, 219, 0.35);
 }
 
 .week-grid-meeting.scheduled .week-grid-meeting-time {
@@ -14303,6 +14073,7 @@ textarea:focus-visible,
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  letter-spacing: -0.01em;
 }
 
 .week-grid-meeting.cancelled .week-grid-meeting-title {
@@ -14376,10 +14147,11 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 12px 16px;
+  gap: 12px;
+  padding: 14px 18px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  background: var(--surface);
 }
 
 .day-grid-header button {
@@ -14393,7 +14165,11 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  transition: background 0.15s, border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s,
+    transform 0.15s,
+    box-shadow 0.15s;
 }
 
 .day-grid-header button:hover {
@@ -14411,7 +14187,7 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 700;
   color: var(--text);
 }
@@ -14419,7 +14195,11 @@ textarea:focus-visible,
 .day-grid-today-chip {
   padding: 4px 12px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    var(--accent-border) 100%
+  );
   border: 1px solid var(--accent-border);
   color: var(--accent-text-strong);
   font-size: 11px;
@@ -14475,7 +14255,7 @@ textarea:focus-visible,
   min-height: 0;
   overflow-y: auto;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -14491,10 +14271,11 @@ textarea:focus-visible,
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
-  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
+  padding: 14px 20px;
+  background: linear-gradient(180deg, var(--surface-2) 0%, color-mix(in srgb, var(--surface) 95%, var(--surface-2)) 100%);
   border-bottom: 1px solid var(--border);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
 }
 
 .agenda-group-weekday {
@@ -14512,7 +14293,11 @@ textarea:focus-visible,
 .agenda-today-chip {
   padding: 3px 10px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    var(--accent-border) 100%
+  );
   border: 1px solid var(--accent-border);
   color: var(--accent-text-strong);
   font-size: 10.5px;
@@ -14546,11 +14331,11 @@ textarea:focus-visible,
 
 .agenda-item {
   display: flex;
-  gap: 14px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border);
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   cursor: pointer;
-  transition: background 0.15s, transform 0.12s;
+  transition: background 0.2s, transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .agenda-list .agenda-item:last-child {
@@ -14558,8 +14343,8 @@ textarea:focus-visible,
 }
 
 .agenda-item:hover {
-  background: var(--hover);
-  transform: translateX(2px);
+  background: color-mix(in srgb, var(--hover) 80%, var(--surface));
+  transform: translateX(3px);
 }
 
 .agenda-item-time {
@@ -14567,19 +14352,20 @@ textarea:focus-visible,
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 76px;
-  padding: 8px 12px;
-  border-radius: 10px;
-  background: var(--calendar-bg);
-  border: 1px solid var(--calendar-border);
-  border-left: 3px solid var(--calendar-border);
+  min-width: 80px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
   text-align: center;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
+  flex-shrink: 0;
 }
 
 .agenda-item:hover .agenda-item-time {
-  transform: scale(1.03);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  transform: scale(1.04);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
 }
 
 .agenda-item-time-start {
@@ -14610,9 +14396,10 @@ textarea:focus-visible,
 
 .agenda-item-title {
   margin: 0;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 650;
-  color: var(--calendar-text);
+  color: var(--text);
+  letter-spacing: -0.01em;
 }
 
 .agenda-item-meta {
@@ -14620,21 +14407,93 @@ textarea:focus-visible,
   align-items: center;
   gap: 10px;
   font-size: 12px;
-  color: var(--calendar-text);
-  opacity: 0.8;
+  color: var(--text-muted);
   flex-wrap: wrap;
 }
 
-/* Year view */
+/* ── Year view ─────────────────────────────────────────────────────── */
 .year-view {
+  flex: 1;
+  min-height: 0;
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  padding: 16px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 20px 18px;
+  padding: 24px 22px;
   overflow-y: auto;
-  background: var(--surface);
+  align-content: start;
+  background: var(--bg);
 }
 
+/* Year view summary bar */
+.year-view-summary {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  border-radius: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+  flex-wrap: wrap;
+}
+
+.year-view-total {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.year-view-total svg {
+  color: var(--accent-text);
+}
+
+.year-view-legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.year-view-legend-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.year-view-legend-swatches {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.year-view-swatch {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.year-view-swatch.heat-1 { background: color-mix(in srgb, var(--accent) 12%, var(--surface-2)); }
+.year-view-swatch.heat-2 { background: color-mix(in srgb, var(--accent) 25%, var(--surface-2)); }
+.year-view-swatch.heat-3 { background: color-mix(in srgb, var(--accent) 42%, var(--surface-2)); }
+.year-view-swatch.heat-4 { background: color-mix(in srgb, var(--accent) 60%, var(--surface-2)); }
+.year-view-swatch.heat-5 { background: color-mix(in srgb, var(--accent) 80%, var(--surface-2)); }
+
+.year-view-hint {
+  font-size: 12px;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+/* Month cards */
 .year-month {
   display: flex;
   flex-direction: column;
@@ -14643,39 +14502,43 @@ textarea:focus-visible,
   border-radius: 14px;
   overflow: hidden;
   cursor: pointer;
-  transition:
-    box-shadow 0.2s,
-    transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1),
-    border-color 0.2s;
+  transition: box-shadow 0.25s, transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.25s;
 }
 
 .year-month:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.07);
+  transform: translateY(-3px);
   border-color: var(--border-strong);
+}
+
+.year-month:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 0 0 3px var(--accent-border);
 }
 
 .year-month.current-month {
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 4px 14px rgba(99, 91, 219, 0.12);
+}
+
+.year-month.current-month:hover {
+  box-shadow: 0 0 0 2px var(--accent-soft), 0 8px 24px rgba(99, 91, 219, 0.18);
 }
 
 .year-month-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-  position: relative;
-  z-index: 1;
+  background: linear-gradient(180deg, var(--surface-2) 0%, var(--surface) 100%);
 }
 
 .year-month-name {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--text);
-  text-transform: uppercase;
-  letter-spacing: 0.4px;
+  letter-spacing: -0.01em;
   transition: color 0.2s;
 }
 
@@ -14683,75 +14546,95 @@ textarea:focus-visible,
   color: var(--accent-text);
 }
 
+.year-month.current-month .year-month-name {
+  color: var(--accent-text);
+}
+
 .year-month-count {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 22px;
-  height: 20px;
-  padding: 0 6px;
+  min-width: 24px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: var(--accent-soft);
   color: var(--accent-text);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.year-month:hover .year-month-count {
-  transform: scale(1.1);
+.year-month-count.empty {
+  background: var(--surface-2);
+  color: var(--text-faint);
 }
 
+.year-month:hover .year-month-count {
+  transform: scale(1.08);
+}
+
+/* Mini calendar grid */
 .year-month-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  padding: 8px 8px 3px;
-  gap: 1px;
-  position: relative;
-  z-index: 1;
+  padding: 8px 10px 4px;
+  gap: 2px;
 }
 
 .year-month-weekdays span {
   text-align: center;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 700;
   color: var(--text-faint);
   text-transform: uppercase;
   letter-spacing: 0.3px;
-  padding: 3px 0;
-  transition: color 0.15s;
+  padding: 2px 0;
 }
 
-.year-month:hover .year-month-weekdays span {
-  color: var(--text-muted);
+.year-month-weekdays span.weekend {
+  color: var(--danger);
+  opacity: 0.55;
 }
 
 .year-month-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  padding: 3px 8px 8px;
-  gap: 1px;
-  position: relative;
-  z-index: 1;
+  padding: 4px 10px 10px;
+  gap: 2px;
 }
 
 .year-month-day {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 30px;
+  min-height: 28px;
+  height: 28px;
+  padding: 0;
   border: none;
   background: transparent;
   color: var(--text);
   font-size: 11px;
   font-weight: 500;
-  border-radius: 50%;
+  border-radius: 8px;
   cursor: pointer;
-  transition:
-    background 0.12s,
-    color 0.12s,
-    transform 0.12s;
-  position: relative;
+  transition: background 0.15s, color 0.15s, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.year-month-day-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 3px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1;
+  color: inherit;
+  transition: background 0.18s, color 0.18s, box-shadow 0.18s;
 }
 
 .year-month-day.other {
@@ -14761,159 +14644,143 @@ textarea:focus-visible,
 
 .year-month-day:hover:not(.other) {
   background: var(--hover);
-  transform: scale(1.15);
 }
 
-.year-month-day.today {
-  background: transparent;
-  color: var(--accent);
-  border: 2px solid var(--accent);
+.year-month-day:hover:not(.other) .year-month-day-num {
+  transform: scale(1.08);
+}
+
+.year-month-day.today .year-month-day-num {
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-hover) 100%);
+  color: #fff;
   font-weight: 700;
+  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.3);
 }
 
-.year-month-day.today:hover {
-  background: var(--accent-soft);
-  transform: scale(1.15);
+.year-month-day.today:hover:not(.other) .year-month-day-num {
+  box-shadow: 0 3px 12px rgba(99, 91, 219, 0.4);
 }
 
-.year-month-day.has-meeting::after {
+/* Meeting dot indicator */
+.year-month-day.has-meetings::after {
   content: "";
   position: absolute;
-  bottom: 4px;
+  bottom: 2px;
   left: 50%;
   transform: translateX(-50%);
-  width: 5px;
-  height: 5px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
   background: var(--accent);
-  box-shadow: 0 0 4px rgba(99, 91, 219, 0.4);
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+  box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--accent) 25%, transparent);
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.year-month-day:hover.has-meeting::after {
-  transform: translateX(-50%) scale(1.4);
+.year-month-day:hover:not(.other).has-meetings::after {
+  transform: translateX(-50%) scale(1.5);
 }
 
-.year-month-day.other.has-meeting::after {
+.year-month-day.other.has-meetings::after {
   background: var(--text-faint);
-  opacity: 0.5;
+  opacity: 0.4;
 }
 
-.year-month-day.has-meeting {
+.year-month-day.has-meetings {
   font-weight: 600;
 }
 
-.year-month-day.has-meeting::after {
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
-}
-
-.year-month-day:hover:not(.other).has-meeting {
+.year-month-day:hover:not(.other).has-meetings {
   background: var(--accent-soft);
-  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.2);
 }
 
-.year-month-day.today.has-meeting::after {
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+/* Year view event overlays (hidden in compact mode) */
+.year-month-day-events,
+.year-month-event,
+.year-month-more {
+  display: none;
 }
 
-/* Year view month cards — clean flat style matching screenshot */
-.year-month {
-  background: var(--surface);
-}
-
-.year-month.current-month {
-  background: var(--surface);
-}
-
-.year-month.current-month .year-month-header {
-  background: var(--surface-2);
-}
-
-.year-month-header {
-  background: var(--surface-2);
-}
-
-.year-month-name {
-  color: var(--text);
-}
-
-.year-month.current-month .year-month-name {
-  color: var(--accent-text);
-  font-weight: 800;
-}
-
-.year-month-weekdays span {
-  color: var(--text-faint);
-  transition: color 0.15s;
-}
-
-.year-month.current-month .year-month-weekdays span {
+/* Footer strip with meeting count and heat bar */
+.year-month-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  font-weight: 650;
   color: var(--text-muted);
 }
 
-/* Year view month cards — clean flat style matching screenshot */
-.year-month {
-  background: var(--surface);
-}
-
-.year-month.current-month {
-  background: var(--surface);
-}
-
-.year-month.current-month .year-month-header {
-  background: var(--surface-2);
-}
-
-.year-month-header {
-  background: var(--surface-2);
-}
-
-.year-month-name {
-  color: var(--text);
-}
-
-.year-month.current-month .year-month-name {
-  color: var(--accent-text);
-  font-weight: 800;
-}
-
-.year-month-weekdays span {
+.year-month-footer.empty {
   color: var(--text-faint);
-  transition: color 0.15s;
+  font-weight: 500;
 }
 
-.year-month.current-month .year-month-weekdays span {
-  color: var(--text-muted);
+.year-month-footer-label {
+  flex-shrink: 0;
 }
 
-/* Enhanced year month day with meeting indicator */
-.year-month-day {
-  transition:
-    background 0.12s,
-    color 0.12s,
-    transform 0.12s;
+.year-month-heatbar {
+  flex: 1;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  overflow: hidden;
 }
 
-.year-month-day.has-meeting {
-  font-weight: 600;
+.year-month-heatbar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), color-mix(in srgb, var(--accent) 75%, var(--accent-hover)));
+  transition: width 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-.year-month-day.has-meeting::after {
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+/* Year view responsive */
+@media (min-width: 1700px) {
+  .year-view {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 22px 20px;
+    padding: 28px 26px;
+  }
 }
 
-.year-month-day:hover:not(.other).has-meeting {
-  background: var(--accent-soft);
-  box-shadow: 0 2px 8px rgba(99, 91, 219, 0.2);
+@media (max-width: 1100px) {
+  .year-view {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px 16px;
+    padding: 20px 18px;
+  }
 }
 
-.year-month-day.today.has-meeting::after {
-  background: var(--accent);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 25%, transparent);
+@media (max-width: 800px) {
+  .year-view {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px 14px;
+    padding: 18px 16px;
+  }
 }
+
+@media (max-width: 520px) {
+  .year-view {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .year-month-day {
+    height: 26px;
+  }
+
+  .year-month-day-num {
+    min-width: 20px;
+    height: 20px;
+    font-size: 10px;
+  }
+}
+
+/* (Years Calendar enhanced UI lives at the end of this file.) */
 
 /* Availability indicators */
 .availability-indicator {
@@ -14949,7 +14816,8 @@ textarea:focus-visible,
   font-size: 10.5px;
   font-weight: 700;
   text-transform: capitalize;
-  transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.15s;
+  letter-spacing: 0.1px;
+  transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s;
 }
 
 .rsvp-badge:hover {
@@ -14963,14 +14831,22 @@ textarea:focus-visible,
 }
 
 .rsvp-accepted {
-  background: linear-gradient(135deg, var(--success-soft) 0%, var(--success-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--success-soft) 0%,
+    var(--success-border) 100%
+  );
   color: var(--success);
   border: 1px solid var(--success-border);
   box-shadow: 0 1px 3px rgba(20, 133, 92, 0.15);
 }
 
 .rsvp-declined {
-  background: linear-gradient(135deg, var(--danger-soft) 0%, var(--danger-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--danger-soft) 0%,
+    var(--danger-border) 100%
+  );
   color: var(--danger);
   border: 1px solid var(--danger-border);
   box-shadow: 0 1px 3px rgba(224, 72, 79, 0.15);
@@ -15004,7 +14880,11 @@ textarea:focus-visible,
 
 /* Better event chip with status colors — overrides the old calendar-bg/text */
 .calendar-event-chip.status-scheduled {
-  background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 85%, var(--accent-hover)) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent) 0%,
+    color-mix(in srgb, var(--accent) 85%, var(--accent-hover)) 100%
+  );
   color: #ffffff;
   border-left-color: color-mix(in srgb, #ffffff 30%, transparent);
   box-shadow: 0 1px 4px rgba(99, 91, 219, 0.25);
@@ -15105,7 +14985,11 @@ textarea:focus-visible,
 
 /* Enhanced agenda item time for scheduled */
 .agenda-item.status-scheduled .agenda-item-time {
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    var(--accent-border) 100%
+  );
   border-color: var(--accent-border);
   border-left-color: var(--accent);
 }
@@ -15141,12 +15025,12 @@ textarea:focus-visible,
   display: flex;
   flex-direction: column;
   gap: 12px;
-  transition: box-shadow 0.2s, border-color 0.2s;
+  transition: box-shadow 0.25s, border-color 0.25s;
 }
 
 .meeting-detail-section:hover {
   border-color: var(--border-strong);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
 }
 
 .meeting-detail-icon {
@@ -15155,7 +15039,11 @@ textarea:focus-visible,
   height: 36px;
   place-items: center;
   border-radius: 10px;
-  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
+  background: linear-gradient(
+    135deg,
+    var(--accent-soft) 0%,
+    var(--accent-border) 100%
+  );
   color: var(--accent-text);
   flex-shrink: 0;
   transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -15202,7 +15090,10 @@ textarea:focus-visible,
   border-radius: 8px;
   background: var(--accent-soft);
   border: 1px solid var(--accent-border);
-  transition: background 0.15s, transform 0.12s, box-shadow 0.15s;
+  transition:
+    background 0.15s,
+    transform 0.12s,
+    box-shadow 0.15s;
 }
 
 .meeting-detail-link:hover {
@@ -15226,7 +15117,11 @@ textarea:focus-visible,
   color: var(--text-muted);
   font-size: 12.5px;
   font-weight: 600;
-  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    border-color 0.12s,
+    transform 0.12s;
 }
 
 .meeting-detail-chips .participant-chip:hover {
@@ -15250,7 +15145,10 @@ textarea:focus-visible,
   border-radius: 12px;
   background: var(--surface);
   border: 1px solid var(--border);
-  transition: box-shadow 0.15s, border-color 0.15s, transform 0.12s;
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s,
+    transform 0.12s;
 }
 
 .attendee-row:hover {
@@ -15298,33 +15196,34 @@ textarea:focus-visible,
 .status-pill {
   display: inline-flex;
   align-items: center;
+  gap: 5px;
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 11px;
   font-weight: 700;
   text-transform: capitalize;
-  letter-spacing: 0.3px;
+  letter-spacing: 0.2px;
 }
 
 .status-pill.scheduled {
   background: var(--accent-soft);
   color: var(--accent-text);
   border: 1px solid var(--accent-border);
-  box-shadow: 0 1px 3px rgba(99, 91, 219, 0.12);
+  box-shadow: 0 1px 4px rgba(99, 91, 219, 0.1);
 }
 
 .status-pill.completed {
   background: var(--success-soft);
   color: var(--success);
   border: 1px solid var(--success-border);
-  box-shadow: 0 1px 3px rgba(20, 133, 92, 0.12);
+  box-shadow: 0 1px 4px rgba(20, 133, 92, 0.1);
 }
 
 .status-pill.cancelled {
   background: var(--surface-2);
   color: var(--text-muted);
-  border: 1px solid var(--border-strong);
-  opacity: 0.8;
+  border: 1px solid var(--border);
+  opacity: 0.75;
 }
 
 /* ── Enhanced empty states ─────────────────────────────────────────── */
@@ -15375,7 +15274,7 @@ textarea:focus-visible,
 }
 
 .upcoming-empty-btn {
-  margin-top: 6px;
+  margin-top: 8px;
   position: relative;
   z-index: 1;
 }
@@ -15653,7 +15552,10 @@ textarea:focus-visible,
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.12s, color 0.12s, box-shadow 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s,
+    box-shadow 0.12s;
 }
 
 .sf-tab:hover {
@@ -15693,7 +15595,10 @@ textarea:focus-visible,
   color: var(--text);
   font-size: 13px;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s,
+    background 0.15s;
 }
 
 .sf-search input:focus {
@@ -15759,5 +15664,63 @@ textarea:focus-visible,
   .sf-actions .icon-btn {
     width: 30px;
     height: 30px;
+  }
+}
+
+/* ── Toolbar year selector (segmented control) ─────────────────────── */
+.meetings-year-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  border-left: 1px solid var(--border);
+  transition: background 0.18s;
+}
+
+.meetings-year-wrap:hover {
+  background: var(--hover);
+}
+
+.meetings-year-wrap:focus-within {
+  background: var(--accent-soft);
+}
+
+.meetings-year-wrap svg {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.meetings-year-select {
+  appearance: none;
+  -webkit-appearance: none;
+  height: 44px;
+  padding: 0 28px 0 12px;
+  border: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  text-align: center;
+  cursor: pointer;
+  outline: none;
+  transition: color 0.18s;
+}
+
+.meetings-year-select:hover {
+  color: var(--accent-text);
+}
+
+.meetings-toolbar-nav .meetings-year-wrap + button {
+  border-left: 1px solid var(--border);
+}
+
+@media (max-width: 640px) {
+  .meetings-year-select {
+    height: 36px;
+    font-size: 13px;
   }
 }

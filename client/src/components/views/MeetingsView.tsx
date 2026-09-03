@@ -67,7 +67,18 @@ const MONTH_NAMES = [
 const WEEKDAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WEEKDAY_NAMES_SHORT = ["S", "M", "T", "W", "T", "F", "S"];
 
-type CalendarViewMode = "year" | "month" | "week" | "day" | "agenda";
+// Heat-map level for a month's meeting volume relative to the busiest month.
+const heatLevel = (count: number, max: number) => {
+  if (count <= 0 || max <= 0) return 0;
+  const r = count / max;
+  if (r >= 0.75) return 5;
+  if (r >= 0.55) return 4;
+  if (r >= 0.35) return 3;
+  if (r >= 0.18) return 2;
+  return 1;
+};
+
+type CalendarViewMode = "month" | "week" | "day" | "agenda";
 
 const MeetingsView = ({
   meetings,
@@ -296,9 +307,6 @@ const MeetingsView = ({
     }
   };
 
-  const goToPrevYear = () => setViewYear((y) => y - 1);
-  const goToNextYear = () => setViewYear((y) => y + 1);
-
   const weekViewDays = useMemo(() => {
     const current = selectedDateForDay ? new Date(selectedDateForDay + "T00:00:00") : new Date(todayStr + "T00:00:00");
     const dayOfWeek = current.getDay();
@@ -321,9 +329,6 @@ const MeetingsView = ({
   }, [selectedDateForDay, todayStr]);
 
   const toolbarTitle = useMemo(() => {
-    if (viewMode === "year") {
-      return `${viewYear}`;
-    }
     if (viewMode === "week") {
       const start = weekViewDays[0];
       const end = weekViewDays[6];
@@ -341,19 +346,6 @@ const MeetingsView = ({
   }, [viewMode, viewMonth, viewYear, weekViewDays]);
 
   const toolbarNav = useMemo(() => {
-    if (viewMode === "year") {
-      return (
-        <>
-          <button className="nav-arrow" onClick={goToPrevYear} aria-label="Previous year">
-            <Icon name="chevron-left" size={15} />
-          </button>
-          <button className="today-btn" onClick={goToToday}>Today</button>
-          <button className="nav-arrow" onClick={goToNextYear} aria-label="Next year">
-            <Icon name="chevron-right" size={15} />
-          </button>
-        </>
-      );
-    }
     if (viewMode === "week") {
       return (
         <>
@@ -378,7 +370,7 @@ const MeetingsView = ({
         </button>
       </>
     );
-  }, [viewMode, goToToday, goToPrevWeek, goToNextWeek, goToPrevMonth, goToNextMonth, goToPrevYear, goToNextYear]);
+  }, [viewMode, goToToday, goToPrevWeek, goToNextWeek, goToPrevMonth, goToNextMonth]);
 
   const agendaGroups = useMemo(() => {
     const sorted = meetings
@@ -539,7 +531,7 @@ const MeetingsView = ({
             </div>
             <div className="meetings-toolbar-actions">
               <div className="meetings-view-tabs" role="tablist" aria-label="Calendar view">
-                {(["year", "month", "week", "day", "agenda"] as CalendarViewMode[]).map((mode) => (
+                {(["month", "week", "day", "agenda"] as CalendarViewMode[]).map((mode) => (
                   <button
                     key={mode}
                     role="tab"
@@ -566,93 +558,6 @@ const MeetingsView = ({
                 {isFullscreen ? "Exit" : "Full screen"}
               </button>
             </div>
-            {viewMode === "year" && (
-              <div className="year-view">
-                {Array.from({ length: 12 }).map((_, i) => {
-                  const key = viewYear * 12 + i;
-                  const monthMeetings = meetingsByMonth[key] || [];
-                  const monthName = MONTH_NAMES[i];
-                  const isCurrentMonth = viewYear === nowRef.getFullYear() && i === nowRef.getMonth();
-                  const firstDay = new Date(viewYear, i, 1);
-                  const startWeekday = firstDay.getDay();
-                  const daysInMonth = new Date(viewYear, i + 1, 0).getDate();
-                  const daysInPrevMonth = new Date(viewYear, i, 0).getDate();
-
-                  const cells: { day: number; isCurrentMonth: boolean; isToday: boolean; dateStr: string }[] = [];
-
-                  for (let d = startWeekday - 1; d >= 0; d--) {
-                    const dayNum = daysInPrevMonth - d;
-                    const m = i === 0 ? 11 : i - 1;
-                    const y = i === 0 ? viewYear - 1 : viewYear;
-                    const ds = `${y}-${String(m + 1).padStart(2, "0")}-${String(dayNum).padStart(2, "0")}`;
-                    cells.push({ day: dayNum, isCurrentMonth: false, isToday: false, dateStr: ds });
-                  }
-
-                  for (let d = 1; d <= daysInMonth; d++) {
-                    const ds = `${viewYear}-${String(i + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    cells.push({ day: d, isCurrentMonth: true, isToday: ds === todayStr, dateStr: ds });
-                  }
-
-                  const remaining = (7 - (cells.length % 7)) % 7;
-                  for (let d = 1; d <= remaining; d++) {
-                    const m = i === 11 ? 0 : i + 1;
-                    const y = i === 11 ? viewYear + 1 : viewYear;
-                    const ds = `${y}-${String(m + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-                    cells.push({ day: d, isCurrentMonth: false, isToday: false, dateStr: ds });
-                  }
-
-                  return (
-                    <div
-                      key={i}
-                      className={`year-month${isCurrentMonth ? " current-month" : ""}`}
-                      onClick={() => {
-                        setViewMonth(i);
-                        setViewMode("month");
-                      }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" || e.key === " ") {
-                          e.preventDefault();
-                          setViewMonth(i);
-                          setViewMode("month");
-                        }
-                      }}
-                    >
-                      <div className="year-month-header">
-                        <span className="year-month-name">{monthName}</span>
-                        {monthMeetings.length > 0 && (
-                          <span className="year-month-count">{monthMeetings.length}</span>
-                        )}
-                      </div>
-                      <div className="year-month-weekdays">
-                        {["S", "M", "T", "W", "T", "F", "S"].map((w, idx) => (
-                          <span key={idx}>{w}</span>
-                        ))}
-                      </div>
-                      <div className="year-month-grid">
-                        {cells.map((cell, idx) => {
-                          const hasMeeting = meetingsByDate[cell.dateStr]?.length > 0;
-                          return (
-                            <button
-                              key={idx}
-                              className={`year-month-day${!cell.isCurrentMonth ? " other" : ""}${cell.isToday ? " today" : ""}${hasMeeting ? " has-meeting" : ""}`}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDayClick(cell.dateStr);
-                              }}
-                              title={hasMeeting ? `${meetingsByDate[cell.dateStr].length} meeting(s)` : undefined}
-                            >
-                              {cell.day}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
           <div className="meetings-toolbar-bottom">
             <div className="meetings-toolbar-controls">
