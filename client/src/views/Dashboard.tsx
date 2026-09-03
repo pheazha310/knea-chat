@@ -49,6 +49,7 @@ import { roleLabel } from "../utils/roles";
 import MeetingsView from "../components/views/MeetingsView";
 import AttendanceView from "../components/views/AttendanceView";
 import ManagerAttendanceView from "../components/views/ManagerAttendanceView";
+import TasksView from "../components/views/TasksView";
 
 /** Shape used by the members panel (conversation members or user fallback). */
 type PanelMember = {
@@ -1141,6 +1142,13 @@ const Dashboard = () => {
             ) : (
               <AttendanceView />
             )
+          ) : view === "tasks" ? (
+            <TasksView
+              users={users}
+              teams={teams}
+              canManage={canManage}
+              currentUserId={currentUserId}
+            />
           ) : view === "notifs" ? (
             <NotifsView
               notifications={notifications}
@@ -1156,6 +1164,10 @@ const Dashboard = () => {
             />
           ) : view === "files" ? (
             <SharedFilesView
+              teams={teams}
+              conversations={conversations}
+              canManage={canManage}
+              currentUserId={currentUserId}
               onOpenConversation={(id) => handleOpenConversation(id)}
             />
           ) : (

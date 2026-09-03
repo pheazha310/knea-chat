@@ -6,6 +6,9 @@
  */
 import type { NextFunction, Request, Response } from 'express';
 import type { SharedFileService } from '../services/SharedFile.service';
+import type { BroadcastToConversation } from '../websocket/broadcast.utils';
+import { serializeMessage } from '../websocket/message.utils';
+import { sendToUser } from '../websocket/connection.registry';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
@@ -69,7 +72,10 @@ const upload = multer({
 });
 
 export class SharedFileController {
-  constructor(private sharedFileService: SharedFileService) {}
+  constructor(
+    private sharedFileService: SharedFileService,
+    private broadcastToConversation: BroadcastToConversation,
+  ) {}
 
   /** POST /api/shared-files/upload */
   uploadFile = async (req: Request, res: Response): Promise<void> => {
@@ -88,6 +94,9 @@ export class SharedFileController {
         const company_id = req.body.company_id ? Number(req.body.company_id) : req.user!.companyId;
         const description = req.body.description || null;
         const is_public = req.body.is_public === 'true';
+        // Non-null when the upload targets a team's file area.
+        const rawTeamId = req.body.team_id ? Number(req.body.team_id) : 0;
+        const team_id = Number.isFinite(rawTeamId) && rawTeamId > 0 ? rawTeamId : null;
 
         if (!req.file) {
           res.status(400).json({
@@ -100,6 +109,7 @@ export class SharedFileController {
 
         const file = await this.sharedFileService.createSharedFile({
           company_id,
+          team_id,
           uploaded_by: req.user!.id,
           file_name: req.file.originalname,
           file_url: `/uploads/${req.file.filename}`,
@@ -158,6 +168,99 @@ export class SharedFileController {
     }
   };
 
+  /** GET /api/shared-files/team/:teamId — team file area (member/manager only) */
+  listTeamFiles = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const teamId = Number(req.params.teamId);
+      if (!Number.isFinite(teamId) || teamId <= 0) {
+        res.status(400).json({ success: false, message: 'Invalid team id', errors: {} });
+        return;
+      }
+      const { search, fileType, page = 1, limit = 20 } = req.query;
+      const result = await this.sharedFileService.listTeamFiles(teamId, req.user!.id, {
+        search: search as string | undefined,
+        fileType: fileType as string | undefined,
+        page: Number(page),
+        limit: Number(limit),
+      });
+      res.status(200).json({
+        success: true,
+        message: 'Team files retrieved successfully',
+        data: result,
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** GET /api/shared-files/:id/shares */
+  listShares = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const shares = await this.sharedFileService.getFileShares(Number(req.params.id), req.user!.id);
+      res.status(200).json({
+        success: true,
+        message: 'File shares retrieved successfully',
+        data: { shares },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** POST /api/shared-files/:id/shares */
+  shareFile = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const target_type = String(req.body.target_type || '');
+      const target_id = Number(req.body.target_id);
+      if (!Number.isFinite(target_id) || target_id <= 0) {
+        res.status(400).json({ success: false, message: 'Invalid target_id', errors: { target_id: 'A positive target id is required' } });
+        return;
+      }
+      const share = await this.sharedFileService.shareFile(
+        Number(req.params.id),
+        req.user!.id,
+        target_type,
+        target_id,
+      );
+      res.status(201).json({
+        success: true,
+        message: 'File shared successfully',
+        data: { share },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** DELETE /api/shared-files/:id/shares/:shareId */
+  unshareFile = async (req: Request, res: Response): Promise<void> => {
+    try {
+      await this.sharedFileService.unshareFile(Number(req.params.shareId), req.user!.id);
+      res.status(200).json({
+        success: true,
+        message: 'Share removed successfully',
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
   /** GET /api/shared-files/:id */
   getById = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -189,6 +292,74 @@ export class SharedFileController {
         success: true,
         message: 'File updated successfully',
         data: { file },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /**
+   * POST /api/shared-files/:id/embed — share the file into a conversation as
+   * a chat message. Body: `{ conversation_id }`.
+   */
+  embed = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const conversation_id = Number(req.body.conversation_id);
+      if (!Number.isFinite(conversation_id) || conversation_id <= 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid conversation_id',
+          errors: { conversation_id: 'A positive conversation id is required' },
+        });
+        return;
+      }
+
+      const result = await this.sharedFileService.embedInConversation(
+        Number(req.params.id),
+        req.user!.id,
+        conversation_id,
+      );
+
+      // Live-sync the file message to every connected member except the
+      // sender, exactly like a chat upload (same `receive_message` event).
+      const serialized = serializeMessage(result.message);
+      void this.broadcastToConversation(
+        conversation_id,
+        { type: 'receive_message', message: serialized },
+        { excludeUserId: req.user!.id },
+      );
+
+      // Keep recipient bells/unread badges in sync (new_message path).
+      const { notifiedUserIds = [] } = result.message;
+      const senderName =
+        [result.message.first_name, result.message.last_name].filter(Boolean).join(' ').trim() ||
+        'Someone';
+      const snippet =
+        result.file.file_name.length > 120
+          ? `${result.file.file_name.slice(0, 120)}…`
+          : result.file.file_name;
+      for (const userId of notifiedUserIds) {
+        if (Number(userId) === Number(req.user!.id)) continue;
+        sendToUser(Number(userId), JSON.stringify({
+          type: 'notification',
+          data: {
+            type: 'new_message',
+            title: senderName,
+            message: snippet,
+            conversationId: conversation_id,
+            messageId: result.message.id,
+          },
+        }));
+      }
+
+      res.status(201).json({
+        success: true,
+        message: 'File shared into the conversation',
+        data: result,
       });
     } catch (error) {
       res.status(400).json({

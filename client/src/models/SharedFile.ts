@@ -6,6 +6,8 @@ import api, { API_BASE_URL } from '../services/api';
 export interface SharedFile {
   id: number;
   company_id: number;
+  /** Team whose file area this file lives in (null = company files). */
+  team_id?: number | null;
   uploaded_by: number;
   file_name: string;
   file_url: string;
@@ -19,6 +21,19 @@ export interface SharedFile {
   uploader_last_name?: string;
   uploader_email?: string;
   uploader_profile_picture?: string | null;
+  team_name?: string | null;
+}
+
+export type FileShareTargetType = 'team' | 'conversation';
+
+export interface FileShare {
+  id: number;
+  file_id: number;
+  target_type: FileShareTargetType;
+  target_id: number;
+  shared_by: number;
+  created_at: string;
+  target_name?: string | null;
 }
 
 export interface FileVersion {
@@ -76,6 +91,41 @@ export const SharedFileModel = {
       `/shared-files${qs ? `?${qs}` : ''}`,
     );
   },
+
+  getTeamFiles: (teamId: number, params?: { search?: string; fileType?: string; page?: number; limit?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.search) query.set('search', params.search);
+    if (params?.fileType) query.set('fileType', params.fileType);
+    if (params?.page) query.set('page', String(params.page));
+    if (params?.limit) query.set('limit', String(params.limit));
+    const qs = query.toString();
+    return api.get<{ success: boolean; data: { files: SharedFile[]; total: number } }>(
+      `/shared-files/team/${teamId}${qs ? `?${qs}` : ''}`,
+    );
+  },
+
+  getShares: (fileId: number) =>
+    api.get<{ success: boolean; data: { shares: FileShare[] } }>(
+      `/shared-files/${fileId}/shares`,
+    ),
+
+  shareFile: (fileId: number, target_type: FileShareTargetType, target_id: number) =>
+    api.post<{ success: boolean; data: { share: FileShare } }>(
+      `/shared-files/${fileId}/shares`,
+      { target_type, target_id },
+    ),
+
+  /** Post the file into a conversation as a chat message. */
+  embedFile: (fileId: number, conversationId: number) =>
+    api.post<{
+      success: boolean;
+      data: { share: FileShare; message: { id: number } };
+    }>(`/shared-files/${fileId}/embed`, { conversation_id: conversationId }),
+
+  unshareFile: (fileId: number, shareId: number) =>
+    api.delete<{ success: boolean; message: string }>(
+      `/shared-files/${fileId}/shares/${shareId}`,
+    ),
 
   getById: (id: number) =>
     api.get<{ success: boolean; data: { file: SharedFile } }>(`/shared-files/${id}`),

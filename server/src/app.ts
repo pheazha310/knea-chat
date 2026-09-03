@@ -28,6 +28,8 @@ import { createOvertimeRouter } from './routes/overtime.routes';
 import { createWorkScheduleRouter } from './routes/workSchedule.routes';
 import { createLeaveRequestRouter } from './routes/leaveRequest.routes';
 import { createHolidayRouter } from './routes/holiday.routes';
+import { createNotificationPreferenceRouter } from './routes/notificationPreference.routes';
+import { createTaskRouter } from './routes/task.routes';
 
 export const app = express();
 
@@ -90,6 +92,8 @@ app.use('/api/bookmarks', container.auth.authenticate, createBookmarkListRouter(
 app.use('/api/shared-files', container.auth.authenticate, createSharedFileRouter(container.sharedFileController, container.auth));
 app.use('/api/search', container.auth.authenticate, createSearchRouter(container.searchController, container.auth));
 app.use('/api/notifications', container.auth.authenticate, createNotificationRouter(container.notificationController, container.auth));
+app.use('/api/notification-preferences', container.auth.authenticate, createNotificationPreferenceRouter(container.notificationPreferenceController, container.auth));
+app.use('/api/tasks', container.auth.authenticate, createTaskRouter(container.taskController, container.auth));
 app.use('/api/companies', container.auth.authenticate, createCompanyRouter(container.companyController, container.auth));
 app.use('/api/departments', container.auth.authenticate, createDepartmentRouter(container.departmentController, container.auth));
 app.use('/api/announcements', container.auth.authenticate, createAnnouncementRouter(container.announcementController, container.auth));

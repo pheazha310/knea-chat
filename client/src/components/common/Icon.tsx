@@ -74,7 +74,9 @@ export type IconName =
   | 'eye'
   | 'eye-off'
   | 'bookmark'
-  | 'screen';
+  | 'screen'
+  | 'columns'
+  | 'list';
 
 const PATHS: Record<IconName, React.ReactNode> = {
   hash: (
@@ -453,6 +455,23 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <rect x="2" y="3" width="12" height="8" rx="1.5" />
       <path d="M5.5 14H10.5" />
       <path d="M8 11V14" />
+    </>
+  ),
+  columns: (
+    <>
+      <rect x="2.5" y="3" width="3.2" height="10" rx="1" />
+      <rect x="6.4" y="3" width="3.2" height="10" rx="1" />
+      <rect x="10.3" y="3" width="3.2" height="10" rx="1" />
+    </>
+  ),
+  list: (
+    <>
+      <rect x="2.5" y="3.5" width="2.4" height="2.4" rx="0.6" />
+      <path d="M7.5 4.7H13.5" />
+      <rect x="2.5" y="6.8" width="2.4" height="2.4" rx="0.6" />
+      <path d="M7.5 8H13.5" />
+      <rect x="2.5" y="10.1" width="2.4" height="2.4" rx="0.6" />
+      <path d="M7.5 11.3H13.5" />
     </>
   ),
 };

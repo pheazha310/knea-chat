@@ -6,6 +6,7 @@ import type { MeetingAttachmentRepository } from "../repositories/meetingAttachm
 import type { NotificationRepository } from "../repositories/notificationRepository";
 import type { UserRepository } from "../repositories/userRepository";
 import type { MeetingRow, CreateMeetingData, UpdateMeetingData, MeetingNoteRow, CreateMeetingNoteData, MeetingReminderRow, CreateMeetingReminderData, MeetingAttendeeRow, UpdateAttendeeRsvpData, MeetingAttachmentRow, CreateMeetingAttachmentData } from "../types/Meeting";
+import type { NotificationPreferenceService } from "./NotificationPreference.service";
 import { sendToUser } from "../websocket/connection.registry";
 
 export class MeetingService {
@@ -17,6 +18,7 @@ export class MeetingService {
         private meetingAttachmentRepository: MeetingAttachmentRepository,
         private notificationRepository: NotificationRepository,
         private userRepository: UserRepository,
+        private notificationPreferences?: NotificationPreferenceService | null,
     ) {}
 
     async getMeetings(companyId: number, filters: { search?: string; organizer_id?: number; department_id?: number; team_id?: number; status?: 'scheduled' | 'completed' | 'cancelled'; start_date?: string; end_date?: string } = {}): Promise<MeetingRow[]> {
@@ -50,7 +52,12 @@ export class MeetingService {
             const startTime = new Date(`${meeting.meeting_date}T${meeting.start_time}`);
             const defaultRemindAt = new Date(startTime.getTime() - (meeting.remind_before_minutes || 15) * 60 * 1000);
 
-            for (const participantId of data.participants) {
+            // Respect each participant's notification preferences.
+            const inviteRecipients = this.notificationPreferences
+                ? await this.notificationPreferences.filterEnabled('meetings', data.participants.map(Number))
+                : data.participants.map(Number);
+
+            for (const participantId of inviteRecipients) {
                 if (Number(participantId) === Number(data.organizer_id)) continue;
                 await this.notificationRepository.create({
                     user_id: participantId,
@@ -194,6 +201,14 @@ export class MeetingService {
             try {
                 const meeting = await this.meetingRepository.findById(reminder.meeting_id);
                 if (!meeting || meeting.status !== 'scheduled') continue;
+
+                // Users who muted meetings get no reminder row — just consume
+                // the due reminder so it is not retried forever.
+                if (this.notificationPreferences &&
+                    !(await this.notificationPreferences.isEnabled(reminder.user_id, 'meetings'))) {
+                    ids.push(reminder.id);
+                    continue;
+                }
 
                 await this.notificationRepository.create({
                     user_id: reminder.user_id,

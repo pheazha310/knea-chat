@@ -7,6 +7,7 @@
 import type { AnnouncementRepository } from '../repositories/announcementRepository';
 import type { NotificationRepository } from '../repositories/notificationRepository';
 import type { UserRepository } from '../repositories/userRepository';
+import type { NotificationPreferenceService } from './NotificationPreference.service';
 import type { AnnouncementRow } from '../types';
 
 export class AnnouncementService {
@@ -14,6 +15,7 @@ export class AnnouncementService {
     private announcementRepository: AnnouncementRepository,
     private notificationRepository: NotificationRepository,
     private userRepository: UserRepository,
+    private notificationPreferences?: NotificationPreferenceService | null,
   ) {}
 
   async getAnnouncements(companyId: number): Promise<AnnouncementRow[]> {
@@ -56,10 +58,14 @@ export class AnnouncementService {
     // announcement shows up in the bell / Notifications view.
     try {
       const memberIds = await this.userRepository.findCompanyUserIds(company_id);
+      // Respect each user's notification preferences (category: announcements).
+      const recipients = this.notificationPreferences
+        ? await this.notificationPreferences.filterEnabled('announcements', memberIds.map(Number))
+        : memberIds.map(Number);
       const snippet = trimmedContent.length > 120
         ? `${trimmedContent.slice(0, 120)}…`
         : trimmedContent;
-      for (const userId of memberIds) {
+      for (const userId of recipients) {
         if (Number(userId) === Number(created_by)) continue;
         await this.notificationRepository.create({
           user_id: userId,

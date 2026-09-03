@@ -20,3 +20,5 @@ export * from './Pagination';
 export * from './SharedFile';
 export * from './Meeting';
 export * from './Attendance';
+export * from './NotificationPreference';
+export * from './Task';

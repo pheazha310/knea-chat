@@ -177,6 +177,81 @@ Enforcement notes:
       checks covering clock in/out, WebSocket events, schedules, leave
       approval, holidays, overtime and permissions)
 
+### Files & Documents (Shared Files)
+- [x] **Company shared files** — upload (drag & drop) to the company public
+      area, type filters + live search, preview, download, delete, per-user
+      permissions (`view`/`edit`/`delete`/`manage`) and version history with
+      re-uploads (`shared_files`, `file_versions`, `file_permissions`)
+- [x] **Team files (migration 019)** — a `team_id` on `shared_files` scopes a
+      file to a team's own file area; uploads to a team are restricted to team
+      members + that company's managers/admins, are stored private (never
+      leaked company-wide), and are visible to every team member. The Files
+      view has **Shared files / Team files** tabs with a team picker; managers
+      can open any team
+- [x] **Sharing to teams & conversations** — a `file_shares` table links a
+      file to extra destinations whose members gain access (team members via
+      `team_members`, conversation members via `conversation_members`,
+      managers/admins company-wide). Access checks (`canAccess`) cover public,
+      uploader, explicit permissions, home-team membership, and share
+      destinations. UI: Share action per file with an add/remove destination
+      modal; sharing is idempotent, owner/manage-gated, cross-company sharing
+      is blocked
+- [x] **API** — `GET /api/shared-files/team/:teamId`,
+      `GET|POST /api/shared-files/:id/shares`,
+      `DELETE /api/shared-files/:id/shares/:shareId`; upload accepts an
+      optional `team_id`
+- [x] **Embed in chat** — `POST /api/shared-files/:id/embed` shares a file
+      INTO a conversation as a `file`-type message (anyone with file access
+      who is part of the conversation). It grants the conversation access via
+      `file_shares`, posts the message through the normal message pipeline
+      (notifications for recipients), and live-broadcasts `receive_message`
+      to connected members exactly like a chat upload — no page refresh
+      needed. UI: the Share dialog's conversation option now posts the file
+      into that chat
+- [x] **Tests** — `server/test/sharedFile.service.test.ts` (18 tests: team
+      upload/listing access, share rules for teams & conversations,
+      unshare permissions, embedding into conversations, idempotency); live
+      E2E (`server/e2e/shared-files.e2e.js`, `npm run test:e2e:files` — 28
+      checks covering uploads, team visibility, access scoping, embedding as
+      a chat message, sharing and cleanup)
+
+### Tasks & Work Management
+- [x] **Create tasks** — title, description, due date, priority (low/medium/high),
+      status (open / in_progress / completed), assignee (`/api/tasks`)
+- [x] **Assign tasks** — managers/admins assign to anyone in the company;
+      employees create personal tasks (or team tasks in teams they belong to)
+- [x] **Team vs personal tasks** — a `team_id` scopes a task to a team (visible
+      to all members); tasks without one are personal (assignee + creator).
+      The Tasks view filters by All / Personal / per-team, and the create &
+      edit forms pick the team
+- [x] **Kanban board** — List ⇄ Board toggle; the board shows Open / In
+      progress / Done columns with drag-and-drop status changes (native HTML5
+      DnD, no new dependency), priority dot, due-date chip, assignee avatar
+      and team badge on each card
+- [x] **Task detail modal** — click any task (list or board) for a detail view:
+      status select, editable title/description/due date/priority/assignee/team
+      (managers & creators), comments with delete, and attachments with
+      upload / download / delete
+- [x] **Task comments** — add/list/delete on any task you can view
+      (`/api/tasks/:id/comments`)
+- [x] **Task attachments** — validated upload (type + size), list with size &
+      uploader, download, delete (`/api/tasks/:id/attachments`)
+- [x] **Task notifications** — assignment produces a `task_assigned`
+      notification (bell + real-time WS event) for the assignee; the server
+      scheduler sends one `task_deadline` reminder per due task (idempotent via
+      `deadline_reminded_at`). Both honor the user's notification preferences
+      (category `tasks` in Notifs → Preferences)
+- [x] **Task search & filters** — live text search (debounced) plus status,
+      priority and scope (team/personal) filters, with per-status counts on
+      the board and overdue highlighting
+- [x] **API** — `GET|POST /api/tasks`, `PATCH|DELETE /api/tasks/:id`,
+      `GET|POST /api/tasks/:id/comments`, `DELETE /api/tasks/:id/comments/:commentId`,
+      `GET|POST /api/tasks/:id/attachments`,
+      `DELETE /api/tasks/:id/attachments/:attachmentId`; role + team scoping
+      enforced in `TaskService`/`TaskRepository`
+- [x] **Tests** — `server/test/task.service.test.ts` + live E2E
+      (`server/e2e/tasks-notifications.e2e.js`, `npm run test:e2e:tasks`)
+
 ### Real company data
 - [x] **Company importer** (`npm run import:company -- <file.json|csv>`,
       template at `server/scripts/data/real-company.example.json`) — creates a

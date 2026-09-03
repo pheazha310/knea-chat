@@ -5,32 +5,41 @@
 // permissions, search).
 import { create } from "zustand";
 import { SharedFileModel } from "../models";
-import type { SharedFile, FileVersion, FilePermission } from "../models";
+import type { SharedFile, FileVersion, FilePermission, FileShare, FileShareTargetType } from "../models";
 
 interface SharedFileState {
   files: SharedFile[];
   total: number;
+  /** Files in the currently selected team's file area. */
+  teamFiles: SharedFile[];
+  teamTotal: number;
   currentFile: SharedFile | null;
   versions: FileVersion[];
   permissions: FilePermission[];
+  /** Where the current file is shared (teams / conversations). */
+  shares: FileShare[];
   isLoading: boolean;
   error: string | null;
   searchQuery: string;
 
   // --- setters ---
   setFiles: (files: SharedFile[], total: number) => void;
+  setTeamFiles: (files: SharedFile[], total: number) => void;
   setCurrentFile: (file: SharedFile | null) => void;
   setVersions: (versions: FileVersion[]) => void;
   setPermissions: (permissions: FilePermission[]) => void;
+  setShares: (shares: FileShare[]) => void;
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
   setSearchQuery: (query: string) => void;
 
   // --- loads ---
   loadFiles: (params?: { search?: string; fileType?: string; isPublic?: boolean; page?: number; limit?: number }) => Promise<void>;
+  loadTeamFiles: (teamId: number, params?: { search?: string; fileType?: string; page?: number; limit?: number }) => Promise<void>;
   loadFile: (id: number) => Promise<void>;
   loadVersions: (id: number) => Promise<void>;
   loadPermissions: (id: number) => Promise<void>;
+  loadShares: (fileId: number) => Promise<void>;
 
   // --- mutations ---
   uploadFile: (formData: FormData, onProgress?: (pct: number) => void) => Promise<SharedFile | null>;
@@ -40,6 +49,10 @@ interface SharedFileState {
   grantPermission: (fileId: number, userId: number, permission: string) => Promise<FilePermission | null>;
   revokePermission: (fileId: number, userId: number) => Promise<boolean>;
   searchFiles: (query: string) => Promise<SharedFile[]>;
+  shareFile: (fileId: number, targetType: FileShareTargetType, targetId: number) => Promise<FileShare | null>;
+  /** Post the file into a conversation as a chat message (also grants access). */
+  embedFile: (fileId: number, conversationId: number) => Promise<FileShare | null>;
+  unshareFile: (fileId: number, shareId: number) => Promise<boolean>;
 
   // --- reset ---
   clear: () => void;
@@ -48,17 +61,22 @@ interface SharedFileState {
 export const useSharedFileStore = create<SharedFileState>()((set, get) => ({
   files: [],
   total: 0,
+  teamFiles: [],
+  teamTotal: 0,
   currentFile: null,
   versions: [],
   permissions: [],
+  shares: [],
   isLoading: false,
   error: null,
   searchQuery: '',
 
   setFiles: (files, total) => set({ files, total }),
+  setTeamFiles: (teamFiles, teamTotal) => set({ teamFiles, teamTotal }),
   setCurrentFile: (currentFile) => set({ currentFile }),
   setVersions: (versions) => set({ versions }),
   setPermissions: (permissions) => set({ permissions }),
+  setShares: (shares) => set({ shares }),
   setLoading: (isLoading) => set({ isLoading }),
   setError: (error) => set({ error }),
   setSearchQuery: (searchQuery) => set({ searchQuery }),
@@ -103,6 +121,29 @@ export const useSharedFileStore = create<SharedFileState>()((set, get) => ({
       const response = await SharedFileModel.getPermissions(id);
       const permissions = response.data.data?.permissions || [];
       set({ permissions, isLoading: false });
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  loadTeamFiles: async (teamId, params = {}) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await SharedFileModel.getTeamFiles(teamId, params);
+      const files = response.data.data?.files || [];
+      const total = response.data.data?.total || 0;
+      set({ teamFiles: files, teamTotal: total, isLoading: false });
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+    }
+  },
+
+  loadShares: async (fileId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await SharedFileModel.getShares(fileId);
+      const shares = response.data.data?.shares || [];
+      set({ shares, isLoading: false });
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
     }
@@ -204,6 +245,57 @@ export const useSharedFileStore = create<SharedFileState>()((set, get) => ({
     }
   },
 
+  shareFile: async (fileId, targetType, targetId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await SharedFileModel.shareFile(fileId, targetType, targetId);
+      const share = response.data.data?.share;
+      if (share) {
+        set((state) => ({
+          shares: [share, ...state.shares.filter((s) => !(s.target_type === share.target_type && s.target_id === share.target_id))],
+          isLoading: false,
+        }));
+      }
+      return share || null;
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+      return null;
+    }
+  },
+
+  unshareFile: async (fileId, shareId) => {
+    set({ isLoading: true, error: null });
+    try {
+      await SharedFileModel.unshareFile(fileId, shareId);
+      set((state) => ({
+        shares: state.shares.filter((s) => s.id !== shareId),
+        isLoading: false,
+      }));
+      return true;
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+      return false;
+    }
+  },
+
+  embedFile: async (fileId, conversationId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await SharedFileModel.embedFile(fileId, conversationId);
+      const share = response.data.data?.share;
+      if (share) {
+        set((state) => ({
+          shares: [share, ...state.shares.filter((s) => !(s.target_type === share.target_type && s.target_id === share.target_id))],
+          isLoading: false,
+        }));
+      }
+      return share || null;
+    } catch (error) {
+      set({ error: (error as Error).message, isLoading: false });
+      return null;
+    }
+  },
+
   searchFiles: async (query) => {
     set({ isLoading: true, error: null, searchQuery: query });
     try {
@@ -220,9 +312,12 @@ export const useSharedFileStore = create<SharedFileState>()((set, get) => ({
   clear: () => set({
     files: [],
     total: 0,
+    teamFiles: [],
+    teamTotal: 0,
     currentFile: null,
     versions: [],
     permissions: [],
+    shares: [],
     isLoading: false,
     error: null,
     searchQuery: '',

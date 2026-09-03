@@ -35,6 +35,8 @@ import { WorkScheduleRepository } from './repositories/workScheduleRepository';
 import { AttendanceRepository } from './repositories/attendanceRepository';
 import { LeaveRequestRepository } from './repositories/leaveRequestRepository';
 import { HolidayRepository } from './repositories/holidayRepository';
+import { NotificationPreferenceRepository } from './repositories/notificationPreferenceRepository';
+import { TaskRepository } from './repositories/taskRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -57,6 +59,8 @@ import { WorkScheduleService } from './services/WorkSchedule.service';
 import { AttendanceService } from './services/Attendance.service';
 import { LeaveService } from './services/Leave.service';
 import { HolidayService } from './services/Holiday.service';
+import { NotificationPreferenceService } from './services/NotificationPreference.service';
+import { TaskService } from './services/Task.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -79,6 +83,8 @@ import { AttendanceController } from './controllers/attendance.controller';
 import { WorkScheduleController } from './controllers/workSchedule.controller';
 import { LeaveRequestController } from './controllers/leaveRequest.controller';
 import { HolidayController } from './controllers/holiday.controller';
+import { NotificationPreferenceController } from './controllers/notificationPreference.controller';
+import { TaskController } from './controllers/task.controller';
 
 // Middleware
 import { createAuthMiddleware } from './middleware/auth.middleware';
@@ -121,12 +127,15 @@ const workScheduleRepository = new WorkScheduleRepository(db);
 const attendanceRepository = new AttendanceRepository(db);
 const leaveRequestRepository = new LeaveRequestRepository(db);
 const holidayRepository = new HolidayRepository(db);
+const notificationPreferenceRepository = new NotificationPreferenceRepository(db);
+const taskRepository = new TaskRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
 // ---------------------------------------------------------------------------
 const systemSettingService = new SystemSettingService(systemSettingRepository);
 const notificationService = new NotificationService(notificationRepository);
+const notificationPreferenceService = new NotificationPreferenceService(notificationPreferenceRepository);
 const authService = new AuthService(
   userRepository,
   notificationRepository,
@@ -159,6 +168,7 @@ const messageService = new MessageService(
   reactionRepository,
   conversationRepository,
   notificationRepository,
+  notificationPreferenceService,
 );
 const companyService = new CompanyService(companyRepository);
 const searchService = new SearchService(messageRepository, userRepository);
@@ -167,11 +177,13 @@ const announcementService = new AnnouncementService(
   announcementRepository,
   notificationRepository,
   userRepository,
+  notificationPreferenceService,
 );
 const reminderService = new ReminderService(
   reminderRepository,
   notificationRepository,
   messageRepository,
+  notificationPreferenceService,
 );
 const bookmarkService = new BookmarkService(
   bookmarkRepository,
@@ -180,6 +192,7 @@ const bookmarkService = new BookmarkService(
 );
 const sharedFileService = new SharedFileService(
   sharedFileRepository,
+  { conversationRepository, messageService },
 );
 const meetingService = new MeetingService(
   meetingRepository,
@@ -189,6 +202,13 @@ const meetingService = new MeetingService(
   meetingAttachmentRepository,
   notificationRepository,
   userRepository,
+  notificationPreferenceService,
+);
+const taskService = new TaskService(
+  taskRepository,
+  notificationRepository,
+  userRepository,
+  notificationPreferenceService,
 );
 const workScheduleService = new WorkScheduleService(workScheduleRepository, userRepository);
 const attendanceService = new AttendanceService(
@@ -214,6 +234,7 @@ const callHandler = new CallHandler(
   userRepository,
   conversationRepository,
   notificationRepository,
+  notificationPreferenceService,
 );
 const chatWebSocketServer = new ChatWebSocketServer({
   messageHandler,
@@ -247,12 +268,14 @@ const departmentController = new DepartmentController(departmentService);
 const announcementController = new AnnouncementController(announcementService);
 const reminderController = new ReminderController(reminderService);
 const bookmarkController = new BookmarkController(bookmarkService);
-const sharedFileController = new SharedFileController(sharedFileService);
+const sharedFileController = new SharedFileController(sharedFileService, broadcastToConversation);
 const meetingController = new MeetingController(meetingService);
 const attendanceController = new AttendanceController(attendanceService);
 const workScheduleController = new WorkScheduleController(workScheduleService);
 const leaveRequestController = new LeaveRequestController(leaveService);
 const holidayController = new HolidayController(holidayService);
+const notificationPreferenceController = new NotificationPreferenceController(notificationPreferenceService);
+const taskController = new TaskController(taskService);
 
 // ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks)
@@ -289,6 +312,8 @@ export const container = {
   attendanceRepository,
   leaveRequestRepository,
   holidayRepository,
+  notificationPreferenceRepository,
+  taskRepository,
   // services
   systemSettingService,
   notificationService,
@@ -310,6 +335,8 @@ export const container = {
   attendanceService,
   leaveService,
   holidayService,
+  notificationPreferenceService,
+  taskService,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -338,6 +365,8 @@ export const container = {
   workScheduleController,
   leaveRequestController,
   holidayController,
+  notificationPreferenceController,
+  taskController,
   attendanceEventPublisher,
   // middleware
   auth,

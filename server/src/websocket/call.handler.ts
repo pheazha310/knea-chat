@@ -16,6 +16,7 @@
 import type { UserRepository } from '../repositories/userRepository';
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import type { NotificationRepository } from '../repositories/notificationRepository';
+import type { NotificationPreferenceService } from '../services/NotificationPreference.service';
 import { isUserConnected, sendToUser } from './connection.registry';
 import type { AuthedSocket } from './connection.registry';
 
@@ -67,6 +68,7 @@ export class CallHandler {
     private userRepository: UserRepository,
     private conversationRepository: ConversationRepository,
     private notificationRepository: NotificationRepository,
+    private notificationPreferences?: NotificationPreferenceService | null,
   ) {}
 
   private error(ws: AuthedSocket, message: string): void {
@@ -404,6 +406,11 @@ export class CallHandler {
   }): Promise<void> {
     const { callId, calleeId, callerId, callerName, type } = data;
     try {
+      // Respect the callee's notification preferences (category: calls).
+      if (this.notificationPreferences &&
+          !(await this.notificationPreferences.isEnabled(calleeId, 'calls'))) {
+        return;
+      }
       const title = `Missed call from ${callerName}`;
       const message = type === 'video' ? 'Video call' : 'Voice call';
       await this.notificationRepository.create({

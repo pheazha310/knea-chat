@@ -6,6 +6,7 @@ import type { MessageRepository } from '../repositories/messageRepository';
 import type { ReactionRepository } from '../repositories/reactionRepository';
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import type { NotificationRepository } from '../repositories/notificationRepository';
+import type { NotificationPreferenceService } from './NotificationPreference.service';
 import { extractMentionedUserIds } from '../utils/mentions.utils';
 import type {
   CreateFileMessageData,
@@ -20,6 +21,7 @@ export class MessageService {
     private reactionRepository: ReactionRepository,
     private conversationRepository: ConversationRepository,
     private notificationRepository: NotificationRepository,
+    private notificationPreferences?: NotificationPreferenceService | null,
   ) {}
 
   /**
@@ -369,7 +371,12 @@ export class MessageService {
         [message.first_name, message.last_name].filter(Boolean).join(' ').trim() || 'Someone';
       const snippet = content.length > 120 ? `${content.slice(0, 120)}…` : content;
 
-      for (const memberId of memberIds) {
+      // Respect each member's notification preferences (category: messages).
+      const recipientIds = this.notificationPreferences
+        ? await this.notificationPreferences.filterEnabled('messages', memberIds.map(Number))
+        : memberIds.map(Number);
+
+      for (const memberId of recipientIds) {
         const numericId = Number(memberId);
         if (numericId === Number(senderId)) continue;
         if (mentionedUserIds.includes(numericId)) continue;
@@ -407,7 +414,12 @@ export class MessageService {
         [message.first_name, message.last_name].filter(Boolean).join(' ').trim() || 'Someone';
       const snippet = content.length > 120 ? `${content.slice(0, 120)}…` : content;
 
-      for (const memberId of mentionedUserIds) {
+      // Respect each mentioned user's preferences (category: mentions).
+      const mentionRecipients = this.notificationPreferences
+        ? await this.notificationPreferences.filterEnabled('mentions', mentionedUserIds.map(Number))
+        : mentionedUserIds;
+
+      for (const memberId of mentionRecipients) {
         if (Number(memberId) === Number(senderId)) continue;
         await this.notificationRepository.create({
           user_id: memberId,

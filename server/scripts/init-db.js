@@ -43,8 +43,22 @@ const TABLES = [
   'conversations',
   'channel_members',
   'channels',
+  // shared files feature (migration 013 + team files 019) — children first:
+  // file_shares/file_versions/file_permissions reference shared_files, and
+  // shared_files references users, teams and companies.
+  'file_shares',
+  'file_permissions',
+  'file_versions',
+  'shared_files',
   'team_members',
   'teams',
+  // notifications feature (migration 020) — children before users/companies
+  'user_notification_preferences',
+  // tasks feature (migrations 020/021) — children before parents (task_comments /
+  // task_attachments reference tasks, and tasks.team_id references teams).
+  'task_attachments',
+  'task_comments',
+  'tasks',
   // attendance feature (migration 017) — children before parents
   'overtime_records',
   'break_records',
@@ -441,6 +455,7 @@ async function applyMigrations(admin) {
       `USE \`${DB_NAME}\`; CREATE TABLE shared_files (
         id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
         company_id BIGINT UNSIGNED NOT NULL,
+        team_id BIGINT UNSIGNED NULL COMMENT 'Non-null when the file lives in a team file area',
         uploaded_by BIGINT UNSIGNED NOT NULL,
         file_name VARCHAR(255) NOT NULL,
         file_url VARCHAR(500) NOT NULL,
@@ -451,8 +466,10 @@ async function applyMigrations(admin) {
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL,
         FOREIGN KEY (uploaded_by) REFERENCES users(id),
         INDEX idx_shared_files_company (company_id),
+        INDEX idx_shared_files_team (team_id),
         INDEX idx_shared_files_uploader (uploaded_by)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
@@ -487,7 +504,21 @@ async function applyMigrations(admin) {
         INDEX idx_file_permissions_file (file_id)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
-    console.log('📁 Created shared_files, file_versions, file_permissions tables (migration 013).');
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE file_shares (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        file_id BIGINT UNSIGNED NOT NULL,
+        target_type ENUM('team', 'conversation') NOT NULL,
+        target_id BIGINT UNSIGNED NOT NULL,
+        shared_by BIGINT UNSIGNED NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_file_share_target (file_id, target_type, target_id),
+        FOREIGN KEY (file_id) REFERENCES shared_files(id) ON DELETE CASCADE,
+        FOREIGN KEY (shared_by) REFERENCES users(id),
+        INDEX idx_file_shares_target (target_type, target_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('📁 Created shared_files, file_versions, file_permissions, file_shares tables (migration 013).');
   }
 
   // Migration 015: meeting enhancements — fix participaints typo, add calendar,
@@ -675,6 +706,180 @@ async function applyMigrations(admin) {
       );
       console.log('⏱️  Added overtime_records.date (migration 018).');
     }
+  }
+
+  // Migration 019: team files + file sharing — shared_files.team_id scopes a
+  // file to a team's file area, and file_shares links a file to extra
+  // destinations (teams or conversations) whose members may access it.
+  const [fileTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'shared_files'`,
+    [DB_NAME],
+  );
+  if (fileTables[0].count > 0) {
+    const [teamCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'shared_files' AND column_name = 'team_id'`,
+      [DB_NAME],
+    );
+    if (teamCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE shared_files
+         ADD COLUMN team_id BIGINT UNSIGNED NULL AFTER company_id,
+         ADD INDEX idx_shared_files_team (team_id),
+         ADD CONSTRAINT fk_shared_files_team FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL;`,
+      );
+      console.log('📁 Added shared_files.team_id (migration 019).');
+    }
+
+    const [shareTables] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.tables
+       WHERE table_schema = ? AND table_name = 'file_shares'`,
+      [DB_NAME],
+    );
+    if (shareTables[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; CREATE TABLE file_shares (
+          id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+          file_id BIGINT UNSIGNED NOT NULL,
+          target_type ENUM('team', 'conversation') NOT NULL,
+          target_id BIGINT UNSIGNED NOT NULL,
+          shared_by BIGINT UNSIGNED NOT NULL,
+          created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE KEY uq_file_share_target (file_id, target_type, target_id),
+          FOREIGN KEY (file_id) REFERENCES shared_files(id) ON DELETE CASCADE,
+          FOREIGN KEY (shared_by) REFERENCES users(id),
+          INDEX idx_file_shares_target (target_type, target_id)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+      );
+      console.log('🔗 Created file_shares table (migration 019).');
+    }
+  }
+
+  // Migration 020: tasks + per-user notification preferences.
+  const [taskTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'tasks'`,
+    [DB_NAME],
+  );
+  if (taskTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE tasks (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        company_id BIGINT UNSIGNED NOT NULL,
+        created_by BIGINT UNSIGNED NOT NULL,
+        assignee_id BIGINT UNSIGNED NULL,
+        title VARCHAR(200) NOT NULL,
+        description TEXT,
+        due_date DATE NULL,
+        priority ENUM('low', 'medium', 'high') NOT NULL DEFAULT 'medium',
+        status ENUM('open', 'in_progress', 'completed') NOT NULL DEFAULT 'open',
+        completed_at DATETIME NULL,
+        deadline_reminded_at DATETIME NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (company_id) REFERENCES companies(id),
+        FOREIGN KEY (created_by) REFERENCES users(id),
+        FOREIGN KEY (assignee_id) REFERENCES users(id) ON DELETE SET NULL,
+        INDEX idx_tasks_company (company_id, created_at),
+        INDEX idx_tasks_assignee (assignee_id, status),
+        INDEX idx_tasks_due (due_date)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('✅ Created tasks table (migration 020).');
+  }
+
+  const [prefTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'user_notification_preferences'`,
+    [DB_NAME],
+  );
+  if (prefTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE user_notification_preferences (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        user_id BIGINT UNSIGNED NOT NULL,
+        category VARCHAR(40) NOT NULL,
+        enabled TINYINT(1) NOT NULL DEFAULT 1,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_user_pref_category (user_id, category),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_prefs_user (user_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🔔 Created user_notification_preferences table (migration 020).');
+  }
+
+  // Migration 021: tasks & work management — optional team scope (team tasks),
+  // per-task comments and file attachments.
+  const [taskCoreTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'tasks'`,
+    [DB_NAME],
+  );
+  if (taskCoreTables[0].count > 0) {
+    // 021a: tasks.team_id — scope a task to a team (visible to its members).
+    const [teamCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'tasks' AND column_name = 'team_id'`,
+      [DB_NAME],
+    );
+    if (teamCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE tasks
+         ADD COLUMN team_id BIGINT UNSIGNED NULL AFTER company_id,
+         ADD INDEX idx_tasks_team (team_id),
+         ADD CONSTRAINT fk_tasks_team FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE SET NULL;`,
+      );
+      console.log('👥 Added tasks.team_id (migration 021).');
+    }
+  }
+
+  const [commentTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'task_comments'`,
+    [DB_NAME],
+  );
+  if (commentTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE task_comments (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        task_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        content TEXT NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_task_comments_task (task_id, created_at)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('💬 Created task_comments table (migration 021).');
+  }
+
+  const [attachmentTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'task_attachments'`,
+    [DB_NAME],
+  );
+  if (attachmentTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE task_attachments (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        task_id BIGINT UNSIGNED NOT NULL,
+        uploaded_by BIGINT UNSIGNED NOT NULL,
+        file_name VARCHAR(255) NOT NULL,
+        file_url VARCHAR(500) NOT NULL,
+        file_type VARCHAR(100),
+        file_size BIGINT UNSIGNED,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (uploaded_by) REFERENCES users(id) ON DELETE CASCADE,
+        INDEX idx_task_attachments_task (task_id)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('📎 Created task_attachments table (migration 021).');
   }
 
   const [noteTables] = await admin.query(

@@ -9,6 +9,8 @@ export * from './Conversation';
 export * from './Department';
 export * from './Message';
 export * from './Notification';
+export * from './NotificationPreference';
+export * from './Task';
 export * from './Reaction';
 export * from './Session';
 export * from './SharedFile';

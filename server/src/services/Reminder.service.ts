@@ -7,6 +7,7 @@
 import type { ReminderRepository } from '../repositories/reminderRepository';
 import type { NotificationRepository } from '../repositories/notificationRepository';
 import type { MessageRepository } from '../repositories/messageRepository';
+import type { NotificationPreferenceService } from './NotificationPreference.service';
 import { sendToUser } from '../websocket/connection.registry';
 
 export interface ReminderData {
@@ -20,6 +21,7 @@ export class ReminderService {
     private reminderRepository: ReminderRepository,
     private notificationRepository: NotificationRepository,
     private messageRepository: MessageRepository,
+    private notificationPreferences?: NotificationPreferenceService | null,
   ) {}
 
   async setReminder(data: ReminderData): Promise<{ id: number }> {
@@ -68,6 +70,13 @@ export class ReminderService {
       try {
         const message = await this.messageRepository.findByIdWithSender(reminder.message_id);
         if (!message) continue;
+
+        // Users who muted reminders get nothing — just consume the reminder.
+        if (this.notificationPreferences &&
+            !(await this.notificationPreferences.isEnabled(reminder.user_id, 'reminders'))) {
+          ids.push(reminder.id);
+          continue;
+        }
 
         const senderName = `${message.first_name || ''} ${message.last_name || ''}`.trim() || 'Someone';
         const shortContent = message.content.length > 120 ? message.content.slice(0, 117) + '...' : message.content;
