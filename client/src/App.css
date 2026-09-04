@@ -16578,3 +16578,501 @@ textarea:focus-visible,
 .task-attachment .icon-button {
   flex-shrink: 0;
 }
+
+/* Announcement scope / read-progress chips (AnnouncementsView). */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-style: normal;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--muted-text, #6b7280);
+  background: var(--accent-soft, rgba(139, 92, 246, 0.1));
+  border-radius: 999px;
+  padding: 1px 8px;
+  line-height: 1.5;
+}
+
+/* ============================================================================
+   Global Search view (SearchView) — SRS US-17 / FR-16
+   ============================================================================ */
+.gs-view {
+  max-width: 1080px;
+}
+.gs-view mark {
+  background: var(--mark-bg);
+  color: inherit;
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+/* --- Search form ---------------------------------------------------------- */
+.gs-form {
+  margin-bottom: 14px;
+}
+.gs-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 48px;
+  padding: 0 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text-faint);
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.gs-search:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.gs-search > svg {
+  flex-shrink: 0;
+}
+.gs-search input {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+}
+.gs-search input::placeholder {
+  color: var(--text-faint);
+}
+.gs-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+.gs-clear:hover {
+  background: var(--border-strong);
+  color: var(--text);
+}
+.gs-spinner {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-strong);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: gs-spin 0.7s linear infinite;
+}
+@keyframes gs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* --- Filter bar ----------------------------------------------------------- */
+.gs-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+.gs-filters select {
+  height: 34px;
+  padding: 0 28px 0 10px;
+  max-width: 210px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12.5px;
+  outline: none;
+  cursor: pointer;
+}
+.gs-filters select:hover {
+  border-color: var(--border-strong);
+}
+.gs-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+.gs-date input {
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 12px;
+  outline: none;
+}
+.gs-date input:hover {
+  border-color: var(--border-strong);
+}
+.gs-clear-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: filter 0.15s ease;
+}
+.gs-clear-filters:hover {
+  filter: brightness(0.97);
+}
+
+/* --- Intro / errors / empty states ----------------------------------------- */
+.gs-intro,
+.gs-no-results,
+.gs-error {
+  margin-top: 34px;
+  padding: 42px 24px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 14px;
+  background: var(--surface);
+  text-align: center;
+}
+.gs-error {
+  margin-top: 14px;
+  padding: 12px 16px;
+  border-style: solid;
+  border-color: var(--danger-border);
+  background: var(--danger-soft);
+  color: var(--danger);
+  font-size: 13px;
+  text-align: left;
+}
+.gs-intro-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 16px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  margin-bottom: 14px;
+}
+.gs-intro h3,
+.gs-no-results h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  letter-spacing: -0.2px;
+}
+.gs-intro p,
+.gs-no-results p {
+  margin: 0 auto;
+  max-width: 460px;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.55;
+}
+.gs-no-results > svg {
+  color: var(--text-faint);
+  margin-bottom: 10px;
+}
+.gs-scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.gs-scope-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+/* --- Result tabs ----------------------------------------------------------- */
+.gs-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 16px;
+}
+.gs-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+.gs-tab:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.gs-tab.active {
+  background: var(--accent-soft);
+  border-color: var(--accent-border);
+  color: var(--accent-text);
+}
+.gs-tab .gs-count {
+  background: var(--hover);
+  color: var(--text-muted);
+}
+.gs-tab.active .gs-count {
+  background: var(--accent-border);
+  color: var(--accent-text-strong);
+}
+
+/* --- Count chip ------------------------------------------------------------ */
+.gs-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+/* --- Scope sections -------------------------------------------------------- */
+.gs-results {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+.gs-section-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.gs-section-header h3 {
+  margin: 0;
+  font-size: 14.5px;
+  letter-spacing: -0.2px;
+}
+.gs-section-header .gs-count {
+  margin-left: 2px;
+}
+.gs-scope-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.gs-scope-icon.people {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.gs-scope-icon.tasks {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.gs-scope-icon.files {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.gs-link {
+  margin-left: auto;
+  background: none;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 6px;
+  border-radius: 6px;
+}
+.gs-link:hover {
+  background: var(--accent-soft);
+}
+
+/* --- Result rows ----------------------------------------------------------- */
+.gs-list {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+.gs-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 14px;
+  text-align: left;
+  background: transparent;
+  color: var(--text);
+  border-bottom: 1px solid var(--border);
+  text-decoration: none;
+  transition: background-color 0.12s ease;
+}
+.gs-row:last-child {
+  border-bottom: 0;
+}
+.gs-row:hover {
+  background: var(--hover);
+}
+.gs-row-main {
+  flex: 1;
+  min-width: 0;
+}
+.gs-row-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+}
+.gs-row-title b {
+  font-size: 13.5px;
+  font-weight: 650;
+}
+.gs-row-title em {
+  font-style: normal;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+.gs-row-title time {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: auto;
+}
+.gs-row-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gs-row-sub span {
+  margin-right: 10px;
+}
+.gs-row-arrow {
+  flex-shrink: 0;
+  color: var(--text-faint);
+  transition: color 0.12s ease, transform 0.12s ease;
+}
+.gs-row:hover .gs-row-arrow {
+  color: var(--accent-text);
+  transform: translateX(2px);
+}
+.gs-snippet {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text);
+  line-height: 1.45;
+}
+
+/* Entity avatar chips per scope */
+.gs-entity-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+.gs-entity-avatar.hash {
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+.gs-entity-avatar.file {
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+.gs-entity-avatar.meeting {
+  background: var(--success-soft);
+  color: var(--success);
+}
+.gs-entity-avatar.task {
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+/* Task status hint inside result rows */
+.gs-status {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.gs-status.open {
+  color: var(--text-faint);
+}
+.gs-status.in_progress {
+  color: var(--accent-text);
+}
+.gs-status.completed {
+  color: var(--success);
+}
+
+/* Load-more / show-all buttons */
+.gs-more {
+  display: block;
+  width: 100%;
+  padding: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--accent-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  transition: background-color 0.12s ease;
+}
+.gs-more:hover:not(:disabled) {
+  background: var(--accent-soft);
+}
+.gs-more:disabled {
+  color: var(--text-faint);
+  cursor: default;
+}
+.gs-empty {
+  padding: 26px 14px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+  border: 1px dashed var(--border-strong);
+  border-radius: 12px;
+  background: var(--surface);
+}

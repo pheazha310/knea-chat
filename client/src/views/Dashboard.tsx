@@ -22,6 +22,7 @@ import CreateGroupModal from "../components/modals/CreateGroupModal";
 import CreateTeamModal from "../components/modals/CreateTeamModal";
 import TeamModal from "../components/modals/TeamModal";
 import SearchModal from "../components/search/SearchModal";
+import SearchView from "../components/views/SearchView";
 import Modal from "../components/modals/Modal";
 import CallModal from "../components/modals/CallModal";
 import IncomingCallModal from "../components/modals/IncomingCallModal";
@@ -143,6 +144,8 @@ const Dashboard = () => {
     createAnnouncement,
     updateAnnouncement,
     deleteAnnouncement,
+    markAnnouncementRead,
+    loadAnnouncementReaders,
     setReminder,
     cancelReminder,
     reminders,
@@ -1116,9 +1119,13 @@ const Dashboard = () => {
               announcements={announcements}
               currentUserId={currentUserId}
               canPublish={canManage}
+              departments={departments}
+              teams={teams}
               onCreate={createAnnouncement}
               onUpdate={updateAnnouncement}
               onDelete={deleteAnnouncement}
+              onMarkRead={markAnnouncementRead}
+              onLoadReaders={loadAnnouncementReaders}
             />
           ) : view === "meetings" ? (
             <MeetingsView
@@ -1169,6 +1176,19 @@ const Dashboard = () => {
               canManage={canManage}
               currentUserId={currentUserId}
               onOpenConversation={(id) => handleOpenConversation(id)}
+            />
+          ) : view === "search" ? (
+            <SearchView
+              currentUserId={currentUserId}
+              users={users}
+              teams={teams}
+              channels={channels}
+              departments={departments}
+              onOpenConversation={handleOpenConversation}
+              onOpenDirect={handleSelectPerson}
+              onOpenChannel={handleSelectChannel}
+              onOpenTeam={handleSelectTeam}
+              onGoToView={handleSelectView}
             />
           ) : (
             <SettingsView

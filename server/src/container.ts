@@ -37,6 +37,7 @@ import { LeaveRequestRepository } from './repositories/leaveRequestRepository';
 import { HolidayRepository } from './repositories/holidayRepository';
 import { NotificationPreferenceRepository } from './repositories/notificationPreferenceRepository';
 import { TaskRepository } from './repositories/taskRepository';
+import { GlobalSearchRepository } from './repositories/globalSearchRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -129,6 +130,7 @@ const leaveRequestRepository = new LeaveRequestRepository(db);
 const holidayRepository = new HolidayRepository(db);
 const notificationPreferenceRepository = new NotificationPreferenceRepository(db);
 const taskRepository = new TaskRepository(db);
+const globalSearchRepository = new GlobalSearchRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -171,7 +173,7 @@ const messageService = new MessageService(
   notificationPreferenceService,
 );
 const companyService = new CompanyService(companyRepository);
-const searchService = new SearchService(messageRepository, userRepository);
+const searchService = new SearchService(messageRepository, userRepository, globalSearchRepository);
 const departmentService = new DepartmentService(departmentRepository);
 const announcementService = new AnnouncementService(
   announcementRepository,
@@ -314,6 +316,7 @@ export const container = {
   holidayRepository,
   notificationPreferenceRepository,
   taskRepository,
+  globalSearchRepository,
   // services
   systemSettingService,
   notificationService,

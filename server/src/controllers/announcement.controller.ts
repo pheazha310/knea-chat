@@ -1,14 +1,16 @@
 /**
  * AnnouncementController — MVC controller layer.
  *
- * Handles HTTP requests for company-wide announcements and delegates
- * business logic to AnnouncementService. Publishing/editing/deleting is
- * manager+ (enforced on the routes); listing is open to every authenticated
- * user of the company. Live clients are updated via WebSocket events.
+ * Handles HTTP requests for announcements (company / department / team scope,
+ * pinned, scheduled) and delegates business logic to AnnouncementService.
+ * Publishing/editing/deleting is manager+ (enforced on the routes); listing,
+ * reading, and marking-read are open to every authenticated user of the
+ * company (the service scopes what they may see). Live clients are updated
+ * via WebSocket events sent only to the announcement's audience.
  */
 import type { NextFunction, Request, Response } from 'express';
 import type { AnnouncementService } from '../services/Announcement.service';
-import { emitAnnouncementEvent } from '../websocket/workspace.events';
+import { emitAnnouncementEvent, emitAnnouncementToUsers } from '../websocket/workspace.events';
 
 const snippetOf = (content: string): string =>
   content.length > 120 ? `${content.slice(0, 120)}…` : content;
@@ -21,6 +23,7 @@ export class AnnouncementController {
     try {
       const announcements = await this.announcementService.getAnnouncements(
         req.user!.companyId,
+        req.user!.id,
       );
       res.status(200).json({
         success: true,
@@ -37,6 +40,8 @@ export class AnnouncementController {
     try {
       const announcement = await this.announcementService.getAnnouncement(
         Number(req.params.id),
+        req.user!.companyId,
+        req.user!.id,
       );
       res.status(200).json({
         success: true,
@@ -51,7 +56,7 @@ export class AnnouncementController {
   /** POST /api/announcements */
   create = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { title, content } = req.body;
+      const { title, content, scope, department_id, team_id, is_pinned, scheduled_at } = req.body;
 
       if (!title || !content) {
         res.status(400).json({
@@ -67,25 +72,35 @@ export class AnnouncementController {
         title,
         content,
         created_by: req.user!.id,
+        scope,
+        department_id,
+        team_id,
+        is_pinned,
+        scheduled_at,
       });
 
       // Live update of the dedicated announcements list — the publisher
-      // already applied the create response, so exclude them.
-      emitAnnouncementEvent(req.user!.companyId, {
-        type: 'announcement_created',
-        data: { announcement },
-      }, req.user!.id);
-      // Bell + toast update — reuse the established `notification` event so
-      // the existing wsListeners / Dashboard toast handlers light up.
-      emitAnnouncementEvent(req.user!.companyId, {
-        type: 'notification',
-        data: {
-          type: 'announcement',
-          title: `Announcement: ${announcement.title}`,
-          message: snippetOf(String(content)),
-          announcementId: announcement.id,
-        },
-      }, req.user!.id);
+      // already applied the create response, so exclude them. Only published
+      // announcements broadcast now; scheduled ones broadcast when the
+      // scheduler flips them live.
+      if (announcement.is_published) {
+        const recipientIds = await this.announcementService.getRecipientIds(announcement.id);
+        emitAnnouncementToUsers(recipientIds, {
+          type: 'announcement_created',
+          data: { announcement },
+        }, req.user!.id);
+        // Bell + toast update — reuse the established `notification` event so
+        // the existing wsListeners / Dashboard toast handlers light up.
+        emitAnnouncementToUsers(recipientIds, {
+          type: 'notification',
+          data: {
+            type: 'announcement',
+            title: `Announcement: ${announcement.title}`,
+            message: snippetOf(String(content)),
+            announcementId: announcement.id,
+          },
+        }, req.user!.id);
+      }
 
       res.status(201).json({
         success: true,
@@ -105,17 +120,22 @@ export class AnnouncementController {
   update = async (req: Request, res: Response): Promise<void> => {
     try {
       const announcementId = Number(req.params.id);
-      const { title, content } = req.body;
+      const { title, content, scope, department_id, team_id, is_pinned, scheduled_at } = req.body;
 
-      const announcement = await this.announcementService.updateAnnouncement(announcementId, {
-        title,
-        content,
-      });
+      const announcement = await this.announcementService.updateAnnouncement(
+        announcementId,
+        { title, content, scope, department_id, team_id, is_pinned, scheduled_at },
+        req.user!.id,
+        req.user!.companyId,
+      );
 
-      emitAnnouncementEvent(req.user!.companyId, {
-        type: 'announcement_updated',
-        data: { announcement },
-      }, req.user!.id);
+      if (announcement.is_published) {
+        const recipientIds = await this.announcementService.getRecipientIds(announcement.id);
+        emitAnnouncementToUsers(recipientIds, {
+          type: 'announcement_updated',
+          data: { announcement },
+        }, req.user!.id);
+      }
 
       res.status(200).json({
         success: true,
@@ -135,9 +155,10 @@ export class AnnouncementController {
   remove = async (req: Request, res: Response): Promise<void> => {
     try {
       const announcementId = Number(req.params.id);
-      const result = await this.announcementService.deleteAnnouncement(announcementId);
+      const recipientIds = await this.announcementService.getRecipientIds(announcementId);
+      const result = await this.announcementService.deleteAnnouncement(announcementId, req.user!.companyId);
 
-      emitAnnouncementEvent(req.user!.companyId, {
+      emitAnnouncementToUsers(recipientIds, {
         type: 'announcement_deleted',
         data: { id: announcementId },
       }, req.user!.id);
@@ -152,6 +173,45 @@ export class AnnouncementController {
         message: (error as Error).message,
         errors: {},
       });
+    }
+  };
+
+  /** POST /api/announcements/:id/read — mark an announcement as read. */
+  markRead = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const announcement = await this.announcementService.markRead(
+        Number(req.params.id),
+        req.user!.id,
+        req.user!.companyId,
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Announcement marked as read',
+        data: { announcement },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** GET /api/announcements/:id/reads — read confirmation (manager+). */
+  readers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const { readers, total_recipients } = await this.announcementService.getReaders(
+        Number(req.params.id),
+        req.user!.companyId,
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Readers retrieved successfully',
+        data: { readers, total_recipients },
+      });
+    } catch (error) {
+      next(error);
     }
   };
 }

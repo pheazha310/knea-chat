@@ -7,6 +7,8 @@ export const createSearchRouter = (searchController: SearchController, auth: Aut
 
   router.get('/messages', auth.authenticate, searchController.searchMessages);
   router.get('/users', auth.authenticate, searchController.searchUsers);
+  router.get('/global', auth.authenticate, searchController.global);
+  router.get('/global/:scope', auth.authenticate, searchController.globalScope);
 
   return router;
 };

@@ -111,5 +111,7 @@ export function useChatViewModel() {
     createAnnouncement: announcementState.createAnnouncement,
     updateAnnouncement: announcementState.updateAnnouncement,
     deleteAnnouncement: announcementState.deleteAnnouncement,
+    markAnnouncementRead: announcementState.markRead,
+    loadAnnouncementReaders: announcementState.loadReaders,
   };
 }

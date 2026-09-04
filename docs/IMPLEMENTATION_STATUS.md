@@ -101,10 +101,22 @@ Enforcement notes:
 - [x] Teams — create, list, view members, add/remove members, team channels,
       shared team conversations (open from the sidebar; member changes sync
       conversation membership)
-- [x] **Announcements (FR-24)** — company-wide announcements published by
-      managers/admins (`/api/announcements`), dedicated sidebar view with a
-      composer, real-time `announcement_*` WebSocket events, and an
-      `announcement` notification for every company user (bell + Notifications)
+- [x] **Announcements (FR-24)** — announcements published by managers/admins
+      (`/api/announcements`), dedicated sidebar view with a composer,
+      real-time `announcement_*` WebSocket events, and an `announcement`
+      notification for recipients (bell + Notifications)
+- [x] **Announcement targeting, pinning, scheduling & read confirmation
+      (migration 022)** — announcements can target the **whole company**, a
+      **department**, or a **team** (non-managers only see what's aimed at
+      them; managers see everything incl. drafts); **pinned** announcements
+      sort to the top with an amber accent; **scheduled** announcements go
+      live at a chosen time via the server scheduler (30s tick, idempotent)
+      and can be edited/published-now before that; **read confirmation** —
+      opening an announcement marks it read (`POST /api/announcements/:id/read`),
+      every card shows `read / total` progress, and managers get a "Seen by"
+      modal listing who read what and when (`GET /api/announcements/:id/reads`)
+      — with `announcement_reads` ledger rows and scoped WebSocket fan-out so
+      department/team announcements only reach their audience
 - [x] **Departments (FR-06)** — company-scoped CRUD endpoints
       (`/api/departments`), Admin console tab with create/rename/delete, and
       a department picker when creating users (departments with members are
@@ -268,8 +280,36 @@ Enforcement notes:
 - [x] Client reconnect with exponential backoff + offline queue
 
 ### Search (US-17, FR-16)
-- [x] Message search (with conversation context) and user search
-- [x] Client search modal (⌘K) with jump-to-conversation
+- [x] **Quick search** — message search (with conversation context) and user
+      search (`/api/search/messages|users`) plus the ⌘K modal that jumps
+      straight into a conversation or DM
+- [x] **Global search view (7 scopes)** — a dedicated Search page searches the
+      whole workspace at once: **messages, people, teams, channels, files,
+      meetings and tasks**. One debounced query box returns a grouped
+      overview — top hits per scope with match totals — and every scope
+      expands into its own tab with pagination ("Show all N" / Load more).
+      Result rows deep-link to their entity: message hits open the
+      conversation, people open a DM, teams/channels open their chat, and
+      files / meetings / tasks jump to their own views
+- [x] **Filters** — Person, Team, Department, File type (image / video / audio /
+      pdf / word / excel / powerpoint / archive / text), Message type, and an
+      inclusive Date range (from/to). Each filter narrows only the scopes
+      where it is meaningful; a pure-filter query (no text) is supported,
+      active filters can be cleared in one click, and query occurrences are
+      highlighted in every result
+- [x] **Access-scoped results** — every scope mirrors the rules of the entity's
+      own endpoints: message results only come from conversations the searcher
+      can open (company channels stay company-wide, team conversations are
+      restricted to members + managers/admins, and DM/group chats surface only
+      to their participants); shared files respect `canAccess`, tasks respect
+      the employee/team scope, and people/teams/channels/meetings are
+      company-scoped
+- [x] **API** — `GET /api/search/global` (grouped overview) and
+      `GET /api/search/global/:scope` (paginated per-scope results), built on
+      `GlobalSearchRepository` behind `SearchService` / `SearchController`
+- [x] **Tests** — `server/test/search.service.test.ts` (overview fan-out to all
+      seven scopes with the viewer context, per-scope routing and pagination,
+      quick-search delegation)
 
 ### UI (SRS §18)
 - [x] Login / Register / Forgot Password / Reset Password screens

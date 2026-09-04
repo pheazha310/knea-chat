@@ -10,7 +10,7 @@
  *   team.controller / channel.controller → emitWorkspaceChanged → clients
  */
 import WebSocket from 'ws';
-import { userConnections } from './connection.registry';
+import { sendToUser, userConnections } from './connection.registry';
 
 export type WorkspaceKind = 'teams' | 'channels';
 
@@ -23,6 +23,24 @@ const emitToCompany = (companyId: number, event: object, excludeUserId: number |
       socket.send(payload);
     }
   });
+};
+
+/**
+ * Emit an event to a specific set of users (targeted announcements). Used for
+ * department/team announcements so only their audience gets the live update;
+ * each connected socket of a recipient receives it.
+ */
+export const emitAnnouncementToUsers = (
+  userIds: number[],
+  event: { type: string; data: Record<string, unknown> },
+  excludeUserId: number | null = null,
+): void => {
+  const payload = JSON.stringify({ ...event, timestamp: new Date().toISOString() });
+  const unique = Array.from(new Set(userIds.map(Number)));
+  for (const userId of unique) {
+    if (excludeUserId !== null && userId === Number(excludeUserId)) continue;
+    sendToUser(userId, payload);
+  }
 };
 
 /** Tell every connected client in the company to refresh a collection. */

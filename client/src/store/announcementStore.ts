@@ -1,12 +1,12 @@
-// announcementStore — Zustand store for company-wide announcements (SRS FR-24).
+// announcementStore — Zustand store for announcements (SRS FR-24).
 //
 // Owns the announcements list and the commands that mutate it (load, publish,
-// edit, delete). Real-time `announcement_*` events from the WebSocket client
-// are dispatched here by wsListeners.ts, so the Announcements view updates
-// automatically when a manager publishes.
+// edit, delete, mark-read). Real-time `announcement_*` events from the
+// WebSocket client are dispatched here by wsListeners.ts, so the
+// Announcements view updates automatically when a manager publishes.
 import { create } from 'zustand';
 import { AnnouncementModel } from '../models';
-import type { Announcement } from '../models';
+import type { Announcement, AnnouncementReader, CreateAnnouncementData } from '../models';
 import { getErrorMessage } from './utils';
 
 interface AnnouncementState {
@@ -18,15 +18,19 @@ interface AnnouncementState {
   addAnnouncement: (announcement: Announcement) => void;
   removeAnnouncement: (id: number) => void;
   load: () => Promise<void>;
-  createAnnouncement: (data: {
-    title: string;
-    content: string;
-  }) => Promise<Announcement | undefined>;
+  createAnnouncement: (data: CreateAnnouncementData) => Promise<Announcement | undefined>;
   updateAnnouncement: (
     id: number,
-    data: { title?: string; content?: string },
+    data: Partial<CreateAnnouncementData>,
   ) => Promise<Announcement | undefined>;
   deleteAnnouncement: (id: number) => Promise<void>;
+  /** Mark an announcement as read by the current user (idempotent). */
+  markRead: (id: number) => Promise<Announcement | undefined>;
+  /** Read-confirmation ledger for one announcement (manager+). */
+  loadReaders: (id: number) => Promise<{
+    readers: AnnouncementReader[];
+    total_recipients: number;
+  }>;
   clear: () => void;
 }
 
@@ -93,6 +97,26 @@ export const useAnnouncementStore = create<AnnouncementState>()((set, get) => ({
       set({ error: getErrorMessage(err, 'Could not delete announcement') });
       throw err;
     }
+  },
+
+  markRead: async (id) => {
+    try {
+      const res = await AnnouncementModel.markRead(id);
+      const announcement = res.data?.data?.announcement;
+      if (announcement) get().addAnnouncement(announcement);
+      return announcement;
+    } catch (err) {
+      set({ error: getErrorMessage(err, 'Could not mark announcement as read') });
+      throw err;
+    }
+  },
+
+  loadReaders: async (id) => {
+    const res = await AnnouncementModel.getReads(id);
+    return {
+      readers: res.data?.data?.readers || [],
+      total_recipients: res.data?.data?.total_recipients || 0,
+    };
   },
 
   clear: () => set({ announcements: [], loading: false, error: null }),

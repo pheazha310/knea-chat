@@ -35,6 +35,9 @@ const TABLES = [
   'password_resets',
   'user_sessions',
   'notifications',
+  // announcement enhancements (migration 022) — announcement_reads references
+  // announcements, so it is dropped first.
+  'announcement_reads',
   'announcements',
   'attachments',
   'message_reactions',
@@ -880,6 +883,38 @@ async function applyMigrations(admin) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
     console.log('📎 Created task_attachments table (migration 021).');
+  }
+
+  // Migration 022: announcement enhancements — targeting (department/team),
+  // pinning, scheduling, and the read-confirmation ledger.
+  const [announcementEnhancementTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'announcements'`,
+    [DB_NAME],
+  );
+  if (announcementEnhancementTables[0].count > 0) {
+    const [scopeCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'announcements' AND column_name = 'scope'`,
+      [DB_NAME],
+    );
+    if (scopeCols[0].count === 0) {
+      const enhancementSql = fs.readFileSync(
+        path.join(__dirname, '..', 'database', 'migrations', '022_announcement_enhancements.sql'),
+        'utf8',
+      );
+      const statements = enhancementSql
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('--'))
+        .join('\n')
+        .split(';')
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      for (const statement of statements) {
+        await admin.query(`USE \`${DB_NAME}\`; ${statement};`);
+      }
+      console.log('📢 Added announcement targeting/pinning/scheduling + announcement_reads (migration 022).');
+    }
   }
 
   const [noteTables] = await admin.query(

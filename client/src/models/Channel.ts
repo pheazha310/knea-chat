@@ -16,6 +16,8 @@ export interface Channel {
   type: ChannelType;
   is_archived?: number;
   member_count?: number;
+  /** Team the channel belongs to (search/list results); null = standalone. */
+  team_name?: string | null;
   created_at?: string;
   updated_at?: string;
 }

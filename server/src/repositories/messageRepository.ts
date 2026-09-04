@@ -123,10 +123,11 @@ export class MessageRepository {
   }
 
   /**
-   * Search messages the searcher is allowed to see. Channels stay
-   * company-wide (permissive model); team conversations are restricted to
-   * team members + privileged roles, so their content never leaks into a
-   * non-member's search results.
+   * Search messages the searcher is allowed to see and open. Channels stay
+   * company-wide (permissive model — channel conversations self-join on
+   * open); team conversations are restricted to team members + privileged
+   * roles; direct/group chats only surface to their participants, so other
+   * people's private conversations never leak into search results.
    */
   async search(userId: number, search: string, filters: MessageSearchFilters = {}): Promise<MessageRow[]> {
     const { conversation_id, page = 1, limit = 20 } = filters;
@@ -136,18 +137,30 @@ export class MessageRepository {
                JOIN conversations c ON m.conversation_id = c.id
                JOIN users searcher ON searcher.id = ?
                WHERE m.content LIKE ? AND m.deleted_at IS NULL
-                 AND EXISTS (
-                   SELECT 1 FROM conversation_members cm
-                   JOIN users cu ON cu.id = cm.user_id
-                   WHERE cm.conversation_id = c.id AND cu.company_id = searcher.company_id
-                 )
                  AND (
-                   c.type <> 'team'
-                   OR searcher.role IN ('super_admin', 'admin', 'manager')
-                   OR EXISTS (
-                     SELECT 1 FROM teams t
-                     JOIN team_members tm ON tm.team_id = t.id
-                     WHERE t.name = c.name AND tm.user_id = searcher.id AND t.company_id = searcher.company_id
+                   EXISTS (
+                     SELECT 1 FROM conversation_members cm_me
+                     WHERE cm_me.conversation_id = c.id AND cm_me.user_id = searcher.id
+                   )
+                   OR (
+                     c.type = 'channel'
+                     AND EXISTS (
+                       SELECT 1 FROM channels ch
+                       WHERE ch.name = c.name AND ch.company_id = searcher.company_id
+                         AND ch.is_archived = 0
+                     )
+                   )
+                   OR (
+                     c.type = 'team'
+                     AND (
+                       searcher.role IN ('super_admin', 'admin', 'manager')
+                       OR EXISTS (
+                         SELECT 1 FROM teams t
+                         JOIN team_members tm ON tm.team_id = t.id
+                         WHERE t.name = c.name AND t.company_id = searcher.company_id
+                           AND tm.user_id = searcher.id
+                       )
+                     )
                    )
                  )`;
     const params: unknown[] = [userId, `%${search}%`];

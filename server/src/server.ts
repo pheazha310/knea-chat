@@ -56,6 +56,17 @@ setInterval(async () => {
   }
 }, REMINDER_POLL_INTERVAL_MS).unref();
 
+// Scheduled announcements — flip pending announcements live when their
+// scheduled time arrives (notifications + WebSocket fan-out happen inside
+// AnnouncementService.processDueScheduledAnnouncements).
+setInterval(async () => {
+  try {
+    await container.announcementService.processDueScheduledAnnouncements(new Date());
+  } catch {
+    // Scheduler failures are non-fatal; the next tick will retry.
+  }
+}, REMINDER_POLL_INTERVAL_MS).unref();
+
 // ============ SERVER START ============
 const PORT = Number(process.env.PORT) || 8080;
 const HOST = process.env.HOST || 'localhost';
