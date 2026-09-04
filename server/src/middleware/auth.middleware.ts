@@ -6,6 +6,8 @@
 import jwt from 'jsonwebtoken';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 import { isAtLeast } from '../utils/roles';
+import { baselineAllows, type PermissionKey } from '../utils/permissions';
+import type { PermissionService } from '../services/Permission.service';
 import type { SystemSettingService } from '../services/SystemSetting.service';
 import type { AuthUser } from '../types';
 
@@ -13,15 +15,25 @@ export interface AuthMiddleware {
   authenticate: RequestHandler;
   authorize: (allowedRoles?: string[]) => RequestHandler;
   authorizeAtLeast: (minRole: string) => RequestHandler;
+  /**
+   * Route gate backed by the discretionary permission catalog: passes when
+   * the user's company has not restricted the capability for their role.
+   * Without a PermissionService the baseline role hierarchy is used.
+   */
+  authorizeCapability: (permissionKey: PermissionKey) => RequestHandler;
 }
 
 const getSecret = (): string => process.env.JWT_SECRET || 'your-secret-key';
 
 /**
  * Create the auth middleware bound to a SystemSettingService instance
- * (used for the platform maintenance-mode check).
+ * (used for the platform maintenance-mode check) and, optionally, the
+ * PermissionService (per-company capability overrides).
  */
-export const createAuthMiddleware = (systemSettingService: SystemSettingService): AuthMiddleware => {
+export const createAuthMiddleware = (
+  systemSettingService: SystemSettingService,
+  permissionService?: PermissionService | null,
+): AuthMiddleware => {
   /**
    * Authenticate middleware - verifies JWT token and attaches user to request
    */
@@ -153,5 +165,43 @@ export const createAuthMiddleware = (systemSettingService: SystemSettingService)
     };
   };
 
-  return { authenticate, authorize, authorizeAtLeast };
+  /**
+   * Authorization middleware - checks the discretionary permission catalog
+   * (admins/super admins always pass; other roles pass unless the company
+   * pinned the capability off, falling back to the baseline hierarchy).
+   */
+  const authorizeCapability = (permissionKey: PermissionKey): RequestHandler => {
+    return async (req: Request, res: Response, next: NextFunction) => {
+      if (!req.user) {
+        return res.status(401).json({
+          success: false,
+          message: 'User not authenticated',
+          errors: {},
+        });
+      }
+
+      let allowed: boolean;
+      if (permissionService) {
+        allowed = await permissionService.allows(
+          req.user.companyId,
+          req.user.role,
+          permissionKey,
+        );
+      } else {
+        allowed = baselineAllows(req.user.role, permissionKey);
+      }
+
+      if (!allowed) {
+        return res.status(403).json({
+          success: false,
+          message: 'User does not have permission to perform this action',
+          errors: {},
+        });
+      }
+
+      next();
+    };
+  };
+
+  return { authenticate, authorize, authorizeAtLeast, authorizeCapability };
 };

@@ -52,9 +52,14 @@ function randomPassword() {
 async function ensureCompany(name, domain) {
   let company = await findOne('SELECT id, name FROM companies WHERE domain = ? LIMIT 1', [domain]);
   if (!company) {
-    const result = await query('INSERT INTO companies (name, domain) VALUES (?, ?)', [name, domain]);
+    // Imported companies get the Enterprise plan so real workloads are never
+    // capped by the Free-plan seat limit (Administration module).
+    const result = await query(
+      "INSERT INTO companies (name, domain, plan_key) VALUES (?, ?, 'enterprise')",
+      [name, domain],
+    );
     company = { id: result.insertId, name };
-    console.log(`🏢 Created company "${name}" (${domain})`);
+    console.log(`🏢 Created company "${name}" (${domain}) — Enterprise plan`);
   } else {
     console.log(`🏢 Using existing company "${company.name}" (${domain})`);
   }

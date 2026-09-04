@@ -1,16 +1,45 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store';
-import { ChannelModel, DepartmentModel, TeamModel, UserModel } from '../models';
+import {
+  AuditLogModel,
+  ChannelModel,
+  CompanySettingModel,
+  DepartmentModel,
+  PermissionModel,
+  TeamModel,
+  UserModel,
+} from '../models';
 import Avatar from '../components/common/Avatar';
 import ConfirmButton from '../components/common/ConfirmButton';
 import Icon from '../components/common/Icon';
 import type { IconName } from '../components/common/Icon';
 import { SkeletonTable } from '../components/common/Skeleton';
 import { roleLabel } from '../utils/roles';
-import type { Channel, Department, Team, User } from '../models';
+import type {
+  AuditLogEntry,
+  Channel,
+  CompanySettings,
+  Department,
+  PermissionDef,
+  PermissionMatrixRow,
+  Team,
+  User,
+} from '../models';
 
-type Tab = 'dashboard' | 'users' | 'teams' | 'channels' | 'departments';
+type Tab = 'dashboard' | 'users' | 'teams' | 'channels' | 'departments' | 'settings' | 'permissions' | 'audit';
+
+/** Tabs rendered in the Admin console (label shown in the tab bar). */
+const ADMIN_TABS: Array<[Tab, string]> = [
+  ['dashboard', 'Dashboard'],
+  ['users', 'Users'],
+  ['teams', 'Teams'],
+  ['channels', 'Channels'],
+  ['departments', 'Departments'],
+  ['settings', 'Settings'],
+  ['permissions', 'Permissions'],
+  ['audit', 'Audit Logs'],
+];
 
 /** Roles a company admin may assign. Super admins can also assign super_admin. */
 const COMPANY_ROLES = ['admin', 'manager', 'employee'];
@@ -77,15 +106,18 @@ const Admin = () => {
         {tab === 'teams' && <TeamsTab />}
         {tab === 'channels' && <ChannelsTab />}
         {tab === 'departments' && <DepartmentsTab />}
+        {tab === 'settings' && <SettingsTab />}
+        {tab === 'permissions' && <PermissionsTab />}
+        {tab === 'audit' && <AuditTab />}
 
-        <div className="flex gap-2 mt-8 mb-6">
-          {(['dashboard', 'users', 'teams', 'channels', 'departments'] as Tab[]).map((t) => (
+        <div className="flex gap-2 mt-8 mb-6 flex-wrap">
+          {ADMIN_TABS.map(([id, label]) => (
             <button
-              key={t}
-              onClick={() => setTab(t)}
-              className={`admin-tab ${tab === t ? 'active' : ''}`}
+              key={id}
+              onClick={() => setTab(id)}
+              className={`admin-tab ${tab === id ? 'active' : ''}`}
             >
-              {t === 'dashboard' ? 'Dashboard' : t[0].toUpperCase() + t.slice(1)}
+              {label}
             </button>
           ))}
         </div>
@@ -1097,6 +1129,448 @@ const MemberAdder = ({
             </li>
           ))}
         </ul>
+      )}
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Settings & Security (workspace settings)                                   */
+/* -------------------------------------------------------------------------- */
+const SETTINGS_DEFAULTS: CompanySettings = {
+  allow_uploads: true,
+  allow_reactions: true,
+  allow_pinning: true,
+  max_upload_size_mb: 10,
+  password_min_length: 6,
+};
+
+const SettingsTab = () => {
+  const [settings, setSettings] = useState<CompanySettings>(SETTINGS_DEFAULTS);
+  const [name, setName] = useState('');
+  const [logo, setLogo] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await CompanySettingModel.get();
+        if (!mounted) return;
+        setSettings(res.data.data.settings);
+        setName(res.data.data.company?.name || '');
+        setLogo(res.data.data.company?.logo || '');
+      } catch {
+        if (mounted) setError('Could not load workspace settings');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const setBool = (key: keyof CompanySettings) => (value: boolean) =>
+    setSettings((s) => ({ ...s, [key]: value }));
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setMessage(null);
+    setSaving(true);
+    try {
+      const res = await CompanySettingModel.update({
+        name: name.trim() || undefined,
+        logo: logo.trim() || undefined,
+        settings,
+      });
+      setSettings(res.data.data.settings);
+      setMessage('Workspace settings saved ✓');
+      setTimeout(() => setMessage(null), 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const inputCls =
+    'w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-lavender/40 focus:border-lavender text-sm';
+
+  if (loading) {
+    return <SkeletonTable rows={5} cells={3} />;
+  }
+
+  return (
+    <form onSubmit={handleSave}>
+      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+      {message && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{message}</div>}
+
+      <section className="bg-white border border-line rounded-xl p-6 mb-6">
+        <h3 className="text-sm font-bold text-ink mb-1">Workspace profile</h3>
+        <p className="text-xs text-muted mb-4">How this workspace appears across KneaChat.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Workspace name</label>
+            <input className={inputCls} value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Corp" />
+          </div>
+          <div>
+            <label className="block text-xs font-semibold text-ink mb-1">Logo URL</label>
+            <input className={inputCls} value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="/uploads/company-logo.png" />
+          </div>
+        </div>
+      </section>
+
+      <section className="bg-white border border-line rounded-xl p-6 mb-6">
+        <h3 className="text-sm font-bold text-ink mb-1">Messaging features</h3>
+        <p className="text-xs text-muted mb-4">Workspace-level toggles. A feature disabled at the platform level stays off here.</p>
+        <div className="space-y-5">
+          <SettingToggleRow label="File uploads" description="Allow attaching files to chat messages." checked={settings.allow_uploads} onChange={setBool('allow_uploads')} />
+          <SettingNumberRow
+            label="Max upload size (MB)"
+            description="Largest file a member can attach (never above the platform cap)."
+            value={settings.max_upload_size_mb}
+            onChange={(v) => setSettings((s) => ({ ...s, max_upload_size_mb: v }))}
+            min={1}
+            max={100}
+          />
+          <SettingToggleRow label="Reactions" description="Allow emoji reactions on messages." checked={settings.allow_reactions} onChange={setBool('allow_reactions')} />
+          <SettingToggleRow label="Message pinning" description="Allow pinning important messages." checked={settings.allow_pinning} onChange={setBool('allow_pinning')} />
+        </div>
+      </section>
+
+      <section className="bg-white border border-line rounded-xl p-6 mb-6">
+        <h3 className="text-sm font-bold text-ink mb-1">Security</h3>
+        <p className="text-xs text-muted mb-4">Password policy for this workspace. The stricter of workspace / platform minimums applies.</p>
+        <SettingNumberRow
+          label="Minimum password length"
+          description="Enforced when members change or reset their password, and for accounts you create."
+          value={settings.password_min_length}
+          onChange={(v) => setSettings((s) => ({ ...s, password_min_length: v }))}
+          min={4}
+          max={64}
+        />
+      </section>
+
+      <div className="flex justify-end">
+        <button type="submit" className="btn-primary" disabled={saving}>
+          {saving ? 'Saving…' : 'Save workspace settings'}
+        </button>
+      </div>
+    </form>
+  );
+};
+
+const SettingToggleRow = ({
+  label,
+  description,
+  checked,
+  onChange,
+}: {
+  label: string;
+  description: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) => (
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <div className="text-sm font-semibold text-ink">{label}</div>
+      <div className="text-xs text-muted mt-0.5">{description}</div>
+    </div>
+    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+      <input
+        type="checkbox"
+        className="sr-only peer"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span className="w-10 h-5 rounded-full bg-gray-300 peer-checked:bg-lavender transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:rounded-full after:bg-white after:transition-all peer-checked:after:translate-x-5" />
+    </label>
+  </div>
+);
+
+const SettingNumberRow = ({
+  label,
+  description,
+  value,
+  onChange,
+  min,
+  max,
+}: {
+  label: string;
+  description: string;
+  value: number;
+  onChange: (value: number) => void;
+  min: number;
+  max?: number;
+}) => (
+  <div className="flex items-center justify-between gap-4">
+    <div>
+      <div className="text-sm font-semibold text-ink">{label}</div>
+      <div className="text-xs text-muted mt-0.5">{description}</div>
+    </div>
+    <input
+      type="number"
+      className="w-28 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:border-lavender text-sm"
+      value={value}
+      min={min}
+      max={max}
+      onChange={(e) => onChange(parseInt(e.target.value, 10) || 0)}
+    />
+  </div>
+);
+
+/* -------------------------------------------------------------------------- */
+/* Manage permissions                                                         */
+/* -------------------------------------------------------------------------- */
+const PermissionsTab = () => {
+  const [matrix, setMatrix] = useState<PermissionMatrixRow[]>([]);
+  const [catalog, setCatalog] = useState<PermissionDef[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await PermissionModel.get();
+      setMatrix(res.data.data.matrix || []);
+      setCatalog(res.data.data.catalog || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not load permissions');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const cellFor = (permissionKey: string, role: string) =>
+    matrix.find((m) => m.permission_key === permissionKey && m.role === role);
+
+  const toggleManager = async (permissionKey: string, current: PermissionMatrixRow) => {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await PermissionModel.update('manager', permissionKey as PermissionMatrixRow['permission_key'], !current.allowed);
+      setMatrix(res.data.data.matrix || []);
+      setMessage(current.allowed ? 'Permission restricted — managers can no longer do this ✓' : 'Permission re-enabled for managers ✓');
+      setTimeout(() => setMessage(null), 2500);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not update permission');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loading) {
+    return <SkeletonTable rows={6} cells={5} />;
+  }
+
+  return (
+    <div className="bg-white border border-line rounded-xl p-6">
+      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+      {message && <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{message}</div>}
+      <h3 className="text-sm font-bold text-ink mb-1">Role permissions</h3>
+      <p className="text-xs text-muted mb-5">
+        Baseline behavior follows the role hierarchy — you can restrict the highlighted
+        capabilities for managers. Administrators always keep every permission.
+      </p>
+      <div className="overflow-x-auto">
+        <table className="admin-table w-full">
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th>Admin</th>
+              <th>Manager</th>
+              <th>Employee</th>
+            </tr>
+          </thead>
+          <tbody>
+            {catalog.map((def) => {
+              const managerCell = cellFor(def.key, 'manager');
+              const employeeCell = cellFor(def.key, 'employee');
+              return (
+                <tr key={def.key}>
+                  <td>
+                    <div className="font-semibold text-[13px] text-ink">{def.label}</div>
+                    <div className="text-xs text-muted">{def.description}</div>
+                  </td>
+                  <td>
+                    <span className="status-pill active">Allowed</span>
+                  </td>
+                  <td>
+                    {managerCell && managerCell.restrictable ? (
+                      <button
+                        className={`status-pill ${managerCell.allowed ? 'active' : 'disabled'} cursor-pointer`}
+                        disabled={busy}
+                        title={managerCell.allowed ? 'Click to restrict for managers' : 'Click to allow for managers'}
+                        onClick={() => toggleManager(def.key, managerCell)}
+                      >
+                        {managerCell.allowed ? 'Allowed' : 'Restricted'}
+                      </button>
+                    ) : managerCell?.allowed ? (
+                      <span className="status-pill active">Allowed</span>
+                    ) : (
+                      <span className="status-pill disabled">Restricted</span>
+                    )}
+                  </td>
+                  <td>
+                    {employeeCell?.allowed ? (
+                      <span className="status-pill active">Allowed</span>
+                    ) : (
+                      <span className="status-pill disabled">—</span>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Audit log                                                                  */
+/* -------------------------------------------------------------------------- */
+const ACTION_LABELS: Record<string, string> = {
+  'user.created': 'User created',
+  'user.updated': 'User updated',
+  'user.deleted': 'User deleted',
+  'department.created': 'Department created',
+  'department.updated': 'Department updated',
+  'department.deleted': 'Department deleted',
+  'team.created': 'Team created',
+  'team.updated': 'Team updated',
+  'team.deleted': 'Team deleted',
+  'team.member_added': 'Team member added',
+  'team.member_removed': 'Team member removed',
+  'announcement.created': 'Announcement published',
+  'announcement.updated': 'Announcement updated',
+  'announcement.deleted': 'Announcement deleted',
+  'company.created': 'Organization created',
+  'company.updated': 'Organization updated',
+  'company.deleted': 'Organization deleted',
+  'settings.updated': 'Platform settings changed',
+  'company_settings.updated': 'Workspace settings changed',
+  'permissions.updated': 'Permission changed',
+  'subscription.updated': 'Plan changed',
+};
+
+const actionLabel = (action: string): string => ACTION_LABELS[action] || action;
+
+const AuditTab = () => {
+  const [logs, setLogs] = useState<AuditLogEntry[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [actionFilter, setActionFilter] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await AuditLogModel.list({
+        limit: 100,
+        ...(actionFilter ? { action: actionFilter } : {}),
+      });
+      setLogs(res.data.data.logs || []);
+    } catch {
+      setError('Could not load the audit log');
+    } finally {
+      setLoading(false);
+    }
+  }, [actionFilter]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const actions = logs
+    .map((l) => l.action)
+    .filter((value, index, all) => all.indexOf(value) === index)
+    .sort();
+  const summary = (details: Record<string, unknown> | null): string => {
+    if (!details) return '—';
+    return Object.entries(details)
+      .filter(([, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => `${k.replace(/_/g, ' ')}=${String(v)}`)
+      .join(', ');
+  };
+
+  return (
+    <div className="bg-white border border-line rounded-xl p-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <div>
+          <h3 className="text-sm font-bold text-ink">Administrative activity</h3>
+          <p className="text-xs text-muted mt-0.5">Who changed what in this workspace, newest first.</p>
+        </div>
+        <select
+          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-lavender"
+          value={actionFilter}
+          onChange={(e) => setActionFilter(e.target.value)}
+        >
+          <option value="">All actions</option>
+          {actions.map((a) => (
+            <option key={a} value={a}>{actionLabel(a)}</option>
+          ))}
+        </select>
+      </div>
+
+      {error && <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+
+      {loading ? (
+        <SkeletonTable rows={8} cells={5} />
+      ) : logs.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-state-icon">🛡️</span>
+          No administrative actions recorded yet.
+        </div>
+      ) : (
+        <div className="table-scroll">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>When</th>
+                <th>Actor</th>
+                <th>Action</th>
+                <th>Target</th>
+                <th>Details</th>
+              </tr>
+            </thead>
+            <tbody>
+              {logs.map((log) => (
+                <tr key={log.id}>
+                  <td className="whitespace-nowrap text-muted text-xs">
+                    {new Date(log.created_at).toLocaleString()}
+                  </td>
+                  <td>
+                    <div className="text-[13px] font-semibold text-ink">
+                      {log.actor_first_name} {log.actor_last_name}
+                    </div>
+                    <div className="text-[11px] text-muted">{log.actor_email}</div>
+                  </td>
+                  <td>
+                    <span className="text-[13px]">{actionLabel(log.action)}</span>
+                    <div className="text-[11px] text-muted">as {log.actor_role}</div>
+                  </td>
+                  <td className="text-muted text-xs whitespace-nowrap">
+                    {log.entity_type}
+                    {log.entity_id ? ` #${log.entity_id}` : ''}
+                  </td>
+                  <td className="text-muted text-xs max-w-[260px]">{summary(log.details)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );

@@ -6,10 +6,34 @@
  * the platform Super Admin.
  */
 import type { NextFunction, Request, Response } from 'express';
+import type { AuditLogService } from '../services/AuditLog.service';
 import type { CompanyService } from '../services/Company.service';
 
 export class CompanyController {
-  constructor(private companyService: CompanyService) {}
+  constructor(
+    private companyService: CompanyService,
+    private auditLogService?: AuditLogService | null,
+  ) {}
+
+  /** Best-effort platform-scope audit record (Super Admin actions). */
+  private async record(
+    req: Request,
+    action: string,
+    companyId: number,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: null,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action,
+      entity_type: 'company',
+      entity_id: companyId,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /** GET /api/companies */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -45,6 +69,10 @@ export class CompanyController {
     try {
       const { name, domain, logo } = req.body;
       const company = await this.companyService.createCompany({ name, domain, logo });
+      await this.record(req, 'company.created', company.id, {
+        name: company.name,
+        domain: company.domain ?? undefined,
+      });
       res.status(201).json({
         success: true,
         message: 'Organization created successfully',
@@ -64,6 +92,10 @@ export class CompanyController {
     try {
       const { name, domain, logo } = req.body;
       const company = await this.companyService.updateCompany(Number(req.params.id), { name, domain, logo });
+      await this.record(req, 'company.updated', company.id, {
+        name: name !== undefined ? String(name) : undefined,
+        domain: domain !== undefined ? String(domain) : undefined,
+      });
       res.status(200).json({
         success: true,
         message: 'Organization updated successfully',
@@ -82,6 +114,7 @@ export class CompanyController {
   remove = async (req: Request, res: Response): Promise<void> => {
     try {
       const result = await this.companyService.deleteCompany(Number(req.params.id));
+      await this.record(req, 'company.deleted', Number(req.params.id));
       res.status(200).json({
         success: true,
         message: result.message,

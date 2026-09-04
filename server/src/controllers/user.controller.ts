@@ -9,6 +9,9 @@ import path from 'path';
 import fs from 'fs';
 import type { NextFunction, Request, Response } from 'express';
 import type { UserService } from '../services/User.service';
+import type { AuditLogService } from '../services/AuditLog.service';
+import type { CompanySettingService } from '../services/CompanySetting.service';
+import type { SubscriptionService } from '../services/Subscription.service';
 import type { UserRepository } from '../repositories/userRepository';
 import { broadcastToAll } from '../websocket/broadcast.utils';
 import { wssRef } from '../websocket/websocket.server';
@@ -61,7 +64,30 @@ export class UserController {
     private userService: UserService,
     private userRepository: UserRepository,
     private systemSettingService: SystemSettingService,
+    private auditLogService?: AuditLogService | null,
+    private companySettingService?: CompanySettingService | null,
+    private subscriptionService?: SubscriptionService | null,
   ) {}
+
+  /** Best-effort audit record for administrative user actions. */
+  private async record(
+    req: Request,
+    action: string,
+    userId: number,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: req.user!.companyId,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action,
+      entity_type: 'user',
+      entity_id: userId,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /** GET /api/users */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -132,6 +158,36 @@ export class UserController {
         }
       }
 
+      // Subscription plan seat limit (Administration module).
+      if (this.subscriptionService) {
+        try {
+          await this.subscriptionService.assertCanAddUser(req.user!.companyId);
+        } catch (error) {
+          res.status(403).json({
+            success: false,
+            message: (error as Error).message,
+            errors: { validation: 'Workspace plan seat limit reached' },
+          });
+          return;
+        }
+      }
+
+      // Workspace password policy can raise the platform minimum.
+      if (this.companySettingService) {
+        const policy = await this.companySettingService.effectiveFeaturePolicy(
+          req.user!.companyId,
+          settings,
+        );
+        if (password.length < policy.password_min_length) {
+          res.status(400).json({
+            success: false,
+            message: `Password must be at least ${policy.password_min_length} characters`,
+            errors: { validation: 'Password too short' },
+          });
+          return;
+        }
+      }
+
       const user = await this.userService.createUser({
         company_id: req.user!.companyId,
         first_name,
@@ -142,6 +198,11 @@ export class UserController {
         job_title,
         department_id,
       }, req.user || null);
+
+      await this.record(req, 'user.created', user.id, {
+        email: user.email,
+        role: user.role,
+      });
 
       res.status(201).json({
         success: true,
@@ -179,6 +240,14 @@ export class UserController {
         req.user!.role,
         req.user!.companyId,
       );
+
+      // Audit role / activation changes (who changed whose access).
+      if ((role !== undefined || is_active !== undefined) && this.auditLogService) {
+        const details: Record<string, unknown> = {};
+        if (role !== undefined) details.role = String(role);
+        if (is_active !== undefined) details.is_active = Number(is_active);
+        await this.record(req, 'user.updated', userId, details);
+      }
 
       const { password: _password, ...userWithoutPassword } = user;
       res.status(200).json({
@@ -281,7 +350,11 @@ export class UserController {
   remove = async (req: Request, res: Response): Promise<void> => {
     try {
       const userId = Number(req.params.id);
+      const target = await this.userService.getUser(userId).catch(() => null);
       const result = await this.userService.deleteUser(userId, req.user || null);
+      await this.record(req, 'user.deleted', userId, {
+        email: target?.email ?? undefined,
+      });
       res.status(200).json({
         success: true,
         message: result.message,

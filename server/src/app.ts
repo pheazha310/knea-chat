@@ -30,6 +30,10 @@ import { createLeaveRequestRouter } from './routes/leaveRequest.routes';
 import { createHolidayRouter } from './routes/holiday.routes';
 import { createNotificationPreferenceRouter } from './routes/notificationPreference.routes';
 import { createTaskRouter } from './routes/task.routes';
+import { createAuditLogRouter } from './routes/auditLog.routes';
+import { createCompanySettingRouter } from './routes/companySetting.routes';
+import { createSubscriptionRouter } from './routes/subscription.routes';
+import { createPlatformMetricRouter } from './routes/platformMetric.routes';
 
 export const app = express();
 
@@ -103,6 +107,12 @@ app.use('/api/overtime', createOvertimeRouter(container.attendanceController, co
 app.use('/api/work-schedules', createWorkScheduleRouter(container.workScheduleController, container.auth));
 app.use('/api/leave-requests', createLeaveRequestRouter(container.leaveRequestController, container.auth));
 app.use('/api/holidays', createHolidayRouter(container.holidayController, container.auth));
+// Administration module (module 10): audit logs, company settings + security,
+// permissions, subscriptions/plans, and platform monitoring.
+app.use('/api/audit-logs', container.auth.authenticate, createAuditLogRouter(container.auditLogController, container.auth));
+app.use('/api/company-settings', container.auth.authenticate, createCompanySettingRouter(container.companySettingController, container.auth));
+app.use('/api/subscriptions', container.auth.authenticate, createSubscriptionRouter(container.subscriptionController, container.auth));
+app.use('/api/admin/metrics', container.auth.authenticate, createPlatformMetricRouter(container.platformMetricController, container.auth));
 // Settings has its own auth handling: GET /api/settings/public is open so the
 // login page can render maintenance/registration state pre-auth.
 app.use('/api/settings', createSystemSettingRouter(container.systemSettingController, container.auth));

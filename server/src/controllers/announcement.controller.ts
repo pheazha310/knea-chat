@@ -9,6 +9,7 @@
  * via WebSocket events sent only to the announcement's audience.
  */
 import type { NextFunction, Request, Response } from 'express';
+import type { AuditLogService } from '../services/AuditLog.service';
 import type { AnnouncementService } from '../services/Announcement.service';
 import { emitAnnouncementEvent, emitAnnouncementToUsers } from '../websocket/workspace.events';
 
@@ -16,7 +17,30 @@ const snippetOf = (content: string): string =>
   content.length > 120 ? `${content.slice(0, 120)}…` : content;
 
 export class AnnouncementController {
-  constructor(private announcementService: AnnouncementService) {}
+  constructor(
+    private announcementService: AnnouncementService,
+    private auditLogService?: AuditLogService | null,
+  ) {}
+
+  /** Best-effort audit record for administrative announcement actions. */
+  private async record(
+    req: Request,
+    action: string,
+    announcementId: number,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: req.user!.companyId,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action,
+      entity_type: 'announcement',
+      entity_id: announcementId,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /** GET /api/announcements */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -102,6 +126,11 @@ export class AnnouncementController {
         }, req.user!.id);
       }
 
+      await this.record(req, 'announcement.created', announcement.id, {
+        title: announcement.title,
+        scope: announcement.scope,
+      });
+
       res.status(201).json({
         success: true,
         message: 'Announcement published successfully',
@@ -137,6 +166,11 @@ export class AnnouncementController {
         }, req.user!.id);
       }
 
+      await this.record(req, 'announcement.updated', announcement.id, {
+        title: announcement.title,
+        scope: announcement.scope,
+      });
+
       res.status(200).json({
         success: true,
         message: 'Announcement updated successfully',
@@ -162,6 +196,8 @@ export class AnnouncementController {
         type: 'announcement_deleted',
         data: { id: announcementId },
       }, req.user!.id);
+
+      await this.record(req, 'announcement.deleted', announcementId);
 
       res.status(200).json({
         success: true,

@@ -14,6 +14,10 @@ export interface Company {
   admin_count?: number;
   team_count?: number;
   channel_count?: number;
+  plan_key?: string;
+  plan_status?: string;
+  plan_expires_at?: string | null;
+  billing_email?: string | null;
   created_at?: string;
   updated_at?: string;
 }

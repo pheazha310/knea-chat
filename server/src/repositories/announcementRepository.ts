@@ -76,7 +76,9 @@ export class AnnouncementRepository {
     );
   }
 
-  /** Raw row (no viewer enrichment) — internal use (update/delete/scheduler). */
+  /**
+   * Raw row (no viewer enrichment) — internal use (update/delete/scheduler).
+   */
   async findById(id: number): Promise<AnnouncementRow | null> {
     const announcements = await this.db.query<AnnouncementRow[]>(
       `SELECT a.*, u.first_name as creator_first_name, u.last_name as creator_last_name,
@@ -87,6 +89,29 @@ export class AnnouncementRepository {
        LEFT JOIN teams t ON t.id = a.team_id
        WHERE a.id = ?`,
       [id],
+    );
+    return announcements[0] || null;
+  }
+
+  /**
+   * Enriched row for live broadcasts: read_count + total_recipients but no
+   * viewer state (is_read stays undefined → recipients see it as unread, which
+   * is correct the moment it goes live). Used by the scheduler / publish-now
+   * fan-out so the card that pops up on recipients' screens already shows the
+   * read-progress chip without a reload.
+   */
+  async findByIdWithStats(id: number): Promise<AnnouncementRow | null> {
+    const announcements = await this.db.query<AnnouncementRow[]>(
+      `SELECT a.*,
+         u.first_name as creator_first_name, u.last_name as creator_last_name,
+         d.name as department_name, t.name as team_name,
+         ${ENRICH_SELECT}
+       FROM announcements a
+       LEFT JOIN users u ON a.created_by = u.id
+       LEFT JOIN departments d ON d.id = a.department_id
+       LEFT JOIN teams t ON t.id = a.team_id
+       WHERE a.id = ?`,
+      [0, id],
     );
     return announcements[0] || null;
   }

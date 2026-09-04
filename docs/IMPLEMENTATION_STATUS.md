@@ -264,6 +264,58 @@ Enforcement notes:
 - [x] **Tests** — `server/test/task.service.test.ts` + live E2E
       (`server/e2e/tasks-notifications.e2e.js`, `npm run test:e2e:tasks`)
 
+### Administration (module 10 — Company Admin + Super Admin)
+- [x] **Audit logs** — `audit_logs` ledger records every administrative action
+      (user created/updated/deleted, department & team changes, member adds/
+      removes, announcements, organization create/update/delete, platform
+      settings, workspace settings, permission changes, plan changes) with
+      actor, role, IP and JSON details. Company Admins read their workspace
+      trail (`GET /api/audit-logs`), Super Admins read the platform trail
+      (`GET /api/audit-logs/platform`, `?company_only=platform` filters to
+      platform-scope actions); logging is best-effort and can never break the
+      action itself
+- [x] **Manage permissions** — a permission catalog
+      (`server/src/utils/permissions.ts`) exposes discretionary capabilities
+      (create/manage teams, manage team members, manage channels, publish
+      announcements) on top of the fixed role hierarchy. Company Admins see
+      the full matrix and may **restrict** capabilities for the manager role
+      (`role_permissions` overrides); the same policy is consulted by the
+      route gates (team create/delete, announcements) and inside
+      `TeamService` / `ChannelService`, so restrictions are enforced —
+      admins & super admins always keep every permission
+- [x] **Company settings + Security settings** — `company_settings` per
+      workspace (key/value, layered over the platform `system_settings`):
+      workspace profile (name/logo) plus feature toggles (uploads, reactions,
+      pinning, upload size cap) and password policy. Enforcement points
+      (message upload, reactions, pin/unpin, admin-created users, password
+      change/reset) merge workspace + platform policy: a disabled platform
+      feature stays off, workspace caps never exceed platform caps, and the
+      stricter password minimum wins (`GET/PATCH /api/company-settings`)
+- [x] **Subscriptions / plan management** — workspaces carry a plan
+      (`free` 10 seats / `pro` 50 / `enterprise` unlimited) with status,
+      expiry and billing email on the `companies` row (migration 023;
+      seeded/imported workspaces keep Enterprise so nothing deployed is
+      retroactively capped). Super Admins manage every workspace's plan
+      (`GET/PATCH /api/subscriptions`); seat limits are enforced when admins
+      create users and on public registration (`SubscriptionService`);
+      Company Admins see their own plan + usage
+      (`GET /api/company-settings/plan`)
+- [x] **Platform monitoring** — live, DB-derived metrics for the Super Admin
+      monitoring tab (`GET /api/admin/metrics`): global totals (workspaces,
+      users, teams, channels, departments, messages, conversations, files,
+      tasks, meetings, announcements, active sessions), online presence,
+      today's activity, attachment storage and a 7-day message chart
+- [x] **UI** — Admin console gained **Settings & Security**, **Permissions**
+      and **Audit Logs** tabs; the Super Admin console gained **Platform
+      Monitoring** and **Subscriptions & Plans** tabs
+- [x] **Tests** — `server/test/auditLog.service.test.ts`,
+      `server/test/companySetting.service.test.ts`,
+      `server/test/permission.service.test.ts` (incl. Team/Channel policy
+      enforcement), `server/test/subscription.service.test.ts`,
+      `server/test/platformMetric.service.test.ts` (47 new tests), plus a
+      live API smoke run covering metrics, plan changes, settings,
+      permission toggles and both audit trails
+
 ### Real company data
 - [x] **Company importer** (`npm run import:company -- <file.json|csv>`,
       template at `server/scripts/data/real-company.example.json`) — creates a

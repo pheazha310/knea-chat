@@ -5,11 +5,35 @@
  * TeamService. The route file only maps URLs to these handlers.
  */
 import type { NextFunction, Request, Response } from 'express';
+import type { AuditLogService } from '../services/AuditLog.service';
 import type { TeamService } from '../services/Team.service';
 import { emitWorkspaceChanged } from '../websocket/workspace.events';
 
 export class TeamController {
-  constructor(private teamService: TeamService) {}
+  constructor(
+    private teamService: TeamService,
+    private auditLogService?: AuditLogService | null,
+  ) {}
+
+  /** Best-effort audit record for administrative team actions. */
+  private async record(
+    req: Request,
+    action: string,
+    teamId: number,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: req.user!.companyId,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action,
+      entity_type: 'team',
+      entity_id: teamId,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /** GET /api/teams */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -58,6 +82,7 @@ export class TeamController {
       });
 
       emitWorkspaceChanged(req.user!.companyId, 'teams');
+      await this.record(req, 'team.created', team.id, { name: team.name });
 
       res.status(201).json({
         success: true,
@@ -96,6 +121,10 @@ export class TeamController {
 
       const team = await this.teamService.updateTeam(teamId, { name, description }, req.user || null);
       emitWorkspaceChanged(req.user!.companyId, 'teams');
+      await this.record(req, 'team.updated', teamId, {
+        name: name !== undefined ? String(name) : undefined,
+        description: description !== undefined ? String(description) : undefined,
+      });
       res.status(200).json({
         success: true,
         message: 'Team updated successfully',
@@ -116,6 +145,7 @@ export class TeamController {
       const teamId = Number(req.params.id);
       const result = await this.teamService.deleteTeam(teamId, req.user || null);
       emitWorkspaceChanged(req.user!.companyId, 'teams');
+      await this.record(req, 'team.deleted', teamId);
       res.status(200).json({
         success: true,
         message: result.message,
@@ -137,6 +167,10 @@ export class TeamController {
 
       await this.teamService.addMember(teamId, user_id, role, req.user || null);
       emitWorkspaceChanged(req.user!.companyId, 'teams');
+      await this.record(req, 'team.member_added', teamId, {
+        member_id: Number(user_id),
+        role: String(role),
+      });
       res.status(201).json({
         success: true,
         message: 'Member added to team successfully',
@@ -157,6 +191,7 @@ export class TeamController {
       const memberId = Number(req.params.memberId);
       const result = await this.teamService.removeMember(teamId, memberId, req.user || null);
       emitWorkspaceChanged(req.user!.companyId, 'teams');
+      await this.record(req, 'team.member_removed', teamId, { member_id: memberId });
       res.status(200).json({
         success: true,
         message: result.message,

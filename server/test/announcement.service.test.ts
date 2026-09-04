@@ -32,6 +32,7 @@ const announcementRepository = {
   countRecipients: async () => 0,
   markRead: async () => undefined,
   findReaders: async () => [],
+  findByIdWithStats: async () => null as AnnouncementRow | null,
   findDueScheduled: async () => [] as AnnouncementRow[],
   markPublished: async () => true,
 };
@@ -525,7 +526,9 @@ describe('AnnouncementService.processDueScheduledAnnouncements', () => {
     const due = makeAnnouncement({ id: 7, is_published: 0, scheduled_at: '2026-08-17T08:00:00Z' });
     t.mock.method(announcementRepository, 'findDueScheduled', async () => [due]);
     const markPublished = t.mock.method(announcementRepository, 'markPublished', async () => true);
-    t.mock.method(announcementRepository, 'findById', async () => due);
+    // The scheduler enriches the broadcast row with read stats.
+    t.mock.method(announcementRepository, 'findByIdWithStats', async () =>
+      makeAnnouncement({ id: 7, is_published: 1, read_count: 0, total_recipients: 3 }));
     t.mock.method(announcementRepository, 'findRecipientUserIds', async () => [5, 11, 12]);
     const notify = t.mock.method(notificationRepository, 'create', async (_data: CreateNotificationData) => 1);
 
@@ -534,6 +537,8 @@ describe('AnnouncementService.processDueScheduledAnnouncements', () => {
     assert.deepEqual(markPublished.mock.calls[0].arguments.slice(0, 1), [7]);
     assert.equal(published.length, 1);
     assert.equal(published[0].id, 7);
+    assert.equal(published[0].read_count, 0);
+    assert.equal(published[0].total_recipients, 3);
     assert.equal(notify.mock.calls.length, 2); // publisher (5) excluded
   });
 

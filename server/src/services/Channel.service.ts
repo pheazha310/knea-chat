@@ -6,6 +6,8 @@ import type { ChannelMemberRepository } from '../repositories/channelMemberRepos
 import type { TeamMemberRepository } from '../repositories/teamMemberRepository';
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import { ROLES, isAtLeast } from '../utils/roles';
+import type { PermissionPolicy } from './Permission.service';
+import type { PermissionKey } from '../utils/permissions';
 import type { AuthUser, ChannelRow } from '../types';
 
 export class ChannelService {
@@ -14,7 +16,15 @@ export class ChannelService {
     private channelMemberRepository: ChannelMemberRepository,
     private teamMemberRepository: TeamMemberRepository,
     private conversationRepository: ConversationRepository,
+    /** Optional: per-company permission overrides (Administration module). */
+    private permissionPolicy?: PermissionPolicy | null,
   ) {}
+
+  /** Effective capability answer (absent policy = baseline hierarchy). */
+  private async can(requester: AuthUser, permissionKey: PermissionKey): Promise<boolean> {
+    if (!this.permissionPolicy) return true;
+    return this.permissionPolicy.allows(requester.companyId, requester.role, permissionKey);
+  }
 
   async getChannels(filters: {
     companyId: number;
@@ -254,10 +264,11 @@ export class ChannelService {
     const channelRole = await this.channelMemberRepository.getRole(channel.id, requesterId);
     if (channelRole === 'admin') return;
 
-    // Managers manage the channels inside the teams they are assigned to.
+    // Managers manage the channels inside the teams they are assigned to (a
+    // Company Admin may restrict this via the permissions console).
     if (role === ROLES.MANAGER && channel.team_id) {
       const teamRole = await this.teamMemberRepository.getRole(channel.team_id, requesterId);
-      if (teamRole) return;
+      if (teamRole && (await this.can(requester, 'manage_channels'))) return;
     }
 
     throw new Error('You do not have permission to manage this channel');

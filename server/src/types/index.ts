@@ -1,4 +1,5 @@
 /** Domain types — barrel export. */
+export * from './Administration';
 export * from './Announcement';
 export * from './Attendance';
 export * from './Auth';

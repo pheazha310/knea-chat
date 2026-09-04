@@ -10,6 +10,10 @@ import db from './database/connection';
 
 // Repositories
 import { UserRepository } from './repositories/userRepository';
+import { AuditLogRepository } from './repositories/auditLogRepository';
+import { CompanySettingRepository } from './repositories/companySettingRepository';
+import { RolePermissionRepository } from './repositories/rolePermissionRepository';
+import { PlatformMetricRepository } from './repositories/platformMetricRepository';
 import { MessageRepository } from './repositories/messageRepository';
 import { ConversationRepository } from './repositories/conversationRepository';
 import { CompanyRepository } from './repositories/companyRepository';
@@ -41,6 +45,11 @@ import { GlobalSearchRepository } from './repositories/globalSearchRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
+import { AuditLogService } from './services/AuditLog.service';
+import { CompanySettingService } from './services/CompanySetting.service';
+import { PermissionService } from './services/Permission.service';
+import { SubscriptionService } from './services/Subscription.service';
+import { PlatformMetricService } from './services/PlatformMetric.service';
 import { UserService } from './services/User.service';
 import { MessageService } from './services/Message.service';
 import { ConversationService } from './services/Conversation.service';
@@ -65,6 +74,10 @@ import { TaskService } from './services/Task.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
+import { AuditLogController } from './controllers/auditLog.controller';
+import { CompanySettingController } from './controllers/companySetting.controller';
+import { SubscriptionController } from './controllers/subscription.controller';
+import { PlatformMetricController } from './controllers/platformMetric.controller';
 import { UserController } from './controllers/user.controller';
 import { MessageController } from './controllers/message.controller';
 import { ConversationController } from './controllers/conversation.controller';
@@ -103,6 +116,10 @@ import { attendanceEventPublisher } from './websocket/attendance.events';
 // Repositories (each receives the shared pool-backed Db)
 // ---------------------------------------------------------------------------
 const userRepository = new UserRepository(db);
+const auditLogRepository = new AuditLogRepository(db);
+const companySettingRepository = new CompanySettingRepository(db);
+const rolePermissionRepository = new RolePermissionRepository(db);
+const platformMetricRepository = new PlatformMetricRepository(db);
 const messageRepository = new MessageRepository(db);
 const conversationRepository = new ConversationRepository(db);
 const companyRepository = new CompanyRepository(db);
@@ -136,6 +153,11 @@ const globalSearchRepository = new GlobalSearchRepository(db);
 // Services (receive their repositories)
 // ---------------------------------------------------------------------------
 const systemSettingService = new SystemSettingService(systemSettingRepository);
+const auditLogService = new AuditLogService(auditLogRepository);
+const companySettingService = new CompanySettingService(companySettingRepository, companyRepository);
+const permissionService = new PermissionService(rolePermissionRepository);
+const subscriptionService = new SubscriptionService(companyRepository, userRepository);
+const platformMetricService = new PlatformMetricService(platformMetricRepository);
 const notificationService = new NotificationService(notificationRepository);
 const notificationPreferenceService = new NotificationPreferenceService(notificationPreferenceRepository);
 const authService = new AuthService(
@@ -143,18 +165,22 @@ const authService = new AuthService(
   notificationRepository,
   companyRepository,
   sessionRepository,
+  subscriptionService,
+  companySettingService,
 );
 const userService = new UserService(userRepository);
 const teamService = new TeamService(
   teamRepository,
   teamMemberRepository,
   conversationRepository,
+  permissionService,
 );
 const channelService = new ChannelService(
   channelRepository,
   channelMemberRepository,
   teamMemberRepository,
   conversationRepository,
+  permissionService,
 );
 const conversationService = new ConversationService(
   conversationRepository,
@@ -249,11 +275,28 @@ const chatWebSocketServer = new ChatWebSocketServer({
 // Controllers (receive their services)
 // ---------------------------------------------------------------------------
 const authController = new AuthController(authService, userRepository, systemSettingService);
-const userController = new UserController(userService, userRepository, systemSettingService);
+const auditLogController = new AuditLogController(auditLogService);
+const companySettingController = new CompanySettingController(
+  companySettingService,
+  permissionService,
+  subscriptionService,
+  auditLogService,
+);
+const subscriptionController = new SubscriptionController(subscriptionService, auditLogService);
+const platformMetricController = new PlatformMetricController(platformMetricService);
+const userController = new UserController(
+  userService,
+  userRepository,
+  systemSettingService,
+  auditLogService,
+  companySettingService,
+  subscriptionService,
+);
 const messageController = new MessageController(
   messageService,
   systemSettingService,
   broadcastToConversation,
+  companySettingService,
 );
 const conversationController = new ConversationController(
   conversationService,
@@ -261,13 +304,13 @@ const conversationController = new ConversationController(
   messageService,
 );
 const notificationController = new NotificationController(notificationService);
-const teamController = new TeamController(teamService);
+const teamController = new TeamController(teamService, auditLogService);
 const channelController = new ChannelController(channelService);
-const companyController = new CompanyController(companyService);
+const companyController = new CompanyController(companyService, auditLogService);
 const searchController = new SearchController(searchService);
-const systemSettingController = new SystemSettingController(systemSettingService);
-const departmentController = new DepartmentController(departmentService);
-const announcementController = new AnnouncementController(announcementService);
+const systemSettingController = new SystemSettingController(systemSettingService, auditLogService);
+const departmentController = new DepartmentController(departmentService, auditLogService);
+const announcementController = new AnnouncementController(announcementService, auditLogService);
 const reminderController = new ReminderController(reminderService);
 const bookmarkController = new BookmarkController(bookmarkService);
 const sharedFileController = new SharedFileController(sharedFileService, broadcastToConversation);
@@ -280,15 +323,20 @@ const notificationPreferenceController = new NotificationPreferenceController(no
 const taskController = new TaskController(taskService);
 
 // ---------------------------------------------------------------------------
-// Middleware (bound to the settings service for maintenance-mode checks)
+// Middleware (bound to the settings service for maintenance-mode checks and
+// the permission service for per-company capability overrides)
 // ---------------------------------------------------------------------------
-const auth = createAuthMiddleware(systemSettingService);
+const auth = createAuthMiddleware(systemSettingService, permissionService);
 
 export const container = {
   // db
   db,
   // repositories
   userRepository,
+  auditLogRepository,
+  companySettingRepository,
+  rolePermissionRepository,
+  platformMetricRepository,
   messageRepository,
   conversationRepository,
   companyRepository,
@@ -319,6 +367,11 @@ export const container = {
   globalSearchRepository,
   // services
   systemSettingService,
+  auditLogService,
+  companySettingService,
+  permissionService,
+  subscriptionService,
+  platformMetricService,
   notificationService,
   authService,
   userService,
@@ -349,6 +402,10 @@ export const container = {
   chatWebSocketServer,
   // controllers
   authController,
+  auditLogController,
+  companySettingController,
+  subscriptionController,
+  platformMetricController,
   userController,
   messageController,
   conversationController,

@@ -62,6 +62,11 @@ const TABLES = [
   'task_attachments',
   'task_comments',
   'tasks',
+  // administration module (migration 023) — audit_logs / company_settings /
+  // role_permissions reference companies and users, so they drop first.
+  'audit_logs',
+  'company_settings',
+  'role_permissions',
   // attendance feature (migration 017) — children before parents
   'overtime_records',
   'break_records',
@@ -915,6 +920,31 @@ async function applyMigrations(admin) {
       }
       console.log('📢 Added announcement targeting/pinning/scheduling + announcement_reads (migration 022).');
     }
+  }
+
+  // Migration 023: administration module — audit logs, per-company settings,
+  // role permission overrides, and subscription plan columns on companies.
+  const [planCols] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'companies' AND column_name = 'plan_key'`,
+    [DB_NAME],
+  );
+  if (planCols[0].count === 0) {
+    const adminSql = fs.readFileSync(
+      path.join(__dirname, '..', 'database', 'migrations', '023_administration.sql'),
+      'utf8',
+    );
+    const statements = adminSql
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('--'))
+      .join('\n')
+      .split(';')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+    for (const statement of statements) {
+      await admin.query(`USE \`${DB_NAME}\`; ${statement};`);
+    }
+    console.log('🛠️  Added administration module tables + plan columns (migration 023).');
   }
 
   const [noteTables] = await admin.query(

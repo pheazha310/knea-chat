@@ -12,6 +12,11 @@ export interface CompanyRow {
   admin_count?: number;
   team_count?: number;
   channel_count?: number;
+  // Subscription / plan fields (Administration module, migration 023).
+  plan_key?: string;
+  plan_status?: string;
+  plan_expires_at?: Date | string | null;
+  billing_email?: string | null;
 }
 
 export interface Company extends CompanyRow {}

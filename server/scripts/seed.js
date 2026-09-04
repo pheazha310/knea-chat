@@ -78,8 +78,10 @@ async function main() {
     ['kneachat.com'],
   );
   if (!company) {
+    // The demo workspace keeps the Enterprise plan (Administration module) so
+    // exploring the admin console is never blocked by the Free seat limit.
     const result = await query(
-      'INSERT INTO companies (name, domain) VALUES (?, ?)',
+      "INSERT INTO companies (name, domain, plan_key) VALUES (?, ?, 'enterprise')",
       ['KneaChat', 'kneachat.com'],
     );
     company = { id: result.insertId };

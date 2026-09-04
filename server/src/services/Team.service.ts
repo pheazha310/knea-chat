@@ -5,6 +5,8 @@ import type { TeamRepository } from '../repositories/teamRepository';
 import type { TeamMemberRepository } from '../repositories/teamMemberRepository';
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import { ROLES, isAtLeast } from '../utils/roles';
+import type { PermissionPolicy } from './Permission.service';
+import type { PermissionKey } from '../utils/permissions';
 import type { AuthUser, TeamRow } from '../types';
 
 export class TeamService {
@@ -12,7 +14,15 @@ export class TeamService {
     private teamRepository: TeamRepository,
     private teamMemberRepository: TeamMemberRepository,
     private conversationRepository: ConversationRepository,
+    /** Optional: per-company permission overrides (Administration module). */
+    private permissionPolicy?: PermissionPolicy | null,
   ) {}
+
+  /** Effective capability answer (absent policy = baseline hierarchy). */
+  private async can(requester: AuthUser, permissionKey: PermissionKey): Promise<boolean> {
+    if (!this.permissionPolicy) return true;
+    return this.permissionPolicy.allows(requester.companyId, requester.role, permissionKey);
+  }
 
   async getTeams(filters: {
     companyId: number;
@@ -214,8 +224,11 @@ export class TeamService {
 
     const teamRole = await this.teamMemberRepository.getRole(team.id, requesterId);
 
-    // Managers manage only the teams they are assigned to.
-    if (role === ROLES.MANAGER && teamRole) return;
+    // Managers manage only the teams they are assigned to (a Company Admin
+    // may restrict this via the permissions console).
+    if (role === ROLES.MANAGER && teamRole) {
+      if (await this.can(requester, 'manage_teams')) return;
+    }
 
     throw new Error('You do not have permission to manage this team');
   }
@@ -238,7 +251,9 @@ export class TeamService {
 
     const teamRole = await this.teamMemberRepository.getRole(team.id, requesterId);
 
-    if (role === ROLES.MANAGER && teamRole) return;
+    if (role === ROLES.MANAGER && teamRole) {
+      if (await this.can(requester, 'manage_team_members')) return;
+    }
 
     throw new Error('You do not have permission to manage team members');
   }

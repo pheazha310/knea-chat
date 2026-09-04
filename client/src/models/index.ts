@@ -22,3 +22,8 @@ export * from './Meeting';
 export * from './Attendance';
 export * from './NotificationPreference';
 export * from './Task';
+export * from './CompanySetting';
+export * from './Permission';
+export * from './AuditLog';
+export * from './Subscription';
+export * from './PlatformMetric';

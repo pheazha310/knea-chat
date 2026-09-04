@@ -2,15 +2,16 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
 import { useAuthStore } from '../store';
 import { CompanyModel, SystemSettingModel, UserModel, type SystemSettings } from '../models';
+import { PlatformMetricModel, SubscriptionModel } from '../models';
 import Avatar from '../components/common/Avatar';
 import ConfirmButton from '../components/common/ConfirmButton';
 import { roleLabel } from '../utils/roles';
 import { SkeletonTable } from '../components/common/Skeleton';
 import Icon from '../components/common/Icon';
 import type { IconName } from '../components/common/Icon';
-import type { Company, User } from '../models';
+import type { Company, PlatformMetrics, PlanDef, SubscriptionCompany, User } from '../models';
 
-type Tab = 'overview' | 'organizations' | 'admins' | 'settings';
+type Tab = 'overview' | 'organizations' | 'admins' | 'settings' | 'monitoring' | 'subscriptions';
 
 /**
  * Platform Administration (Super Admin only).
@@ -55,6 +56,8 @@ const SuperAdmin = () => {
             ['overview', 'home', 'Global Overview'],
             ['organizations', 'grid', 'Workspaces'],
             ['admins', 'users', 'Administrator Access'],
+            ['monitoring', 'bolt', 'Platform Monitoring'],
+            ['subscriptions', 'building', 'Subscriptions & Plans'],
             ['settings', 'gear', 'Platform Settings'],
           ] as Array<[Tab, IconName, string]>).map(([id, icon, label]) => (
             <button
@@ -72,6 +75,8 @@ const SuperAdmin = () => {
           {tab === 'overview' && <OverviewTab onNavigate={setTab} />}
           {tab === 'organizations' && <OrganizationsTab />}
           {tab === 'admins' && <AdminsTab />}
+          {tab === 'monitoring' && <MonitoringTab />}
+          {tab === 'subscriptions' && <SubscriptionsTab />}
           {tab === 'settings' && <SettingsTab />}
         </section>
       </main>
@@ -806,5 +811,250 @@ const NumberRow = ({
     />
   </div>
 );
+
+/* -------------------------------------------------------------------------- */
+/* Platform monitoring                                                        */
+/* -------------------------------------------------------------------------- */
+const MonitoringTab = () => {
+  const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      try {
+        const res = await PlatformMetricModel.get();
+        if (mounted) setMetrics(res.data.data.metrics);
+      } catch {
+        if (mounted) setError('Could not load platform metrics');
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  if (loading) {
+    return <SkeletonTable rows={6} cells={4} />;
+  }
+
+  if (error || !metrics) {
+    return (
+      <div className="empty-state">
+        <span className="empty-state-icon"><Icon name="bolt" size={18} /></span>
+        {error || 'Platform metrics are unavailable right now.'}
+      </div>
+    );
+  }
+
+  const maxDay = Math.max(1, ...metrics.weekly_messages.map((d) => d.messages));
+  const { totals } = metrics;
+
+  return (
+    <div className="space-y-6">
+      <header className="command-center-heading">
+        <div>
+          <span>Live platform statistics</span>
+          <h1>Platform Monitoring</h1>
+          <p>Real-time health, activity and growth across every workspace.</p>
+        </div>
+        <button className="btn-secondary" onClick={() => window.location.reload()}>
+          <Icon name="search" size={13} /> Refresh
+        </button>
+      </header>
+
+      <div className="super-admin-stats">
+        <StatCard label="Workspaces" value={totals.companies} sub={`${totals.departments} departments`} icon="grid" />
+        <StatCard label="Global users" value={totals.users} sub={`${totals.active_users} active accounts`} icon="users" />
+        <StatCard label="Teams" value={totals.teams} sub={`${totals.channels} channels`} icon="user" />
+        <StatCard label="Online now" value={metrics.online_users} sub="live presence" icon="bolt" />
+      </div>
+
+      <div className="command-center-grid">
+        <section className="command-card command-health">
+          <div className="command-card-heading">
+            <div><h2>Activity Today</h2><p>Since midnight, platform-wide.</p></div>
+          </div>
+          <div className="command-health-grid">
+            <HealthMetric label="Messages sent" value={metrics.today.messages.toLocaleString()} level="good" />
+            <HealthMetric label="New users" value={String(metrics.today.users_joined)} level="good" />
+            <HealthMetric label="New workspaces" value={String(metrics.today.companies_created)} level="good" />
+            <HealthMetric label="Active sessions" value={String(totals.active_sessions)} level="good" />
+          </div>
+        </section>
+
+        <aside className="command-alerts">
+          <h2>Platform Storage</h2>
+          <div className="command-alert">
+            <i>•</i>
+            <div><b>{metrics.storage.attachment_files} chat attachments</b><p>{(metrics.storage.attachment_bytes / 1024 / 1024).toFixed(2)} MB of message files stored.</p></div>
+          </div>
+          <div className="command-alert">
+            <i>•</i>
+            <div><b>{totals.messages.toLocaleString()} messages</b><p>across {totals.conversations} conversations.</p></div>
+          </div>
+          <div className="command-alert">
+            <i>•</i>
+            <div><b>{totals.shared_files} shared files</b><p>and {totals.tasks} tasks across workspaces.</p></div>
+          </div>
+        </aside>
+      </div>
+
+      <section className="command-card">
+        <div className="command-card-heading">
+          <div><h2>Messages — last 7 days</h2><p>Daily message volume across the platform.</p></div>
+        </div>
+        <div className="p-6 space-y-3">
+          {metrics.weekly_messages.map((row) => (
+            <div key={row.day} className="flex items-center gap-3">
+              <span className="w-24 text-xs text-muted shrink-0">{row.day.slice(5)}</span>
+              <div className="flex-1 h-4 bg-soft rounded overflow-hidden">
+                <div
+                  className="h-full bg-lavender rounded transition-all"
+                  style={{ width: `${Math.max(2, Math.round((row.messages / maxDay) * 100))}%` }}
+                />
+              </div>
+              <span className="w-16 text-xs font-semibold text-ink text-right shrink-0">{row.messages.toLocaleString()}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+};
+
+/* -------------------------------------------------------------------------- */
+/* Subscriptions & plans                                                      */
+/* -------------------------------------------------------------------------- */
+const SubscriptionsTab = () => {
+  const [rows, setRows] = useState<SubscriptionCompany[]>([]);
+  const [plans, setPlans] = useState<PlanDef[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await SubscriptionModel.list(search ? { search } : {});
+      setRows(res.data.data.subscriptions || []);
+      setPlans(res.data.data.plans || []);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not load subscriptions');
+    } finally {
+      setLoading(false);
+    }
+  }, [search]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const changePlan = async (company: SubscriptionCompany, planKey: string) => {
+    if (planKey === (company.plan_key || 'free')) return;
+    setBusyId(company.id);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await SubscriptionModel.update(company.id, { plan_key: planKey });
+      setMessage(`Updated ${company.name} to ${res.data.data.subscription.plan.name} ✓`);
+      setTimeout(() => setMessage(null), 2500);
+      await load();
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Could not change the plan');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const seatInfo = (c: SubscriptionCompany): string => {
+    const plan = plans.find((p) => p.key === (c.plan_key || 'free'));
+    if (!plan) return '';
+    if (plan.seatLimit === 0) return `${c.user_count ?? 0} users · unlimited seats`;
+    return `${c.user_count ?? 0} / ${plan.seatLimit} users`;
+  };
+
+  const inputCls =
+    'w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-lavender/40 focus:border-lavender text-sm';
+
+  return (
+    <div>
+      <div className="super-admin-panel-header">
+        <div>
+          <h2>Subscriptions &amp; Plans</h2>
+          <p>Assign plans and manage workspace subscriptions. Seat limits are enforced automatically.</p>
+        </div>
+        <input
+          className={inputCls + ' !w-56'}
+          placeholder="Search workspace…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {error && <div className="mx-6 mt-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">{error}</div>}
+      {message && <div className="mx-6 mt-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">{message}</div>}
+
+      {loading ? (
+        <SkeletonTable rows={6} cells={5} />
+      ) : rows.length === 0 ? (
+        <div className="empty-state">
+          <span className="empty-state-icon"><Icon name="building" size={18} /></span>
+          No workspaces found.
+        </div>
+      ) : (
+        <div className="table-scroll">
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>Workspace</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Usage</th>
+                <th>Billing email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((c) => (
+                <tr key={c.id}>
+                  <td className="font-semibold">
+                    <span className="flex items-center gap-2">
+                      <span className="command-company-mark">{c.name.charAt(0)}</span>
+                      {c.name}
+                    </span>
+                  </td>
+                  <td>
+                    <select
+                      className="border border-gray-200 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-lavender"
+                      value={c.plan_key || 'free'}
+                      disabled={busyId === c.id}
+                      onChange={(e) => changePlan(c, e.target.value)}
+                    >
+                      {plans.map((p) => (
+                        <option key={p.key} value={p.key}>{p.name}</option>
+                      ))}
+                    </select>
+                  </td>
+                  <td>
+                    <span className={`status-pill ${c.plan_status === 'active' || c.plan_status === 'trialing' ? 'active' : 'disabled'}`}>
+                      {c.plan_status || 'active'}
+                    </span>
+                  </td>
+                  <td className="text-muted text-xs">{seatInfo(c)}</td>
+                  <td className="text-muted text-xs">{c.billing_email || '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+};
 
 export default SuperAdmin;

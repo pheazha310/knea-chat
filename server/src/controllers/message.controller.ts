@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import type { NextFunction, Request, Response } from 'express';
 import type { MessageService } from '../services/Message.service';
+import type { CompanySettingService } from '../services/CompanySetting.service';
 import type { SystemSettingService } from '../services/SystemSetting.service';
 import type { BroadcastToConversation } from '../websocket/broadcast.utils';
 import { serializeMessage } from '../websocket/message.utils';
@@ -45,6 +46,15 @@ const ALLOWED_MIME_EXACT = new Set([
 
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760', 10);
 
+/** Effective per-workspace feature policy (platform AND company settings). */
+interface FeaturePolicy {
+  allow_uploads: boolean;
+  allow_reactions: boolean;
+  allow_pinning: boolean;
+  max_upload_size_mb: number;
+  password_min_length: number;
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, UPLOAD_DIR),
   filename: (req, file, cb) => {
@@ -80,7 +90,26 @@ export class MessageController {
     private messageService: MessageService,
     private systemSettingService: SystemSettingService,
     private broadcastToConversation: BroadcastToConversation,
+    private companySettingService?: CompanySettingService | null,
   ) {}
+
+  /**
+   * Effective feature policy for a user's workspace: platform policy AND-ed
+   * with the workspace's own settings (Administration module).
+   */
+  private async getPolicy(companyId?: number): Promise<FeaturePolicy> {
+    const platform = await this.systemSettingService.getCached();
+    if (!this.companySettingService || !companyId) {
+      return {
+        allow_uploads: platform.allow_uploads,
+        allow_reactions: platform.allow_reactions,
+        allow_pinning: platform.allow_pinning,
+        max_upload_size_mb: platform.max_upload_size_mb,
+        password_min_length: platform.password_min_length,
+      };
+    }
+    return this.companySettingService.effectiveFeaturePolicy(companyId, platform);
+  }
 
   /** POST /api/messages */
   create = async (req: Request, res: Response): Promise<void> => {
@@ -124,13 +153,13 @@ export class MessageController {
    * Creates a `file` type message with an attachments row (SRS FR-17).
    */
   uploadFile = async (req: Request, res: Response): Promise<void> => {
-    let settings;
+    let policy: FeaturePolicy;
     try {
-      settings = await this.systemSettingService.getCached();
-      if (!settings.allow_uploads) {
+      policy = await this.getPolicy(req.user?.companyId);
+      if (!policy.allow_uploads) {
         res.status(403).json({
           success: false,
-          message: 'File uploads are currently disabled by your platform administrator.',
+          message: 'File uploads are currently disabled by your platform or workspace administrator.',
           errors: { file: 'Uploads disabled' },
         });
         return;
@@ -173,13 +202,13 @@ export class MessageController {
           return;
         }
 
-        // Platform file-size limit (defaults to the env hard cap).
-        const maxBytes = settings.max_upload_size_mb * 1024 * 1024;
+        // Effective file-size limit (platform cap AND workspace cap).
+        const maxBytes = policy.max_upload_size_mb * 1024 * 1024;
         if (req.file.size > maxBytes) {
           fs.unlink(path.join(UPLOAD_DIR, req.file.filename), () => {});
           res.status(400).json({
             success: false,
-            message: `File exceeds the ${settings.max_upload_size_mb} MB platform limit`,
+            message: `File exceeds the ${policy.max_upload_size_mb} MB upload limit`,
             errors: { file: 'File too large' },
           });
           return;
@@ -348,7 +377,7 @@ export class MessageController {
   /** POST /api/messages/:id/pin */
   pin = async (req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await this.systemSettingService.getCached();
+      const settings = await this.getPolicy(req.user?.companyId);
       if (!settings.allow_pinning) {
         res.status(403).json({
           success: false,
@@ -377,7 +406,7 @@ export class MessageController {
   /** DELETE /api/messages/:id/pin */
   unpin = async (req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await this.systemSettingService.getCached();
+      const settings = await this.getPolicy(req.user?.companyId);
       if (!settings.allow_pinning) {
         res.status(403).json({
           success: false,
@@ -406,7 +435,7 @@ export class MessageController {
   /** POST /api/messages/:id/reactions */
   addReaction = async (req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await this.systemSettingService.getCached();
+      const settings = await this.getPolicy(req.user?.companyId);
       if (!settings.allow_reactions) {
         res.status(403).json({
           success: false,
@@ -481,7 +510,7 @@ export class MessageController {
   /** DELETE /api/messages/:id/reactions/:reactionType */
   removeReaction = async (req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await this.systemSettingService.getCached();
+      const settings = await this.getPolicy(req.user?.companyId);
       if (!settings.allow_reactions) {
         res.status(403).json({
           success: false,

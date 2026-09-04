@@ -6,10 +6,29 @@
  * (enforced by middleware in the route file).
  */
 import type { NextFunction, Request, Response } from 'express';
+import type { AuditLogService } from '../services/AuditLog.service';
 import type { SystemSettingService } from '../services/SystemSetting.service';
 
 export class SystemSettingController {
-  constructor(private systemSettingService: SystemSettingService) {}
+  constructor(
+    private systemSettingService: SystemSettingService,
+    private auditLogService?: AuditLogService | null,
+  ) {}
+
+  /** Best-effort platform-scope audit record (settings changes). */
+  private async record(req: Request, details: Record<string, unknown>): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: null,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action: 'settings.updated',
+      entity_type: 'system_settings',
+      entity_id: null,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /**
    * GET /api/settings/public
@@ -46,7 +65,9 @@ export class SystemSettingController {
   /** PATCH /api/settings */
   update = async (req: Request, res: Response): Promise<void> => {
     try {
-      const settings = await this.systemSettingService.updateSettings(req.body || {});
+      const patch = req.body || {};
+      const settings = await this.systemSettingService.updateSettings(patch);
+      await this.record(req, { changed: Object.keys(patch) });
       res.status(200).json({
         success: true,
         message: 'Settings updated successfully',

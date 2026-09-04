@@ -9,9 +9,10 @@ const password = 'kneachat168';
 
 async function createDemoUser() {
   try {
+    // The demo workspace keeps the Enterprise plan (Administration module).
     const [companyResult] = await pool.execute(
-      `INSERT INTO companies (name, domain)
-       VALUES (?, ?)
+      `INSERT INTO companies (name, domain, plan_key)
+       VALUES (?, ?, 'enterprise')
        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
       ['KneaChat', 'kneachat.com']
     );

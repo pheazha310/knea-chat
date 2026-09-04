@@ -6,10 +6,34 @@
  * company; create/update/delete are admin+ (enforced on the routes).
  */
 import type { NextFunction, Request, Response } from 'express';
+import type { AuditLogService } from '../services/AuditLog.service';
 import type { DepartmentService } from '../services/Department.service';
 
 export class DepartmentController {
-  constructor(private departmentService: DepartmentService) {}
+  constructor(
+    private departmentService: DepartmentService,
+    private auditLogService?: AuditLogService | null,
+  ) {}
+
+  /** Best-effort audit record for administrative department actions. */
+  private async record(
+    req: Request,
+    action: string,
+    departmentId: number,
+    details?: Record<string, unknown>,
+  ): Promise<void> {
+    if (!this.auditLogService) return;
+    await this.auditLogService.log({
+      company_id: req.user!.companyId,
+      actor_user_id: req.user!.id,
+      actor_role: req.user!.role,
+      action,
+      entity_type: 'department',
+      entity_id: departmentId,
+      details,
+      ip_address: req.ip,
+    });
+  }
 
   /** GET /api/departments */
   list = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -63,6 +87,8 @@ export class DepartmentController {
         description,
       });
 
+      await this.record(req, 'department.created', department.id, { name: department.name });
+
       res.status(201).json({
         success: true,
         message: 'Department created successfully',
@@ -88,6 +114,8 @@ export class DepartmentController {
         description,
       });
 
+      await this.record(req, 'department.updated', departmentId, { name: department.name });
+
       res.status(200).json({
         success: true,
         message: 'Department updated successfully',
@@ -107,6 +135,7 @@ export class DepartmentController {
     try {
       const departmentId = Number(req.params.id);
       const result = await this.departmentService.deleteDepartment(departmentId);
+      await this.record(req, 'department.deleted', departmentId);
       res.status(200).json({
         success: true,
         message: result.message,

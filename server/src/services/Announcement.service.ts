@@ -228,21 +228,25 @@ export class AnnouncementService {
     // A draft that just went live reaches its audience now.
     if (!announcement.is_published && refreshed.is_published) {
       await this.notifyRecipients(refreshed, refreshed.created_by);
-      const recipientIds = await this.announcementRepository.findRecipientUserIds(refreshed);
+      // Broadcast a stats-enriched copy (read_count/total_recipients) so the
+      // live card on recipients' screens shows read progress right away. The
+      // updater's own row (with their is_read) is still returned via `refreshed`.
+      const broadcast = (await this.announcementRepository.findByIdWithStats(id)) ?? refreshed;
+      const recipientIds = await this.announcementRepository.findRecipientUserIds(broadcast);
       emitAnnouncementToUsers(recipientIds, {
         type: 'announcement_created',
-        data: { announcement: refreshed },
+        data: { announcement: broadcast },
       }, userId);
-      const snippet = refreshed.content.length > 120
-        ? `${refreshed.content.slice(0, 120)}…`
-        : refreshed.content;
+      const snippet = broadcast.content.length > 120
+        ? `${broadcast.content.slice(0, 120)}…`
+        : broadcast.content;
       emitAnnouncementToUsers(recipientIds, {
         type: 'notification',
         data: {
           type: 'announcement',
-          title: `Announcement: ${refreshed.title}`,
+          title: `Announcement: ${broadcast.title}`,
           message: snippet,
-          announcementId: refreshed.id,
+          announcementId: broadcast.id,
         },
       }, userId);
     }
@@ -358,7 +362,9 @@ export class AnnouncementService {
       try {
         const ok = await this.announcementRepository.markPublished(announcement.id, now);
         if (!ok) continue; // someone else already published it
-        const refreshed = await this.announcementRepository.findById(announcement.id);
+        // Enriched (read_count / total_recipients) so the card that pops up on
+        // recipients' screens already shows the read-progress chip.
+        const refreshed = await this.announcementRepository.findByIdWithStats(announcement.id);
         if (!refreshed) continue;
 
         await this.notifyRecipients(refreshed, refreshed.created_by);

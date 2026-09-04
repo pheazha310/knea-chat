@@ -11,7 +11,18 @@ import type { NotificationRepository } from '../repositories/notificationReposit
 import type { CompanyRepository } from '../repositories/companyRepository';
 import type { SessionRepository } from '../repositories/sessionRepository';
 import { generateToken } from '../utils/auth.utils';
-import type { LoginResult, SystemSettings, User } from '../types';
+import type { CompanySettingService } from './CompanySetting.service';
+import type { SubscriptionService } from './Subscription.service';
+import type { LoginResult, SystemSettings, User, UserRow } from '../types';
+
+/** Platform-neutral baseline used when only the company policy matters. */
+const NEUTRAL_PLATFORM = {
+  allow_uploads: true,
+  allow_reactions: true,
+  allow_pinning: true,
+  max_upload_size_mb: 10,
+  password_min_length: 0,
+};
 
 export class AuthService {
   constructor(
@@ -19,7 +30,23 @@ export class AuthService {
     private notificationRepository: NotificationRepository,
     private companyRepository: CompanyRepository,
     private sessionRepository: SessionRepository,
+    private subscriptionService?: SubscriptionService | null,
+    private companySettingService?: CompanySettingService | null,
   ) {}
+
+  /** Effective workspace password minimum for a user's company (default 6). */
+  private async companyMinPassword(user: UserRow): Promise<number> {
+    if (!this.companySettingService || !user.company_id) return 0;
+    try {
+      const policy = await this.companySettingService.effectiveFeaturePolicy(
+        Number(user.company_id),
+        NEUTRAL_PLATFORM,
+      );
+      return policy.password_min_length;
+    } catch {
+      return 0;
+    }
+  }
 
   async register(
     { firstName, lastName, email, password }: { firstName: string; lastName: string; email: string; password: string },
@@ -56,6 +83,11 @@ export class AuthService {
           `This workspace has reached its limit of ${maxUsersPerOrg} users.`,
         );
       }
+    }
+
+    // Subscription plan seat limit (Administration module).
+    if (this.subscriptionService) {
+      await this.subscriptionService.assertCanAddUser(company.id);
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
@@ -179,6 +211,14 @@ export class AuthService {
       throw new Error('Invalid or expired reset token');
     }
 
+    // The workspace policy may demand a longer password than the platform
+    // minimum the controller already enforced.
+    const user = await this.userRepository.findById(reset.user_id);
+    const companyMin = user ? await this.companyMinPassword(user) : 0;
+    if (newPassword.length < companyMin) {
+      throw new Error(`Password must be at least ${companyMin} characters`);
+    }
+
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     await this.userRepository.updatePassword(reset.user_id, hashedPassword);
     await this.sessionRepository.markPasswordResetUsed(reset.id);
@@ -199,6 +239,13 @@ export class AuthService {
     const isPasswordValid = await bcrypt.compare(currentPassword, user.password || '');
     if (!isPasswordValid) {
       throw new Error('Current password is incorrect');
+    }
+
+    // The workspace policy may demand a longer password than the platform
+    // minimum the controller already enforced.
+    const companyMin = await this.companyMinPassword(user);
+    if (newPassword.length < companyMin) {
+      throw new Error(`Password must be at least ${companyMin} characters`);
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);

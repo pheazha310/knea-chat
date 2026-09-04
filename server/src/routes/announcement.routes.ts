@@ -17,10 +17,12 @@ export const createAnnouncementRouter = (
   router.post('/:id/read', auth.authenticate, announcementController.markRead);
   router.get('/:id/reads', auth.authenticate, auth.authorizeAtLeast('manager'), announcementController.readers);
 
-  // Publishing / editing / deleting announcements is manager+ (SRS FR-24).
-  router.post('/', auth.authenticate, auth.authorizeAtLeast('manager'), announcementController.create);
-  router.patch('/:id', auth.authenticate, auth.authorizeAtLeast('manager'), announcementController.update);
-  router.delete('/:id', auth.authenticate, auth.authorizeAtLeast('manager'), announcementController.remove);
+  // Publishing / editing / deleting announcements consults the discretionary
+  // permission catalog (Company Admins may restrict managers); baseline
+  // manager+ (SRS FR-24).
+  router.post('/', auth.authenticate, auth.authorizeCapability('publish_announcements'), announcementController.create);
+  router.patch('/:id', auth.authenticate, auth.authorizeCapability('publish_announcements'), announcementController.update);
+  router.delete('/:id', auth.authenticate, auth.authorizeCapability('publish_announcements'), announcementController.remove);
 
   return router;
 };

@@ -16,6 +16,7 @@ export class CompanyRepository {
     const { search = '' } = filters;
     let sql = `
       SELECT c.id, c.name, c.domain, c.logo, c.created_at, c.updated_at,
+             c.plan_key, c.plan_status, c.plan_expires_at, c.billing_email,
              (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id) AS user_count,
              (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.is_active = 1) AS active_user_count,
              (SELECT COUNT(*) FROM users u WHERE u.company_id = c.id AND u.role = 'admin') AS admin_count,
@@ -62,7 +63,12 @@ export class CompanyRepository {
   }
 
   async update(id: number, data: Record<string, unknown>): Promise<boolean> {
-    const allowed = ['name', 'domain', 'logo'];
+    // `name/domain/logo` are branding; the rest are the subscription / plan
+    // fields managed by the Super Admin (Administration module).
+    const allowed = [
+      'name', 'domain', 'logo',
+      'plan_key', 'plan_status', 'plan_expires_at', 'billing_email',
+    ];
     const updates: string[] = [];
     const params: unknown[] = [];
 
