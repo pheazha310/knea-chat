@@ -534,6 +534,9 @@ const SearchView = ({
             placeholder="Search the whole workspace…"
             aria-label="Search the whole workspace"
           />
+          {!q && !loading && (
+            <kbd className="gs-kbd">⌘K</kbd>
+          )}
           {q && (
             <button type="button" className="gs-clear" onClick={() => setQ('')} aria-label="Clear query">
               <Icon name="x" size={13} />

@@ -1,4 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import Icon from '../common/Icon';
+import Avatar from '../common/Avatar';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
 import { useUserStore } from '../../store/userStore';
@@ -15,6 +17,23 @@ const senderName = (m: ChatMessage) => {
     .filter(Boolean)
     .join(' ')
     .trim() || 'User';
+};
+
+const initialsOf = (m: ChatMessage) => {
+  const rest = m as any;
+  const first = rest.first_name || rest.senderFirstName || '';
+  const last = rest.last_name || rest.senderLastName || '';
+  return `${first[0] || ''}${last[0] || ''}`.trim().toUpperCase() || '?';
+};
+
+const senderAvatar = (m: ChatMessage) => {
+  const rest = m as any;
+  return {
+    id: rest.sender_id ?? rest.senderId,
+    first_name: rest.first_name || rest.senderFirstName,
+    last_name: rest.last_name || rest.senderLastName,
+    profile_picture: rest.profile_picture || rest.senderProfilePicture,
+  };
 };
 
 /**
@@ -154,7 +173,10 @@ const CallChatPanel = ({ call }: CallChatPanelProps) => {
       </div>
       <div className="call-chat-list" ref={listRef}>
         {!messages || messages.length === 0 ? (
-          <p className="call-chat-empty">No messages yet — say hi!</p>
+          <div className="call-chat-empty">
+            <Icon name="message" size={22} />
+            <p>No messages yet — say hi!</p>
+          </div>
         ) : (
           messages.map((m) => {
             const mine =
@@ -162,8 +184,25 @@ const CallChatPanel = ({ call }: CallChatPanelProps) => {
               Number((m as any).sender_id ?? (m as any).senderId) === currentUserId;
             return (
               <div key={m.id} className={`call-chat-msg ${mine ? 'mine' : ''}`}>
-                {!mine && <b>{senderName(m)}</b>}
-                <span>{m.content}</span>
+                {!mine && (
+                  <Avatar
+                    person={{
+                      id: (m as any).sender_id ?? (m as any).senderId,
+                      first_name: (m as any).first_name || (m as any).senderFirstName,
+                      last_name: (m as any).last_name || (m as any).senderLastName,
+                      profile_picture: (m as any).profile_picture || (m as any).senderProfilePicture,
+                    }}
+                    className="tiny"
+                  />
+                )}
+                <div className="call-chat-msg-body">
+                  {!mine && (
+                    <div className="call-chat-msg-heading">
+                      <b>{senderName(m)}</b>
+                    </div>
+                  )}
+                  <span className="call-chat-msg-text">{m.content}</span>
+                </div>
               </div>
             );
           })
@@ -188,8 +227,8 @@ const CallChatPanel = ({ call }: CallChatPanelProps) => {
           placeholder="Message during the call…"
           disabled={conversationId === null}
         />
-        <button onClick={send} disabled={!draft.trim() || conversationId === null} aria-label="Send">
-          ➤
+        <button onClick={send} disabled={!draft.trim() || conversationId === null} aria-label="Send" title="Send">
+          <Icon name="send" size={16} />
         </button>
       </div>
     </div>

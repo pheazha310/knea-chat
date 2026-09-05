@@ -190,6 +190,18 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
     return list;
   }, [teams, canManage]);
 
+  // Summary counts reflect the currently filtered task set so the strip
+  // always matches what the user is looking at.
+  const stats = {
+    open: tasks.filter((t) => t.status === 'open').length,
+    inProgress: tasks.filter((t) => t.status === 'in_progress').length,
+    completed: tasks.filter((t) => t.status === 'completed').length,
+    overdue: tasks.filter((t) => t.is_overdue && t.status !== 'completed').length,
+  };
+  const pctDone = tasks.length
+    ? Math.round((stats.completed / tasks.length) * 100)
+    : 0;
+
   return (
     <div className="view-page">
       <div className="view-header">
@@ -204,6 +216,36 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
           <Icon name="plus" size={14} /> {canManage ? 'Assign task' : 'New task'}
         </button>
       </div>
+
+      {tasks.length > 0 && (
+        <div className="task-summary" aria-label="Task overview">
+          <div className="task-summary-stats">
+            <span className="task-summary-stat">
+              <span className="task-summary-dot open" /> Open <b>{stats.open}</b>
+            </span>
+            <span className="task-summary-stat">
+              <span className="task-summary-dot in_progress" /> In progress{' '}
+              <b>{stats.inProgress}</b>
+            </span>
+            <span className="task-summary-stat">
+              <span className="task-summary-dot completed" /> Done <b>{stats.completed}</b>
+            </span>
+            <span className="task-summary-stat">
+              <span className="task-summary-dot overdue" /> Overdue <b>{stats.overdue}</b>
+            </span>
+          </div>
+          <div className="task-summary-progress" aria-label={`${pctDone}% complete`}>
+            <span className="task-summary-progress-label">Progress</span>
+            <div className="task-summary-progress-track">
+              <span
+                className="task-summary-progress-fill"
+                style={{ width: `${pctDone}%` }}
+              />
+            </div>
+            <span className="task-summary-progress-pct">{pctDone}%</span>
+          </div>
+        </div>
+      )}
 
       <div className="sf-toolbar">
         <div className="flex items-center gap-2 flex-wrap">
@@ -245,7 +287,7 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
           )}
 
           <select
-            className="form-select !py-1.5 !px-2 !text-xs w-auto"
+            className="task-select"
             aria-label="Filter by scope"
             value={teamFilter === 'all' ? 'all' : String(teamFilter)}
             onChange={(e) => {
@@ -261,7 +303,7 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
           </select>
 
           <select
-            className="form-select !py-1.5 !px-2 !text-xs w-auto"
+            className="task-select"
             aria-label="Filter by priority"
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value as TaskPriority | '')}
@@ -397,7 +439,7 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
 
                 <div className="flex items-center gap-1 flex-shrink-0">
                   <select
-                    className="form-select !py-1.5 !px-2 !text-xs w-auto"
+                    className="task-select"
                     aria-label={`Status for ${task.title}`}
                     value={task.status}
                     disabled={
@@ -530,37 +572,35 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
 
       {showCreate && (
         <Modal onClose={() => setShowCreate(false)} title={canManage ? 'Assign a task' : 'New task'}>
-          <div className="space-y-4">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                Title *
+          <div className="task-create-form">
+            <div className="task-create-section">
+              <label className="task-create-label">
+                Title <span className="task-required">*</span>
               </label>
               <input
-                className="form-input w-full"
+                className="task-create-input"
                 placeholder="What needs to be done?"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 autoFocus
               />
             </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                Description
-              </label>
+
+            <div className="task-create-section">
+              <label className="task-create-label">Description</label>
               <textarea
-                className="form-input w-full min-h-[72px]"
+                className="task-create-input task-create-textarea"
                 placeholder="Optional details…"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                  Assignee
-                </label>
+
+            <div className="task-create-grid">
+              <div className="task-create-section">
+                <label className="task-create-label">Assignee</label>
                 <select
-                  className="form-select w-full"
+                  className="task-create-select"
                   value={assigneeId}
                   disabled={assigneeOptions.length === 0}
                   onChange={(e) => setAssigneeId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -573,12 +613,10 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                  Team
-                </label>
+              <div className="task-create-section">
+                <label className="task-create-label">Team</label>
                 <select
-                  className="form-select w-full"
+                  className="task-create-select"
                   value={teamId}
                   onChange={(e) => setTeamId(e.target.value === '' ? '' : Number(e.target.value))}
                 >
@@ -588,23 +626,19 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                  Due date
-                </label>
+              <div className="task-create-section">
+                <label className="task-create-label">Due date</label>
                 <input
                   type="date"
-                  className="form-input w-full"
+                  className="task-create-input"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">
-                  Priority
-                </label>
+              <div className="task-create-section">
+                <label className="task-create-label">Priority</label>
                 <select
-                  className="form-select w-full"
+                  className="task-create-select"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
                 >
@@ -616,16 +650,17 @@ const TasksView = ({ users, teams, canManage, currentUserId }: TasksViewProps) =
             </div>
 
             {formError && (
-              <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
-                {formError}
+              <div className="task-create-error">
+                <Icon name="alert" size={14} />
+                <span>{formError}</span>
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-1">
-              <button className="btn-secondary" onClick={() => setShowCreate(false)}>
+            <div className="task-create-actions">
+              <button className="task-create-btn-secondary" onClick={() => setShowCreate(false)}>
                 Cancel
               </button>
-              <button className="btn-primary" disabled={busy} onClick={handleCreate}>
+              <button className="task-create-btn-primary" disabled={busy} onClick={handleCreate}>
                 <Icon name="check" size={13} /> {canManage ? 'Assign' : 'Create'}
               </button>
             </div>

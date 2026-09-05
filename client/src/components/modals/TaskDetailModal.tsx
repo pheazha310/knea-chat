@@ -37,6 +37,12 @@ const PRIORITY_COLORS: Record<TaskPriority, string> = {
   high: '#ef4444',
 };
 
+const STATUS_COLORS: Record<TaskStatus, { bg: string; text: string; border: string }> = {
+  open: { bg: '#fffbeb', text: '#b45309', border: '#fde68a' },
+  in_progress: { bg: '#eff6ff', text: '#1d4ed8', border: '#bfdbfe' },
+  completed: { bg: '#ecfdf5', text: '#065f46', border: '#a7f3d0' },
+};
+
 const personName = (first?: string | null, last?: string | null, email?: string | null) =>
   [first, last].filter(Boolean).join(' ').trim() || email || 'Someone';
 
@@ -91,20 +97,16 @@ const TaskDetailModal = ({
   const comments = commentsByTask[task.id] || [];
   const attachments = attachmentsByTask[task.id] || [];
 
-  // The modal can only edit when the user is a manager/creator.
   const canTouch = canManage || task.created_by === currentUserId;
-  // Status may also be flipped by the assignee or a member of the task's team.
   const isAssignee = task.assignee_id != null && task.assignee_id === currentUserId;
   const isTeamMember = !!task.team_id && teams.some((t) => t.id === task.team_id && !!t.user_role);
   const canChangeStatus = canTouch || isAssignee || isTeamMember;
 
-  // Assignee options: anyone for managers, otherwise just the current user.
   const assigneeOptions = useMemo(() => {
     const list = canManage ? users : users.filter((u) => u.id === currentUserId);
     return list;
   }, [users, canManage, currentUserId]);
 
-  // Team options: managers may pick any team; employees only their own.
   const teamOptions = useMemo(() => {
     const list = canManage ? teams : teams.filter((t) => !!t.user_role);
     return list;
@@ -125,15 +127,12 @@ const TaskDetailModal = ({
   const [uploadBusy, setUploadBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Fresh data every time the modal opens for a task.
   useEffect(() => {
     loadComments(task.id);
     loadAttachments(task.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [task.id]);
 
-  // Keep local edit state in sync when the store pushes an updated task
-  // (e.g. after a status flip).
   useEffect(() => {
     setTitle(task.title);
     setDescription(task.description || '');
@@ -196,9 +195,11 @@ const TaskDetailModal = ({
     setUploadBusy(false);
   };
 
+  const sc = STATUS_COLORS[task.status] || STATUS_COLORS.open;
+
   const statusSelect = canChangeStatus ? (
     <select
-      className="form-select !py-1.5 !px-2 !text-xs w-auto"
+      className="task-status-select"
       aria-label="Task status"
       value={task.status}
       onChange={(e) => handleStatus(e.target.value as TaskStatus)}
@@ -209,7 +210,12 @@ const TaskDetailModal = ({
     </select>
   ) : (
     <span
-      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 dark:bg-gray-800 text-muted"
+      className="task-status-pill"
+      style={{
+        background: sc.bg,
+        color: sc.text,
+        borderColor: sc.border,
+      }}
     >
       {STATUS_LABELS[task.status]}
     </span>
@@ -218,85 +224,114 @@ const TaskDetailModal = ({
   return (
     <Modal onClose={onClose} title="Task" width={620}>
       <div className="task-detail">
-        {/* Header: title + status */}
-        <div className="flex items-start gap-3">
-          <span
-            className="w-2.5 h-2.5 rounded-full mt-2 flex-shrink-0"
-            style={{ backgroundColor: PRIORITY_COLORS[task.priority] || '#94a3b8' }}
-            title={`${task.priority} priority`}
-          />
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h4 className={`text-base font-semibold ${task.status === 'completed' ? 'text-muted line-through' : 'text-ink'}`}>
+        {/* Header */}
+        <div className="task-detail-header">
+          <div className="task-detail-header-main">
+            <div className="task-detail-title-row">
+              <span
+                className="task-detail-priority-dot"
+                style={{ backgroundColor: PRIORITY_COLORS[task.priority] || '#94a3b8' }}
+                title={`${task.priority} priority`}
+              />
+              <h4 className={`task-detail-title ${task.status === 'completed' ? 'is-completed' : ''}`}>
                 {task.title}
               </h4>
             </div>
             {task.description && !editing && (
-              <p className="text-sm text-muted mt-1 whitespace-pre-wrap">{task.description}</p>
+              <p className="task-detail-description">{task.description}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
+          <div className="task-detail-header-actions">
             {statusSelect}
             {canTouch && !editing && (
-              <button className="btn-secondary !py-1.5 !px-2.5 !text-xs" onClick={startEdit} aria-label="Edit task">
-                <Icon name="edit" size={13} />
+              <button className="task-icon-btn" onClick={startEdit} aria-label="Edit task" title="Edit task">
+                <Icon name="edit" size={14} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Meta row */}
-        <div className="task-detail-meta">
-          <span className="inline-flex items-center gap-1.5">
-            <Avatar
-              person={{
-                id: task.assignee_id,
-                first_name: task.assignee_first_name,
-                last_name: task.assignee_last_name,
-                profile_picture: task.assignee_profile_picture,
-              }}
-              className="tiny"
-            />
-            <span className="text-xs text-ink">
-              {personName(task.assignee_first_name, task.assignee_last_name, task.assignee_email)}
+        {/* Meta */}
+        <div className="task-detail-meta-grid">
+          <div className="task-meta-item">
+            <span className="task-meta-label">Assignee</span>
+            <span className="task-meta-value">
+              <Avatar
+                person={{
+                  id: task.assignee_id,
+                  first_name: task.assignee_first_name,
+                  last_name: task.assignee_last_name,
+                  profile_picture: task.assignee_profile_picture,
+                }}
+                className="tiny"
+              />
+              <span className="task-meta-text">
+                {personName(task.assignee_first_name, task.assignee_last_name, task.assignee_email)}
+              </span>
             </span>
-          </span>
-          <span className="text-gray-300 dark:text-gray-600">·</span>
-          <span className="inline-flex items-center gap-1 text-xs text-muted">
-            <Icon name="calendar" size={11} />
-            {task.due_date ? formatDate(task.due_date) : 'No due date'}
-          </span>
-          <span className="text-gray-300 dark:text-gray-600">·</span>
-          <span className="inline-flex items-center gap-1 text-xs text-muted">
-            <Icon name="grid" size={11} />
-            {task.team_name ? `Team · ${task.team_name}` : 'Personal'}
-          </span>
-          <span className="text-gray-300 dark:text-gray-600">·</span>
-          <span className="text-xs text-muted">
-            by {personName(task.creator_first_name, task.creator_last_name)}
-          </span>
+          </div>
+          <div className="task-meta-item">
+            <span className="task-meta-label">Due date</span>
+            <span className="task-meta-value">
+              <Icon name="calendar" size={13} className="task-meta-icon" />
+              <span className={`task-meta-text ${task.is_overdue && task.status !== 'completed' ? 'is-overdue' : ''}`}>
+                {task.due_date ? formatDate(task.due_date) : 'No due date'}
+              </span>
+            </span>
+          </div>
+          <div className="task-meta-item">
+            <span className="task-meta-label">Team</span>
+            <span className="task-meta-value">
+              <Icon name="grid" size={13} className="task-meta-icon" />
+              <span className="task-meta-text">
+                {task.team_name ? `Team · ${task.team_name}` : 'Personal'}
+              </span>
+            </span>
+          </div>
+          <div className="task-meta-item">
+            <span className="task-meta-label">Priority</span>
+            <span className="task-meta-value">
+              <span
+                className="task-priority-dot-sm"
+                style={{ backgroundColor: PRIORITY_COLORS[task.priority] || '#94a3b8' }}
+              />
+              <span className="task-meta-text">{PRIORITY_LABELS[task.priority]}</span>
+            </span>
+          </div>
+          <div className="task-meta-item">
+            <span className="task-meta-label">Created by</span>
+            <span className="task-meta-value">
+              <span className="task-meta-text">
+                {personName(task.creator_first_name, task.creator_last_name)}
+              </span>
+            </span>
+          </div>
         </div>
 
         {/* Edit form */}
         {editing && (
-          <div className="space-y-3 mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Title *</label>
-              <input className="form-input w-full" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+          <div className="task-edit-form">
+            <div className="task-edit-row">
+              <div className="task-edit-field">
+                <label className="task-edit-label">Title *</label>
+                <input className="task-edit-input" value={title} onChange={(e) => setTitle(e.target.value)} autoFocus />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Description</label>
-              <textarea
-                className="form-input w-full min-h-[64px]"
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-              />
+            <div className="task-edit-row">
+              <div className="task-edit-field">
+                <label className="task-edit-label">Description</label>
+                <textarea
+                  className="task-edit-input task-edit-textarea"
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Assignee</label>
+            <div className="task-edit-grid">
+              <div className="task-edit-field">
+                <label className="task-edit-label">Assignee</label>
                 <select
-                  className="form-select w-full"
+                  className="task-edit-select"
                   value={assigneeId}
                   disabled={assigneeOptions.length === 0}
                   onChange={(e) => setAssigneeId(e.target.value === '' ? '' : Number(e.target.value))}
@@ -307,10 +342,10 @@ const TaskDetailModal = ({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Team</label>
+              <div className="task-edit-field">
+                <label className="task-edit-label">Team</label>
                 <select
-                  className="form-select w-full"
+                  className="task-edit-select"
                   value={teamId}
                   onChange={(e) => setTeamId(e.target.value === '' ? '' : Number(e.target.value))}
                 >
@@ -320,19 +355,19 @@ const TaskDetailModal = ({
                   ))}
                 </select>
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Due date</label>
+              <div className="task-edit-field">
+                <label className="task-edit-label">Due date</label>
                 <input
                   type="date"
-                  className="form-input w-full"
+                  className="task-edit-input"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold uppercase tracking-wide text-muted mb-1.5">Priority</label>
+              <div className="task-edit-field">
+                <label className="task-edit-label">Priority</label>
                 <select
-                  className="form-select w-full"
+                  className="task-edit-select"
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as TaskPriority)}
                 >
@@ -343,13 +378,14 @@ const TaskDetailModal = ({
               </div>
             </div>
             {error && (
-              <div className="text-xs text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg px-3 py-2">
+              <div className="task-error">
+                <Icon name="alert" size={14} />
                 {error}
               </div>
             )}
-            <div className="flex justify-end gap-2">
-              <button className="btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
-              <button className="btn-primary" disabled={saveBusy} onClick={saveEdit}>
+            <div className="task-edit-actions">
+              <button className="task-btn-secondary" onClick={() => setEditing(false)}>Cancel</button>
+              <button className="task-btn-primary" disabled={saveBusy} onClick={saveEdit}>
                 <Icon name="check" size={13} /> Save
               </button>
             </div>
@@ -358,15 +394,20 @@ const TaskDetailModal = ({
 
         {/* Comments */}
         <section className="task-detail-section">
-          <h5 className="task-detail-heading">
-            <Icon name="message" size={13} /> Comments ({comments.length})
+          <h5 className="task-section-title">
+            <Icon name="message" size={14} />
+            Comments
+            <span className="task-section-count">{comments.length}</span>
           </h5>
-          <ul className="task-comment-list">
+          <div className="task-comment-list">
             {comments.length === 0 && (
-              <li className="text-xs text-muted">No comments yet — add the first one below.</li>
+              <div className="task-empty-state">
+                <Icon name="message" size={22} />
+                <p>No comments yet — add the first one below.</p>
+              </div>
             )}
             {comments.map((c) => (
-              <li key={c.id} className="task-comment">
+              <div key={c.id} className="task-comment">
                 <Avatar
                   person={{
                     id: c.user_id,
@@ -376,27 +417,27 @@ const TaskDetailModal = ({
                   }}
                   className="tiny"
                 />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-baseline gap-2">
-                    <b className="text-xs text-ink">{personName(c.author_first_name, c.author_last_name, c.author_email)}</b>
-                    <time className="text-[11px] text-muted">{relativeTime(c.created_at)}</time>
+                <div className="task-comment-body">
+                  <div className="task-comment-header">
+                    <b className="task-comment-author">{personName(c.author_first_name, c.author_last_name, c.author_email)}</b>
+                    <time className="task-comment-time">{relativeTime(c.created_at)}</time>
                   </div>
-                  <p className="text-sm text-ink whitespace-pre-wrap mt-0.5">{c.content}</p>
+                  <p className="task-comment-text">{c.content}</p>
                 </div>
                 {(canManage || c.user_id === currentUserId) && (
                   <ConfirmButton
                     label="Delete"
                     confirmLabel="Delete comment?"
-                    className="btn-danger task-comment-delete"
+                    className="task-delete-btn"
                     onConfirm={() => deleteComment(task.id, c.id)}
                   />
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
-          <div className="flex items-center gap-2 mt-2">
+          </div>
+          <div className="task-comment-input-row">
             <input
-              className="form-input w-full !text-sm"
+              className="task-comment-input"
               placeholder="Add a comment…"
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
@@ -409,39 +450,47 @@ const TaskDetailModal = ({
               aria-label="Add a comment"
             />
             <button
-              className="btn-primary !py-2 !px-3"
+              className="task-btn-icon"
               disabled={commentBusy || !commentText.trim()}
               onClick={handleComment}
               aria-label="Post comment"
+              title="Post comment"
             >
-              <Icon name="send" size={13} />
+              <Icon name="send" size={14} />
             </button>
           </div>
         </section>
 
         {/* Attachments */}
         <section className="task-detail-section">
-          <h5 className="task-detail-heading">
-            <Icon name="paperclip" size={13} /> Attachments ({attachments.length})
+          <h5 className="task-section-title">
+            <Icon name="paperclip" size={14} />
+            Attachments
+            <span className="task-section-count">{attachments.length}</span>
           </h5>
-          <ul className="task-attachment-list">
+          <div className="task-attachment-list">
             {attachments.length === 0 && (
-              <li className="text-xs text-muted">No attachments yet.</li>
+              <div className="task-empty-state">
+                <Icon name="paperclip" size={22} />
+                <p>No attachments yet.</p>
+              </div>
             )}
             {attachments.map((a) => (
-              <li key={a.id} className="task-attachment">
-                <span className="task-attachment-icon"><Icon name="file" size={14} /></span>
-                <div className="flex-1 min-w-0">
+              <div key={a.id} className="task-attachment">
+                <span className="task-attachment-icon">
+                  <Icon name="file" size={15} />
+                </span>
+                <div className="task-attachment-info">
                   <a
                     href={resolveTaskFileUrl(a.file_url)}
                     target="_blank"
                     rel="noreferrer"
-                    className="text-sm text-ink font-medium truncate block hover:underline"
+                    className="task-attachment-name"
                     title={a.file_name}
                   >
                     {a.file_name}
                   </a>
-                  <span className="text-[11px] text-muted">
+                  <span className="task-attachment-meta">
                     {formatBytes(a.file_size)}
                     {a.uploader_first_name ? ` · by ${personName(a.uploader_first_name, a.uploader_last_name, a.uploader_email)}` : ''}
                   </span>
@@ -449,7 +498,7 @@ const TaskDetailModal = ({
                 <a
                   href={resolveTaskFileUrl(a.file_url)}
                   download={a.file_name}
-                  className="icon-button"
+                  className="task-btn-icon"
                   aria-label={`Download ${a.file_name}`}
                   title="Download"
                 >
@@ -459,13 +508,13 @@ const TaskDetailModal = ({
                   <ConfirmButton
                     label="Delete"
                     confirmLabel="Delete attachment?"
-                    className="btn-danger task-comment-delete"
+                    className="task-delete-btn"
                     onConfirm={() => deleteAttachment(task.id, a.id)}
                   />
                 )}
-              </li>
+              </div>
             ))}
-          </ul>
+          </div>
           <input
             ref={fileInputRef}
             type="file"
@@ -474,7 +523,7 @@ const TaskDetailModal = ({
             aria-label="Upload attachment"
           />
           <button
-            className="btn-secondary mt-2"
+            className="task-btn-secondary mt-3"
             disabled={uploadBusy}
             onClick={() => fileInputRef.current?.click()}
           >
