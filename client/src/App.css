@@ -17379,7 +17379,7 @@ textarea:focus-visible,
    Global Search view (SearchView) — SRS US-17 / FR-16
    ============================================================================ */
 .gs-view {
-  max-width: 1080px;
+  max-width: 1100px;
 }
 .gs-view mark {
   background: var(--mark-bg);
@@ -17390,27 +17390,33 @@ textarea:focus-visible,
 
 /* --- Search form ---------------------------------------------------------- */
 .gs-form {
-  margin-bottom: 14px;
+  margin-bottom: 16px;
 }
 .gs-search {
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 52px;
-  padding: 0 16px;
+  gap: 12px;
+  height: 54px;
+  padding: 0 18px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 16px;
   color: var(--text-faint);
-  box-shadow: var(--shadow-sm);
-  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  box-shadow: var(--shadow-sm), 0 1px 2px rgba(0, 0, 0, 0.02);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
 }
 .gs-search:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-sm);
+  box-shadow: 0 0 0 4px var(--accent-soft), var(--shadow-sm), 0 1px 2px rgba(0, 0, 0, 0.02);
+  background: var(--surface);
 }
 .gs-search > svg {
   flex-shrink: 0;
+  color: var(--text-muted);
+  transition: color 0.2s ease;
+}
+.gs-search:focus-within > svg {
+  color: var(--accent-text);
 }
 .gs-search input {
   flex: 1;
@@ -17421,29 +17427,34 @@ textarea:focus-visible,
   background: transparent;
   color: var(--text);
   font-size: 15px;
+  font-weight: 450;
+  letter-spacing: -0.1px;
 }
 .gs-search input::placeholder {
   color: var(--text-faint);
+  font-weight: 400;
 }
 .gs-clear {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   flex-shrink: 0;
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--text-muted);
-  transition: background-color 0.15s ease, color 0.15s ease;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
 }
 .gs-clear:hover {
   background: var(--border-strong);
   color: var(--text);
+  transform: scale(1.05);
 }
 .gs-spinner {
-  width: 16px;
-  height: 16px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
   border: 2px solid var(--border-strong);
   border-top-color: var(--accent);
@@ -17454,18 +17465,23 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  height: 24px;
-  padding: 0 7px;
-  border-radius: 6px;
+  height: 26px;
+  padding: 0 9px;
+  border-radius: 7px;
   border: 1px solid var(--border-strong);
   background: var(--surface-2);
   color: var(--text-faint);
   font-family: inherit;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 700;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.03em;
   flex-shrink: 0;
   pointer-events: none;
+  box-shadow: 0 1px 0 var(--border);
+  transition: all 0.15s ease;
+}
+.gs-search:focus-within .gs-kbd {
+  opacity: 0.4;
 }
 @keyframes gs-spin {
   to {
@@ -17480,57 +17496,65 @@ textarea:focus-visible,
   align-items: center;
   gap: 10px;
   margin-top: 14px;
-  padding: 14px;
+  padding: 16px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow-sm);
+  border-radius: 14px;
+  box-shadow: var(--shadow-sm), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .gs-filters select {
-  height: 36px;
-  padding: 0 30px 0 12px;
-  max-width: 210px;
-  border-radius: 8px;
+  height: 38px;
+  padding: 0 32px 0 14px;
+  max-width: 220px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 12.5px;
+  font-size: 13px;
+  font-weight: 450;
   outline: none;
   cursor: pointer;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 12px center;
   appearance: none;
 }
 .gs-filters select:hover {
   border-color: var(--border-strong);
+  background-color: var(--surface-2);
 }
 .gs-filters select:focus {
   border-color: var(--accent);
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
+.gs-filters select:active {
+  transform: translateY(1px);
+}
 .gs-date {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   color: var(--text-muted);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: -0.1px;
 }
 .gs-date input {
-  height: 36px;
-  padding: 0 10px;
-  border-radius: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
-  font-size: 12px;
+  font-size: 13px;
+  font-weight: 450;
   outline: none;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
 }
 .gs-date input:hover {
   border-color: var(--border-strong);
+  background-color: var(--surface-2);
 }
 .gs-date input:focus {
   border-color: var(--accent);
@@ -17539,81 +17563,96 @@ textarea:focus-visible,
 .gs-clear-filters {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 6px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   background: var(--danger-soft);
   color: var(--danger);
-  font-size: 11.5px;
+  font-size: 12px;
   font-weight: 600;
-  transition: filter 0.15s ease, background-color 0.15s ease;
+  transition: all 0.15s ease;
   border: 1px solid transparent;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .gs-clear-filters:hover {
   filter: brightness(0.95);
   background: var(--danger-soft);
   border-color: var(--danger-border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
 /* --- Intro / errors / empty states ----------------------------------------- */
 .gs-intro,
 .gs-no-results,
 .gs-error {
-  margin-top: 34px;
-  padding: 42px 24px;
-  border: 1px dashed var(--border-strong);
-  border-radius: 14px;
+  margin-top: 36px;
+  padding: 48px 28px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
   background: var(--surface);
   text-align: center;
+  box-shadow: var(--shadow-sm), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .gs-error {
   margin-top: 14px;
-  padding: 12px 16px;
+  padding: 14px 18px;
   border-style: solid;
   border-color: var(--danger-border);
   background: var(--danger-soft);
   color: var(--danger);
   font-size: 13px;
   text-align: left;
+  border-radius: 12px;
 }
 .gs-intro-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 56px;
-  height: 56px;
-  border-radius: 16px;
-  background: var(--accent-soft);
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--accent-soft) 0%, var(--accent-border) 100%);
   color: var(--accent-text);
-  margin-bottom: 14px;
+  margin-bottom: 18px;
+  box-shadow: 0 4px 12px var(--accent-soft);
 }
 .gs-intro h3,
 .gs-no-results h3 {
-  margin: 0 0 6px;
-  font-size: 16px;
-  letter-spacing: -0.2px;
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.3px;
+  color: var(--text);
 }
 .gs-intro p,
 .gs-no-results p {
   margin: 0 auto;
-  max-width: 460px;
+  max-width: 480px;
   color: var(--text-muted);
-  font-size: 13px;
-  line-height: 1.55;
+  font-size: 13.5px;
+  line-height: 1.6;
+  font-weight: 450;
+}
+.gs-no-results {
+  border-style: dashed;
+  border-color: var(--border-strong);
+  background: linear-gradient(180deg, var(--surface) 0%, rgba(var(--accent-soft-rgb, 239, 246, 255), 0.3) 100%);
 }
 .gs-no-results > svg {
   color: var(--text-faint);
-  margin-bottom: 10px;
+  margin-bottom: 12px;
+  opacity: 0.6;
 }
-.gs-scope-chips {
+.gs-no-results-filters {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   margin-top: 20px;
 }
-.gs-scope-chips span {
+.gs-filter-pill {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -17624,8 +17663,38 @@ textarea:focus-visible,
   color: var(--text-muted);
   font-size: 12px;
   font-weight: 600;
-  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+.gs-filter-pill svg {
+  flex-shrink: 0;
+  opacity: 0.7;
+}
+.gs-scope-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 22px;
+}
+.gs-scope-chips span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.15s ease;
   cursor: default;
+}
+.gs-scope-chips span:hover {
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 
 /* --- Result tabs ----------------------------------------------------------- */
@@ -17634,38 +17703,47 @@ textarea:focus-visible,
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin: 3px 0 18px;
+  margin: 4px 0 20px;
   padding-bottom: 2px;
 }
 .gs-tab {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 34px;
-  padding: 0 14px;
+  gap: 7px;
+  height: 36px;
+  padding: 0 16px;
   border-radius: 999px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text-muted);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+  letter-spacing: -0.1px;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .gs-tab:hover {
   border-color: var(--border-strong);
   color: var(--text);
   background: var(--surface-2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 .gs-tab.active {
   background: var(--accent-soft);
   border-color: var(--accent-border);
   color: var(--accent-text);
-  box-shadow: 0 0 0 1px var(--accent-border);
+  box-shadow: 0 0 0 1px var(--accent-border), 0 2px 4px rgba(0, 0, 0, 0.04);
+  transform: translateY(-1px);
 }
 .gs-tab .gs-count {
   background: var(--hover);
   color: var(--text-muted);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: all 0.2s ease;
+  font-size: 10.5px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
 }
 .gs-tab.active .gs-count {
   background: var(--accent-border);
@@ -17677,33 +17755,35 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
-  padding: 0 7px;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 8px;
   border-radius: 999px;
   background: var(--accent-soft);
   color: var(--accent-text);
   font-size: 10.5px;
   font-weight: 700;
+  transition: all 0.2s ease;
 }
 
 /* --- Scope sections -------------------------------------------------------- */
 .gs-results {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 28px;
 }
 .gs-section-header {
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .gs-section-header h3 {
   margin: 0;
   font-size: 15px;
   letter-spacing: -0.3px;
   font-weight: 650;
+  color: var(--text);
 }
 .gs-section-header .gs-count {
   margin-left: 2px;
@@ -17712,67 +17792,94 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 10px;
   background: var(--accent-soft);
   color: var(--accent-text);
-  transition: transform 0.15s ease;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.gs-section-header:hover .gs-scope-icon {
+  transform: scale(1.05);
+}
+.gs-scope-icon.messages {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1d4ed8;
 }
 .gs-scope-icon.people {
-  background: var(--success-soft);
-  color: var(--success);
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
 }
-.gs-scope-icon.tasks {
-  background: var(--success-soft);
-  color: var(--success);
+.gs-scope-icon.teams {
+  background: linear-gradient(135deg, #f3e8ff 0%, #e9d5ff 100%);
+  color: #7c3aed;
+}
+.gs-scope-icon.channels {
+  background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%);
+  color: #92400e;
 }
 .gs-scope-icon.files {
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+  color: #c2410c;
+}
+.gs-scope-icon.meetings {
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
+}
+.gs-scope-icon.tasks {
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
 }
 .gs-link {
   margin-left: auto;
   background: none;
   color: var(--accent-text);
-  font-size: 12px;
+  font-size: 12.5px;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 6px;
-  border-radius: 6px;
+  gap: 3px;
+  padding: 5px 8px;
+  border-radius: 7px;
+  transition: all 0.15s ease;
 }
 .gs-link:hover {
   background: var(--accent-soft);
+  transform: translateX(1px);
 }
 
 /* --- Result rows ----------------------------------------------------------- */
 .gs-list {
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--surface);
   overflow: hidden;
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-sm), 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .gs-row {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   width: 100%;
-  padding: 12px 16px;
+  padding: 14px 18px;
   text-align: left;
   background: transparent;
   color: var(--text);
   border-bottom: 1px solid var(--border);
   text-decoration: none;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
+  position: relative;
 }
 .gs-row:last-child {
   border-bottom: 0;
 }
 .gs-row:hover {
   background: var(--hover);
+}
+.gs-row:hover .gs-row-arrow {
+  transform: translateX(3px);
 }
 .gs-row-main {
   flex: 1;
@@ -17782,32 +17889,36 @@ textarea:focus-visible,
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
-  gap: 4px 9px;
+  gap: 5px 10px;
 }
 .gs-row-title b {
   font-size: 13.5px;
   font-weight: 650;
   letter-spacing: -0.1px;
+  color: var(--text);
 }
 .gs-row-title em {
   font-style: normal;
   font-size: 11.5px;
   font-weight: 600;
   color: var(--text-muted);
+  letter-spacing: -0.1px;
 }
 .gs-row-title time {
   font-size: 11px;
   color: var(--text-faint);
   margin-left: auto;
+  font-weight: 500;
 }
 .gs-row-sub {
   display: block;
-  margin-top: 3px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 12.5px;
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 450;
 }
 .gs-row-sub span {
   margin-right: 10px;
@@ -17815,7 +17926,7 @@ textarea:focus-visible,
 .gs-row-arrow {
   flex-shrink: 0;
   color: var(--text-faint);
-  transition: color 0.12s ease, transform 0.12s ease;
+  transition: all 0.2s ease;
 }
 .gs-row:hover .gs-row-arrow {
   color: var(--accent-text);
@@ -17823,10 +17934,18 @@ textarea:focus-visible,
 }
 .gs-snippet {
   display: block;
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 12.5px;
   color: var(--text);
-  line-height: 1.45;
+  line-height: 1.5;
+  font-weight: 450;
+}
+.gs-snippet mark {
+  background: var(--mark-bg);
+  color: inherit;
+  border-radius: 3px;
+  padding: 1px 3px;
+  font-weight: 600;
 }
 
 /* Entity avatar chips per scope */
@@ -17834,28 +17953,29 @@ textarea:focus-visible,
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  border-radius: 9px;
+  border-radius: 10px;
   background: var(--accent-soft);
   color: var(--accent-text);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
 }
 .gs-entity-avatar.hash {
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+  color: #4b5563;
 }
 .gs-entity-avatar.file {
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: linear-gradient(135deg, #ffedd5 0%, #fed7aa 100%);
+  color: #c2410c;
 }
 .gs-entity-avatar.meeting {
-  background: var(--success-soft);
-  color: var(--success);
+  background: linear-gradient(135deg, #dbeafe 0%, #bfdbfe 100%);
+  color: #1e40af;
 }
 .gs-entity-avatar.task {
-  background: var(--success-soft);
-  color: var(--success);
+  background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%);
+  color: #065f46;
 }
 
 /* Task status hint inside result rows */
@@ -17879,30 +17999,34 @@ textarea:focus-visible,
 .gs-more {
   display: block;
   width: 100%;
-  padding: 12px;
+  padding: 14px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 10px;
+  border-radius: 12px;
   color: var(--accent-text);
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
   text-align: center;
-  transition: background-color 0.15s ease, border-color 0.15s ease;
+  transition: all 0.15s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
 }
 .gs-more:hover:not(:disabled) {
   background: var(--accent-soft);
   border-color: var(--accent-border);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.04);
 }
 .gs-more:disabled {
   color: var(--text-faint);
   cursor: default;
 }
 .gs-empty {
-  padding: 28px 16px;
+  padding: 32px 20px;
   text-align: center;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 13.5px;
   border: 1px dashed var(--border-strong);
   border-radius: 12px;
   background: var(--surface);
+  font-weight: 450;
 }

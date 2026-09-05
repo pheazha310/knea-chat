@@ -647,7 +647,7 @@ const SearchView = ({
 
       {hasCriteria && ranSearch && !loading && totalHits === 0 && (
         <div className="gs-no-results">
-          <Icon name="search" size={26} />
+          <Icon name="search" size={32} />
           <h3>No results found</h3>
           <p>
             Nothing matches{activeFiltersCount > 0 ? ' these filters' : ''}. Try
@@ -656,6 +656,34 @@ const SearchView = ({
               <button className="gs-link" onClick={clearAll}>Clear filters</button>
             )}
           </p>
+          {activeFiltersCount > 0 && (
+            <div className="gs-no-results-filters">
+              {personId !== '' && (
+                <span className="gs-filter-pill">
+                  <Icon name="user" size={12} />
+                  {users.find(u => u.id === Number(personId)) ? personName(users.find(u => u.id === Number(personId))!.first_name, users.find(u => u.id === Number(personId))!.last_name) : 'Person'}
+                </span>
+              )}
+              {teamId !== '' && (
+                <span className="gs-filter-pill">
+                  <Icon name="grid" size={12} />
+                  {teams.find(t => t.id === Number(teamId))?.name || 'Team'}
+                </span>
+              )}
+              {departmentId !== '' && (
+                <span className="gs-filter-pill">
+                  <Icon name="building" size={12} />
+                  {departments.find(d => d.id === Number(departmentId))?.name || 'Department'}
+                </span>
+              )}
+              {(dateFrom || dateTo) && (
+                <span className="gs-filter-pill">
+                  <Icon name="calendar" size={12} />
+                  {dateFrom && dateTo ? `${formatDate(dateFrom)} - ${formatDate(dateTo)}` : dateFrom ? `From ${formatDate(dateFrom)}` : `Until ${formatDate(dateTo)}`}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       )}
 
