@@ -185,6 +185,59 @@ export class TaskController {
     }
   };
 
+  /** POST /api/tasks/:id/reactions — add an emoji reaction. */
+  addReaction = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const reaction = String(req.body.reaction || '').trim();
+      if (!reaction) {
+        res.status(400).json({
+          success: false,
+          message: 'Reaction is required',
+          errors: { reaction: 'Reaction emoji/text is required' },
+        });
+        return;
+      }
+      const reactions = await this.taskService.addReaction(
+        Number(req.params.id),
+        req.user!.id,
+        reaction,
+      );
+      res.status(201).json({
+        success: true,
+        message: 'Reaction added successfully',
+        data: { reactions },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** DELETE /api/tasks/:id/reactions/:reactionType — remove a reaction. */
+  removeReaction = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const reactions = await this.taskService.removeReaction(
+        Number(req.params.id),
+        req.user!.id,
+        String(req.params.reactionType),
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Reaction removed successfully',
+        data: { reactions },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
   /** DELETE /api/tasks/:id */
   remove = async (req: Request, res: Response): Promise<void> => {
     try {

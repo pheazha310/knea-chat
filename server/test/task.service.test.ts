@@ -103,6 +103,7 @@ const makeTaskRepo = (
       );
       return { tasks: list.map((t) => ({ ...t })), total: list.length };
     },
+    findReactionsByTaskIds: async () => [],
     findTeam: async (teamId: number) => {
       const team = teams.find((tm) => Number(tm.id) === Number(teamId));
       return team ? { id: Number(team.id), company_id: Number(team.company_id), name: String(team.name || '') } : null;

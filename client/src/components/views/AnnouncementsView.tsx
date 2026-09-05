@@ -2,12 +2,14 @@ import React, { useState } from 'react';
 import Icon from '../common/Icon';
 import ConfirmButton from '../common/ConfirmButton';
 import Avatar from '../common/Avatar';
+import ReactionBar from '../common/ReactionBar';
 import type {
   Announcement,
   AnnouncementReader,
   AnnouncementScope,
   CreateAnnouncementData,
   Department,
+  Reaction,
   Team,
 } from '../../models';
 
@@ -28,6 +30,13 @@ interface AnnouncementsViewProps {
     readers: AnnouncementReader[];
     total_recipients: number;
   }>;
+  /** Toggle an emoji reaction on an announcement; resolves with the fresh
+   *  reaction list (null = failed). */
+  onToggleReaction?: (
+    id: number,
+    emoji: string,
+    mine: boolean,
+  ) => Promise<Reaction[] | null>;
 }
 
 const relativeTime = (value?: string) => {
@@ -82,6 +91,7 @@ const AnnouncementsView = ({
   onDelete,
   onMarkRead,
   onLoadReaders,
+  onToggleReaction,
 }: AnnouncementsViewProps) => {
   const [composing, setComposing] = useState(false);
   const [editing, setEditing] = useState<Announcement | null>(null);
@@ -458,6 +468,21 @@ const AnnouncementsView = ({
                 <p className="text-sm text-ink leading-relaxed mt-2 mb-0 whitespace-pre-wrap">
                   {a.content}
                 </p>
+                {onToggleReaction && !draft && (
+                  <div
+                    className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <ReactionBar
+                      reactions={a.reactions}
+                      meId={currentUserId}
+                      onToggle={(emoji, mine) =>
+                        onToggleReaction(a.id, emoji, mine)
+                      }
+                      label="React to the announcement"
+                    />
+                  </div>
+                )}
               </article>
             );
           })}

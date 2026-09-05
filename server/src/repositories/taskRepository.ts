@@ -16,6 +16,7 @@ import type {
   TaskAttachmentRow,
   TaskCommentRow,
   TaskFilters,
+  TaskReactionRow,
   TaskRow,
   UpdateTaskData,
 } from '../types';
@@ -350,5 +351,71 @@ export class TaskRepository {
       [id],
     );
     return result.affectedRows > 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Reactions (migration 026)
+  // -------------------------------------------------------------------------
+
+  /** Idempotent add — POST means "ensure this reaction exists". */
+  async addReaction(taskId: number, userId: number, reaction: string): Promise<void> {
+    await this.db.query<ResultSetHeader>(
+      `INSERT INTO task_reactions (task_id, user_id, reaction)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE reaction = reaction`,
+      [taskId, userId, reaction],
+    );
+  }
+
+  async removeReaction(taskId: number, userId: number, reaction: string): Promise<boolean> {
+    const result = await this.db.query<ResultSetHeader>(
+      'DELETE FROM task_reactions WHERE task_id = ? AND user_id = ? AND reaction = ?',
+      [taskId, userId, reaction],
+    );
+    return result.affectedRows > 0;
+  }
+
+  async findReactions(taskId: number): Promise<TaskReactionRow[]> {
+    return this.findReactionsByTaskIds([taskId]);
+  }
+
+  async findReactionsByTaskIds(taskIds: number[]): Promise<TaskReactionRow[]> {
+    if (taskIds.length === 0) return [];
+    return this.db.query<TaskReactionRow[]>(
+      `SELECT tr.*, u.first_name, u.last_name, u.email, u.profile_picture
+       FROM task_reactions tr
+       JOIN users u ON tr.user_id = u.id
+       WHERE tr.task_id IN (?)
+       ORDER BY tr.created_at ASC`,
+      [taskIds],
+    );
+  }
+
+  /**
+   * Everyone who may see a task (for live reaction broadcasts): the assignee,
+   * the creator, members of the team the task belongs to, and every manager
+   * of the company.
+   */
+  async findViewerUserIds(task: {
+    company_id: number;
+    team_id: number | null;
+    created_by: number;
+    assignee_id: number | null;
+  }): Promise<number[]> {
+    const { company_id, team_id, created_by, assignee_id } = task;
+    const rows = await this.db.query<Array<{ id: number }>>(
+      `SELECT DISTINCT id FROM (
+         SELECT u.id FROM users u
+         WHERE u.company_id = ? AND u.role IN ('super_admin', 'admin', 'manager')
+         UNION
+         SELECT ? AS id
+         UNION
+         SELECT tm.user_id AS id FROM team_members tm WHERE tm.team_id = ?
+       ) viewers`,
+      [company_id, created_by, team_id ?? 0],
+    );
+    const ids = rows.map((row) => Number(row.id));
+    if (assignee_id !== null) ids.push(Number(assignee_id));
+    return Array.from(new Set(ids)).filter((id) => Number.isFinite(id));
   }
 }

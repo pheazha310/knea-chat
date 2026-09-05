@@ -6,8 +6,12 @@
 // Announcements view updates automatically when a manager publishes.
 import { create } from 'zustand';
 import { AnnouncementModel } from '../models';
-import type { Announcement, AnnouncementReader, CreateAnnouncementData } from '../models';
+import type { Announcement, AnnouncementReader, CreateAnnouncementData, Reaction } from '../models';
+import { useAuthStore } from './authStore';
 import { getErrorMessage } from './utils';
+
+/** Announcement reactions with an in-flight toggle request (guards double-clicks). */
+const reactionInFlight = new Set<string>();
 
 interface AnnouncementState {
   announcements: Announcement[];
@@ -31,6 +35,15 @@ interface AnnouncementState {
     readers: AnnouncementReader[];
     total_recipients: number;
   }>;
+  /** Replace the reaction list on a cached announcement (live broadcasts). */
+  applyReactions: (id: number, reactions: Reaction[]) => void;
+  /** Add or remove the current user's emoji on an announcement. Resolves with
+   *  the fresh reaction list (null on failure). */
+  toggleReaction: (
+    id: number,
+    reaction: string,
+    knownMine?: boolean,
+  ) => Promise<Reaction[] | null>;
   clear: () => void;
 }
 
@@ -54,6 +67,39 @@ export const useAnnouncementStore = create<AnnouncementState>()((set, get) => ({
     set((state) => ({
       announcements: state.announcements.filter((a) => a.id !== id),
     })),
+
+  applyReactions: (id, reactions) =>
+    set((state) => ({
+      announcements: state.announcements.map((a) =>
+        a.id === id ? { ...a, reactions } : a,
+      ),
+    })),
+
+  toggleReaction: async (id, reaction, knownMine) => {
+    const key = `${id}:${reaction}`;
+    if (reactionInFlight.has(key)) return null;
+    reactionInFlight.add(key);
+    try {
+      const current = get().announcements.find((a) => a.id === id);
+      const userId = useAuthStore.getState().user?.id ?? null;
+      const cachedMine =
+        current?.reactions?.some(
+          (r) => userId !== null && Number(r.user_id) === Number(userId) && r.reaction === reaction,
+        ) ?? false;
+      const mine = current ? cachedMine : (knownMine ?? false);
+      const res = mine
+        ? await AnnouncementModel.removeReaction(id, reaction)
+        : await AnnouncementModel.addReaction(id, reaction);
+      const reactions: Reaction[] = res.data?.data?.reactions || [];
+      get().applyReactions(id, reactions);
+      return reactions;
+    } catch (err) {
+      set({ error: getErrorMessage(err, 'Failed to toggle reaction') });
+      return null;
+    } finally {
+      reactionInFlight.delete(key);
+    }
+  },
 
   load: async () => {
     set({ loading: true, error: null });

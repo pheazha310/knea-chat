@@ -158,7 +158,14 @@ const companySettingService = new CompanySettingService(companySettingRepository
 const permissionService = new PermissionService(rolePermissionRepository);
 const subscriptionService = new SubscriptionService(companyRepository, userRepository);
 const platformMetricService = new PlatformMetricService(platformMetricRepository);
-const notificationService = new NotificationService(notificationRepository);
+// Notifications carry the reaction lists of the messages / announcements /
+// tasks they point at, so the extra repositories are injected here.
+const notificationService = new NotificationService(
+  notificationRepository,
+  messageRepository,
+  announcementRepository,
+  taskRepository,
+);
 const notificationPreferenceService = new NotificationPreferenceService(notificationPreferenceRepository);
 const authService = new AuthService(
   userRepository,
@@ -201,11 +208,20 @@ const messageService = new MessageService(
 const companyService = new CompanyService(companyRepository);
 const searchService = new SearchService(messageRepository, userRepository, globalSearchRepository);
 const departmentService = new DepartmentService(departmentRepository);
+// Feature policy resolver shared by the announcement/task reaction endpoints
+// (platform AND workspace allow_reactions, like message reactions).
+const reactionsAllowedForCompany = async (companyId: number): Promise<boolean> => {
+  const platform = await systemSettingService.getCached();
+  const policy = await companySettingService.effectiveFeaturePolicy(companyId, platform);
+  return policy.allow_reactions;
+};
+
 const announcementService = new AnnouncementService(
   announcementRepository,
   notificationRepository,
   userRepository,
   notificationPreferenceService,
+  reactionsAllowedForCompany,
 );
 const reminderService = new ReminderService(
   reminderRepository,
@@ -237,6 +253,7 @@ const taskService = new TaskService(
   notificationRepository,
   userRepository,
   notificationPreferenceService,
+  reactionsAllowedForCompany,
 );
 const workScheduleService = new WorkScheduleService(workScheduleRepository, userRepository);
 const attendanceService = new AttendanceService(

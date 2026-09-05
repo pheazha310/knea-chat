@@ -8,6 +8,8 @@ export const createTaskRouter = (taskController: TaskController, auth: AuthMiddl
   router.post('/', auth.authenticate, taskController.create);
   router.patch('/:id', auth.authenticate, taskController.update);
   router.delete('/:id', auth.authenticate, taskController.remove);
+  router.post('/:id/reactions', auth.authenticate, taskController.addReaction);
+  router.delete('/:id/reactions/:reactionType', auth.authenticate, taskController.removeReaction);
   router.get('/:id/comments', auth.authenticate, taskController.listComments);
   router.post('/:id/comments', auth.authenticate, taskController.addComment);
   router.delete('/:id/comments/:commentId', auth.authenticate, taskController.removeComment);

@@ -102,6 +102,15 @@ export const MessageModel = {
     api.get<{ success: boolean; data: { parent: Message; replies: Message[]; pagination: any } }>(
       `/messages/${messageId}/thread?page=${page}&limit=${limit}`,
     ),
+  /** One full message (+ sender, reactions, attachments, conversation). */
+  getById: (id: number) =>
+    api.get<{
+      success: boolean;
+      data: {
+        message: Message;
+        conversation: { id: number; type: string; name: string | null };
+      };
+    }>(`/messages/${id}`),
   upload: (conversationId: number, file: File, onProgress?: (pct: number) => void) => {
     const formData = new FormData();
     formData.append('conversation_id', String(conversationId));

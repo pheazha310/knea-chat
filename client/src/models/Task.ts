@@ -3,6 +3,7 @@
 // endpoints (assignment, deadlines, status, team scope, comments,
 // attachments).
 import api, { API_BASE_URL } from '../services/api';
+import type { Reaction } from './Message';
 
 export type TaskStatus = 'open' | 'in_progress' | 'completed';
 export type TaskPriority = 'low' | 'medium' | 'high';
@@ -30,6 +31,8 @@ export interface Task {
   creator_last_name?: string | null;
   team_name?: string | null;
   is_overdue?: boolean;
+  /** Emoji reactions on the task (assignee/creator/team/managers). */
+  reactions?: Reaction[];
 }
 
 export interface TaskComment {
@@ -133,4 +136,15 @@ export const TaskModel = {
   },
   removeAttachment: (taskId: number, attachmentId: number) =>
     api.delete<{ success: boolean; message: string }>(`/tasks/${taskId}/attachments/${attachmentId}`),
+
+  // Reactions
+  addReaction: (id: number, reaction: string) =>
+    api.post<{ success: boolean; data: { reactions: Reaction[] } }>(
+      `/tasks/${id}/reactions`,
+      { reaction },
+    ),
+  removeReaction: (id: number, reaction: string) =>
+    api.delete<{ success: boolean; data: { reactions: Reaction[] } }>(
+      `/tasks/${id}/reactions/${encodeURIComponent(reaction)}`,
+    ),
 };

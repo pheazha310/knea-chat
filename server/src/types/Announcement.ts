@@ -34,6 +34,21 @@ export interface AnnouncementRow {
   total_recipients?: number;
   /** 1 when the current viewer has read this announcement (viewer-scoped). */
   is_read?: number;
+  /** Emoji reactions on this announcement (announcement_reactions). */
+  reactions?: AnnouncementReactionRow[];
+}
+
+/** One row of the announcement_reactions ledger (migration 025). */
+export interface AnnouncementReactionRow {
+  id: number;
+  announcement_id: number;
+  user_id: number;
+  reaction: string;
+  created_at: Date | string;
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  profile_picture?: string | null;
 }
 
 /** One row of the read-confirmation ledger (who read what, and when). */

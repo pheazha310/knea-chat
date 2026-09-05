@@ -13,6 +13,7 @@ import { useCompanyStore } from './companyStore';
 import { useUserStore } from './userStore';
 import { useNotificationStore } from './notificationStore';
 import { useAnnouncementStore } from './announcementStore';
+import { useTaskStore } from './taskStore';
 import { useCallStore } from './callStore';
 import { useMeetingStore } from './meetingStore';
 import { useSharedFileStore } from './sharedFileStore';
@@ -315,6 +316,34 @@ export function registerWsListeners(): () => void {
       useAnnouncementStore.getState().removeAnnouncement(id);
     }),
   );
+  // Reaction changes broadcast to the announcement audience — refresh the
+  // cached list and the notification rows that point at it.
+  const announcementReactionEvents = ['announcement_reacted', 'announcement_unreacted'] as const;
+  for (const type of announcementReactionEvents) {
+    unsubs.push(
+      wsService.on(type, (payload) => {
+        const id = toNumber(payload?.data?.announcementId);
+        if (id === null || !payload?.data?.reactions) return;
+        useAnnouncementStore.getState().applyReactions(id, payload.data.reactions);
+        void useNotificationStore.getState().refresh();
+      }),
+    );
+  }
+
+  // --- Tasks (reactions) -----------------------------------------------------
+  // Reaction changes broadcast to everyone who can see the task — refresh the
+  // cached list and the notification rows that point at it.
+  const taskReactionEvents = ['task_reacted', 'task_unreacted'] as const;
+  for (const type of taskReactionEvents) {
+    unsubs.push(
+      wsService.on(type, (payload) => {
+        const id = toNumber(payload?.data?.taskId);
+        if (id === null || !payload?.data?.reactions) return;
+        useTaskStore.getState().applyReactions(id, payload.data.reactions);
+        void useNotificationStore.getState().refresh();
+      }),
+    );
+  }
 
   // --- Shared files (SRS §2) -------------------------------------------------
   unsubs.push(

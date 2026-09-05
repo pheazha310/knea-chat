@@ -6,9 +6,10 @@ import Icon from '../common/Icon';
 import Avatar from '../common/Avatar';
 import ConfirmButton from '../common/ConfirmButton';
 import Modal from './Modal';
+import ReactionBar from '../common/ReactionBar';
 import { useTaskStore } from '../../store/taskStore';
 import { resolveTaskFileUrl } from '../../models/Task';
-import type { Task, User, Team, TaskPriority, TaskStatus } from '../../models';
+import type { Reaction, Task, User, Team, TaskPriority, TaskStatus } from '../../models';
 
 interface TaskDetailModalProps {
   task: Task;
@@ -92,6 +93,7 @@ const TaskDetailModal = ({
     uploadAttachment,
     deleteAttachment,
     updateTask,
+    toggleReaction,
   } = useTaskStore();
 
   const comments = commentsByTask[task.id] || [];
@@ -126,6 +128,20 @@ const TaskDetailModal = ({
   const [commentBusy, setCommentBusy] = useState(false);
   const [uploadBusy, setUploadBusy] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Reaction chips — local snapshot so the modal reacts instantly, kept in
+  // sync with the store (which also mirrors live task_reacted broadcasts).
+  const [reactionList, setReactionList] = useState<Reaction[]>(task.reactions || []);
+
+  useEffect(() => {
+    setReactionList(task.reactions || []);
+  }, [task.reactions]);
+
+  const handleToggleReaction = async (emoji: string, mine: boolean) => {
+    const fresh = await toggleReaction(task.id, emoji, mine);
+    if (fresh !== null) setReactionList(fresh);
+    return fresh;
+  };
 
   useEffect(() => {
     loadComments(task.id);
@@ -306,6 +322,16 @@ const TaskDetailModal = ({
               </span>
             </span>
           </div>
+        </div>
+
+        {/* Reactions */}
+        <div className="task-detail-reactions">
+          <ReactionBar
+            reactions={reactionList}
+            meId={currentUserId}
+            onToggle={handleToggleReaction}
+            label="React to the task"
+          />
         </div>
 
         {/* Edit form */}

@@ -63,3 +63,25 @@ export const replyPlaceholderOf = (target: ReplyTarget) =>
 
 export const replyAriaLabelOf = (target: ReplyTarget) =>
   target.kind === 'dm' ? 'Reply to the caller' : 'Reply to the message';
+
+/**
+ * The message a notification points at, when it is reactable. Only
+ * `mention` / `new_message` rows carry `conversationId` + `messageId`, so
+ * those are the notifications whose quick reactions land on the real message
+ * (SRS FR-16). Returns null for anything else (missed calls, announcements,
+ * tasks, …) or when the ids are missing/unparseable.
+ */
+export const messageTargetOf = (
+  notification: Notification,
+): { conversationId: number; messageId: number } | null => {
+  if (notification.type !== 'mention' && notification.type !== 'new_message') {
+    return null;
+  }
+  const data = parseData(notification.data);
+  if (!data) return null;
+  const conversationId = Number(data.conversationId);
+  if (!(Number.isFinite(conversationId) && conversationId > 0)) return null;
+  const messageId = Number(data.messageId);
+  if (!(Number.isFinite(messageId) && messageId > 0)) return null;
+  return { conversationId, messageId };
+};

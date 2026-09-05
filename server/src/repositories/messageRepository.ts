@@ -81,12 +81,18 @@ export class MessageRepository {
   }
 
   async findReactions(messageId: number): Promise<ReactionRow[]> {
+    return this.findReactionsByMessageIds([messageId]);
+  }
+
+  async findReactionsByMessageIds(messageIds: number[]): Promise<ReactionRow[]> {
+    if (messageIds.length === 0) return [];
     return this.db.query<ReactionRow[]>(
       `SELECT mr.*, u.first_name, u.last_name, u.email, u.profile_picture
        FROM message_reactions mr
        JOIN users u ON mr.user_id = u.id
-       WHERE mr.message_id = ?`,
-      [messageId],
+       WHERE mr.message_id IN (?)
+       ORDER BY mr.created_at ASC`,
+      [messageIds],
     );
   }
 

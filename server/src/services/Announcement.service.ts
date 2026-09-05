@@ -15,6 +15,7 @@ import type { UserRepository } from '../repositories/userRepository';
 import type { NotificationPreferenceService } from './NotificationPreference.service';
 import { emitAnnouncementToUsers } from '../websocket/workspace.events';
 import type {
+  AnnouncementReactionRow,
   AnnouncementRow,
   AnnouncementScope,
   CreateAnnouncementData,
@@ -29,10 +30,34 @@ export class AnnouncementService {
     private notificationRepository: NotificationRepository,
     private userRepository: UserRepository,
     private notificationPreferences?: NotificationPreferenceService | null,
+    /** Resolves whether emoji reactions are enabled for a company (optional —
+     *  absent in unit tests, where reactions are always allowed). */
+    private reactionsAllowed?: ((companyId: number) => Promise<boolean>) | null,
   ) {}
 
   private isManager(role: string): boolean {
     return MANAGER_ROLES.includes(role);
+  }
+
+  private async assertReactionsAllowed(companyId: number): Promise<void> {
+    if (!this.reactionsAllowed) return;
+    if (!(await this.reactionsAllowed(companyId))) {
+      throw new Error('Reactions are currently disabled');
+    }
+  }
+
+  /** Attach each announcement's reaction list (bulk query per list fetch). */
+  private async withReactions(rows: AnnouncementRow[]): Promise<AnnouncementRow[]> {
+    const ids = rows.map((a) => Number(a.id)).filter((n) => Number.isFinite(n));
+    if (ids.length === 0) return rows;
+    const reactions = await this.announcementRepository.findReactionsByAnnouncementIds(ids);
+    const byId = new Map<number, AnnouncementReactionRow[]>();
+    for (const r of reactions) {
+      const list = byId.get(Number(r.announcement_id)) || [];
+      list.push(r);
+      byId.set(Number(r.announcement_id), list);
+    }
+    return rows.map((a) => ({ ...a, reactions: byId.get(Number(a.id)) || [] }));
   }
 
   /** Department + role of a user (used to scope the announcement list). */
@@ -89,7 +114,13 @@ export class AnnouncementService {
 
   async getAnnouncements(companyId: number, userId: number): Promise<AnnouncementRow[]> {
     const { department_id, role } = await this.getUserContext(userId);
-    return this.announcementRepository.findAll(companyId, userId, department_id, this.isManager(role));
+    const announcements = await this.announcementRepository.findAll(
+      companyId,
+      userId,
+      department_id,
+      this.isManager(role),
+    );
+    return this.withReactions(announcements);
   }
 
   async getAnnouncement(id: number, companyId: number, userId: number): Promise<AnnouncementRow> {
@@ -97,7 +128,63 @@ export class AnnouncementService {
     if (!announcement) {
       throw new Error('Announcement not found');
     }
+    const [enriched] = await this.withReactions([announcement]);
+    return enriched;
+  }
+
+  // -------------------------------------------------------------------------
+  // Reactions (migration 025)
+  // -------------------------------------------------------------------------
+
+  /** A live announcement the user may see (reactions only apply once live). */
+  private async assertVisibleLiveAnnouncement(
+    id: number,
+    companyId: number,
+    userId: number,
+  ): Promise<AnnouncementRow> {
+    const announcement = await this.getVisible(id, companyId, userId);
+    if (!announcement || !announcement.is_published) {
+      throw new Error('Announcement not found');
+    }
     return announcement;
+  }
+
+  /** Idempotent add; returns the fresh reaction list and live-syncs viewers. */
+  async addReaction(
+    id: number,
+    companyId: number,
+    userId: number,
+    reaction: string,
+  ): Promise<AnnouncementReactionRow[]> {
+    await this.assertReactionsAllowed(companyId);
+    const announcement = await this.assertVisibleLiveAnnouncement(id, companyId, userId);
+    await this.announcementRepository.addReaction(id, userId, reaction);
+    const reactions = await this.announcementRepository.findReactions(id);
+    emitAnnouncementToUsers(
+      await this.announcementRepository.findRecipientUserIds(announcement),
+      { type: 'announcement_reacted', data: { announcementId: id, reactions } },
+      userId,
+    );
+    return reactions;
+  }
+
+  /** Idempotent remove; returns the fresh reaction list and live-syncs viewers. */
+  async removeReaction(
+    id: number,
+    companyId: number,
+    userId: number,
+    reaction: string,
+  ): Promise<AnnouncementReactionRow[]> {
+    await this.assertReactionsAllowed(companyId);
+    const announcement = await this.assertVisibleLiveAnnouncement(id, companyId, userId);
+    await this.announcementRepository.removeReaction(id, userId, reaction);
+    const reactions = await this.announcementRepository.findReactions(id);
+    emitAnnouncementToUsers(
+      await this.announcementRepository.findRecipientUserIds(announcement),
+      { type: 'announcement_unreacted', data: { announcementId: id, reactions } },
+      userId,
+    );
+    return reactions;
   }
 
   /**

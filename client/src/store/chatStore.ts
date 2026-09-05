@@ -130,7 +130,8 @@ interface ChatState {
     conversationId: number,
     messageId: number,
     reaction: string,
-  ) => Promise<void>;
+    knownMine?: boolean,
+  ) => Promise<Reaction[] | null>;
   setReminder: (messageId: number) => Promise<void>;
   cancelReminder: (messageId: number) => Promise<void>;
   loadReminder: (messageId: number) => Promise<void>;
@@ -625,22 +626,31 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     }
   },
 
-  /** Toggle a reaction on a message via REST, then sync local state. */
-  toggleReaction: async (conversationId, messageId, reaction) => {
+  /**
+   * Toggle a reaction on a message via REST, then sync local state.
+   *
+   * `knownMine` lets callers that act on a message they may not have cached
+   * (e.g. quick reactions from a notification) state whether the current user
+   * already placed this reaction: the cached message list wins when the
+   * message is loaded, otherwise the hint decides add vs remove. Resolves
+   * with the updated reaction list (null on failure).
+   */
+  toggleReaction: async (conversationId, messageId, reaction, knownMine) => {
     // Guard against rapid double-clicks: only one request per message+reaction
     // at a time, so a fast click can't fire POST then DELETE (or two POSTs)
     // against the same reaction and end up in the wrong state.
     const key = `${messageId}:${reaction}`;
-    if (reactionInFlight.has(key)) return;
+    if (reactionInFlight.has(key)) return null;
     reactionInFlight.add(key);
 
     const list = get().messages[conversationId] || [];
     const msg = list.find((m) => m.id === messageId);
     const userId = currentUserId();
-    const mine =
+    const cachedMine =
       msg?.reactions?.some(
         (r) => r.user_id === userId && r.reaction === reaction,
       ) ?? false;
+    const mine = msg ? cachedMine : (knownMine ?? false);
 
     try {
       const res = mine
@@ -655,8 +665,10 @@ export const useChatStore = create<ChatState>()((set, get) => ({
           ),
         },
       }));
+      return reactions;
     } catch (err) {
       set({ error: getErrorMessage(err, "Failed to toggle reaction") });
+      return null;
     } finally {
       reactionInFlight.delete(key);
     }

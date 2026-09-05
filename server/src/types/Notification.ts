@@ -11,6 +11,9 @@ export interface NotificationRow {
   data: string | null;
   is_read: number;
   created_at: Date | string;
+  /** Reactions of the referenced entity (messages / announcements / tasks),
+   *  attached by NotificationService so rows can show who reacted. */
+  reactions?: unknown[];
 }
 
 export interface Notification extends NotificationRow {}

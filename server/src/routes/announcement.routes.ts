@@ -17,6 +17,10 @@ export const createAnnouncementRouter = (
   router.post('/:id/read', auth.authenticate, announcementController.markRead);
   router.get('/:id/reads', auth.authenticate, auth.authorizeAtLeast('manager'), announcementController.readers);
 
+  // Emoji reactions — any authenticated user who can see the announcement.
+  router.post('/:id/reactions', auth.authenticate, announcementController.addReaction);
+  router.delete('/:id/reactions/:reactionType', auth.authenticate, announcementController.removeReaction);
+
   // Publishing / editing / deleting announcements consults the discretionary
   // permission catalog (Company Admins may restrict managers); baseline
   // manager+ (SRS FR-24).

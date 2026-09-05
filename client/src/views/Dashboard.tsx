@@ -8,6 +8,7 @@ import TeamsView from "../components/views/TeamsView";
 import AnnouncementsView from "../components/views/AnnouncementsView";
 import NotifsView from "../components/views/NotifsView";
 import NotificationReplyAction from "../components/common/NotificationReplyAction";
+import NotificationReactionAction from "../components/common/NotificationReactionAction";
 import SettingsView from "../components/views/SettingsView";
 import BookmarksView from "../components/views/BookmarksView";
 import SharedFilesView from "../components/views/SharedFilesView";
@@ -24,13 +25,20 @@ import TeamModal from "../components/modals/TeamModal";
 import SearchModal from "../components/search/SearchModal";
 import SearchView from "../components/views/SearchView";
 import Modal from "../components/modals/Modal";
+import NotificationMessageModal from "../components/modals/NotificationMessageModal";
 import CallModal from "../components/modals/CallModal";
 import IncomingCallModal from "../components/modals/IncomingCallModal";
 import CreateMeetingModal from "../components/modals/CreateMeetingModal";
 import Avatar from "../components/common/Avatar";
 import Icon from "../components/common/Icon";
 import ConnectionIndicator from "../components/common/ConnectionIndicator";
-import { useAuthStore, useChatStore, useCallStore, useCompanyStore } from "../store";
+import {
+  useAuthStore,
+  useChatStore,
+  useCallStore,
+  useCompanyStore,
+  useAnnouncementStore,
+} from "../store";
 import { useTheme } from "../contexts/ThemeContext";
 import { useToast } from "../contexts/ToastContext";
 import { wsService } from "../services/websocket";
@@ -41,11 +49,13 @@ import type {
   ChatMessage,
   Conversation,
   MessageSearchResult,
+  Notification,
   Team,
   User,
 } from "../models";
 import { avatarClass } from "../utils/avatar";
 import { conversationIdOf } from "../utils/notifications";
+import { reactableTargetOf } from "../utils/reactions";
 import { roleLabel } from "../utils/roles";
 import MeetingsView from "../components/views/MeetingsView";
 import AttendanceView from "../components/views/AttendanceView";
@@ -100,6 +110,20 @@ const statusLabel = (s?: string) =>
       : s === "dnd"
         ? "Do not disturb"
         : "Offline";
+
+const relativeTime = (value?: string) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const minutes = Math.floor((Date.now() - date.getTime()) / 60000);
+  if (minutes < 1) return 'just now';
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+};
 
 const Dashboard = () => {
   const { user, isAuthenticated, logout } = useAuthStore();
@@ -177,6 +201,9 @@ const Dashboard = () => {
   const [showTeamModal, setShowTeamModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showInfoPanel, setShowInfoPanel] = useState(false);
+  // The notification whose full message is currently shown in a modal.
+  const [viewingMessageNotification, setViewingMessageNotification] =
+    useState<Notification | null>(null);
   const [showMeetingFromChat, setShowMeetingFromChat] = useState(false);
   const [viewingTeam, setViewingTeam] = useState<Team | null>(null);
   const [jumpTarget, setJumpTarget] = useState<{
@@ -440,6 +467,7 @@ const Dashboard = () => {
 
   /** Missed-call notifications reply to the caller's DM and open it. */
   const handleReplyMissedCall = async (userId: number, content: string) => {
+    setViewingMessageNotification(null);
     const conv = await openDirectWithUser(userId);
     if (!conv) return false;
     openThenGoHome(Promise.resolve());
@@ -455,6 +483,7 @@ const Dashboard = () => {
     content: string,
     messageId?: number,
   ) => {
+    setViewingMessageNotification(null);
     const conv = await openConversationById(conversationId);
     if (!conv) return false;
     openThenGoHome(Promise.resolve());
@@ -462,8 +491,34 @@ const Dashboard = () => {
     return true;
   };
 
+  /** Announcement cards react straight onto the announcement (no navigation). */
+  const handleReactAnnouncement = async (
+    id: number,
+    emoji: string,
+    mine: boolean,
+  ) => useAnnouncementStore.getState().toggleReaction(id, emoji, mine);
+
   const handleOpenConversation = (id: number) => {
     openThenGoHome(openConversationById(id));
+  };
+
+  /** Clicking a message notification opens its full message and marks it read. */
+  const handleOpenMessageNotification = (notification: Notification) => {
+    if (!notification.is_read) markNotificationRead(notification.id);
+    setShowNotifications(false);
+    setViewingMessageNotification(notification);
+  };
+
+  /** "Open in conversation" from the full-message modal: jump into the chat
+   *  and flash-highlight the message when it is within the loaded window. */
+  const handleOpenMessageInChat = async (
+    conversationId: number,
+    messageId: number,
+  ) => {
+    setViewingMessageNotification(null);
+    const conv = await openConversationById(conversationId);
+    if (conv) openThenGoHome(Promise.resolve());
+    setJumpTarget({ id: messageId, ts: Date.now() });
   };
 
   /** Team conversations are restricted to team members + managers/admins. */
@@ -721,49 +776,74 @@ const Dashboard = () => {
               className="notification-popover"
               onClick={(e) => e.stopPropagation()}
             >
-              <p>
-                Notifications{" "}
-                {unreadCount > 0 && <em>({unreadCount} unread)</em>}
+              <div className="notif-popover-header">
+                <div>
+                  <b>Notifications</b>
+                  {unreadCount > 0 && (
+                    <span className="notif-popover-badge">{unreadCount} unread</span>
+                  )}
+                </div>
                 {unreadCount > 0 && (
                   <button
-                    className="float-right !font-normal"
+                    className="notif-popover-mark-read"
                     onClick={markAllNotificationsRead}
                   >
                     Mark all read
                   </button>
                 )}
-              </p>
+              </div>
               {notifications.length === 0 ? (
                 <div className="popover-empty">You're all caught up 🎉</div>
               ) : (
                 <ul className="popover-list">
-                  {notifications.slice(0, 8).map((n) => (
-                    <li key={n.id}>
-                      <div className="popover-row">
-                        <button
-                          type="button"
-                          onClick={() => markNotificationRead(n.id)}
-                          className={`popover-main ${n.is_read ? "popover-read" : ""}`}
-                        >
-                          <b>
-                            {n.type === "mention" ? "@ " : ""}
-                            {n.title}
-                          </b>
-                          <span>{n.message}</span>
-                        </button>
-                        <NotificationReplyAction
-                          notification={n}
-                          onReplyMissedCall={handleReplyMissedCall}
-                          onReplyMessage={handleReplyMessage}
-                          onSent={() => {
-                            markNotificationRead(n.id);
-                            // Replying opens the conversation — drop the popover.
-                            setShowNotifications(false);
-                          }}
-                        />
-                      </div>
-                    </li>
-                  ))}
+                  {notifications.slice(0, 8).map((n) => {
+                    const unread = !n.is_read;
+                    return (
+                      <li key={n.id} className={unread ? 'unread' : ''}>
+                        <div className="popover-row">
+                          <span className={`popover-icon ${unread ? 'unread' : ''}`}>
+                            <Icon name={n.type === 'mention' ? 'at' : n.type === 'announcement' ? 'bell' : n.type === 'task_assigned' || n.type === 'task_deadline' ? 'check-circle' : n.type === 'meeting_invite' || n.type === 'meeting_reminder' ? 'calendar' : n.type === 'missed_call' ? 'phone' : 'message'} size={14} />
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const target = reactableTargetOf(n);
+                              if (target && target.kind === 'message') {
+                                handleOpenMessageNotification(n);
+                              } else if (!n.is_read) {
+                                markNotificationRead(n.id);
+                              }
+                            }}
+                            className={`popover-main ${unread ? '' : 'popover-read'}`}
+                            title={
+                              reactableTargetOf(n)?.kind === 'message'
+                                ? 'View full message'
+                                : undefined
+                            }
+                          >
+                            <span className="popover-title">{n.title}</span>
+                            {n.message && <span className="popover-message">{n.message}</span>}
+                            <time>{relativeTime(n.created_at)}</time>
+                          </button>
+                          <div className="popover-actions">
+                            <NotificationReactionAction
+                              notification={n}
+                              onAcknowledged={() => markNotificationRead(n.id)}
+                            />
+                            <NotificationReplyAction
+                              notification={n}
+                              onReplyMissedCall={handleReplyMissedCall}
+                              onReplyMessage={handleReplyMessage}
+                              onSent={() => {
+                                markNotificationRead(n.id);
+                                setShowNotifications(false);
+                              }}
+                            />
+                          </div>
+                        </div>
+                      </li>
+                    );
+                  })}
                 </ul>
               )}
             </div>
@@ -1126,6 +1206,7 @@ const Dashboard = () => {
               onDelete={deleteAnnouncement}
               onMarkRead={markAnnouncementRead}
               onLoadReaders={loadAnnouncementReaders}
+              onToggleReaction={handleReactAnnouncement}
             />
           ) : view === "meetings" ? (
             <MeetingsView
@@ -1164,6 +1245,7 @@ const Dashboard = () => {
               onMarkAllRead={markAllNotificationsRead}
               onReplyMissedCall={handleReplyMissedCall}
               onReplyMessage={handleReplyMessage}
+              onOpenMessageNotification={handleOpenMessageNotification}
             />
           ) : view === "bookmarks" ? (
             <BookmarksView
@@ -1531,6 +1613,20 @@ const Dashboard = () => {
               showToast('Meeting created from conversation', { type: 'success' });
             }
             return result;
+          }}
+        />
+      )}
+      {viewingMessageNotification && (
+        <NotificationMessageModal
+          notification={viewingMessageNotification}
+          onClose={() => setViewingMessageNotification(null)}
+          onOpenInChat={handleOpenMessageInChat}
+          onReplyMessage={handleReplyMessage}
+          onReplyMissedCall={handleReplyMissedCall}
+          onAcknowledged={() => {
+            if (!viewingMessageNotification.is_read) {
+              markNotificationRead(viewingMessageNotification.id);
+            }
           }}
         />
       )}

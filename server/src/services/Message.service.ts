@@ -72,6 +72,37 @@ export class MessageService {
     return messages;
   }
 
+  /**
+   * Fetch a single message by id with its sender, reactions, attachments and
+   * conversation context. Notification rows only store a 120-char preview of
+   * the message (see createMessageNotifications), so the UI opens this to show
+   * the full original content when a message notification is clicked.
+   * Access is enforced exactly like `getMessages`.
+   */
+  async getSingleMessage(
+    messageId: number,
+    userId: number | null = null,
+  ): Promise<{ message: OutgoingMessage; conversation: { id: number; type: string; name: string | null } }> {
+    const found = await this.messageRepository.findById(messageId);
+    if (!found) {
+      throw new Error('Message not found');
+    }
+
+    const conversation = await this.conversationRepository.findById(found.conversation_id);
+    if (!conversation) {
+      throw new Error('Conversation not found');
+    }
+
+    if (userId) {
+      await this.assertConversationAccess(conversation, userId);
+    }
+
+    const message = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
+    message.reactions = await this.messageRepository.findReactions(messageId);
+    message.attachments = await this.messageRepository.findAttachments(messageId);
+    return { message, conversation };
+  }
+
   async createMessage(data: CreateMessageData): Promise<OutgoingMessage> {
     const { conversation_id, sender_id, content, type, reply_to, forwarded_from } = data;
 

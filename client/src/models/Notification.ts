@@ -2,6 +2,7 @@
 // Holds the `Notification` entity plus `NotificationModel`, the data access
 // for the /notifications endpoints.
 import api from '../services/api';
+import type { Reaction } from './Message';
 
 export interface Notification {
   id: number;
@@ -10,9 +11,14 @@ export interface Notification {
   type: string;
   title: string;
   message?: string | null;
-  data?: string | null;
+  /** JSON payload — arrives as a string over REST for older rows, but as an
+   *  already-parsed object for some shapes; both are handled everywhere. */
+  data?: string | Record<string, unknown> | null;
   is_read: number;
   created_at: string;
+  /** The target's current emoji reactions (message/announcement/task rows),
+   *  attached by the server when the target has a reaction model. */
+  reactions?: Reaction[];
 }
 
 export const NotificationModel = {

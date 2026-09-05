@@ -835,112 +835,156 @@ body {
   position: absolute;
   right: 25px;
   top: 60px;
-  padding: 16px;
-  width: 300px;
+  width: 340px;
+  max-height: 520px;
+  display: flex;
+  flex-direction: column;
   background: linear-gradient(180deg, var(--surface) 0%, var(--surface-2) 100%);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-lg);
-  border-radius: 14px;
+  border-radius: 16px;
   animation: popIn 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   backdrop-filter: blur(16px);
+  overflow: hidden;
 }
-.notification-popover p {
-  font-size: 13px;
+.notification-popover .notif-popover-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px 12px;
   border-bottom: 1px solid var(--border);
-  padding-bottom: 10px;
-  margin: 0;
 }
-.notification-popover p b {
-  display: block;
+.notification-popover .notif-popover-header b {
   font-size: 14px;
   color: var(--text);
-  margin-bottom: 2px;
 }
-.notification-popover p small {
-  color: var(--text-muted);
-  font-size: 12px;
+.notification-popover .notif-popover-badge {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 700;
 }
-.notification-popover .popover-link {
-  display: block;
-  width: 100%;
-  text-align: left;
-  color: var(--text);
-  font-weight: 600;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
-  text-decoration: none;
-  transition: background 0.12s;
-}
-.notification-popover .popover-link:hover {
-  background: var(--hover);
-}
-.notification-popover .popover-danger {
-  display: block;
-  width: 100%;
-  text-align: left;
+.notification-popover .notif-popover-mark-read {
   background: transparent;
-  color: var(--danger);
-  font-weight: 600;
-  padding: 9px 0;
-  border-top: 1px solid var(--border);
-  font-size: 13px;
+  color: var(--accent-text);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 8px;
   transition: background 0.12s;
 }
-.notification-popover .popover-danger:hover {
-  background: var(--danger-soft);
+.notification-popover .notif-popover-mark-read:hover {
+  background: var(--accent-border);
 }
 .notification-popover .popover-empty {
-  padding: 10px 0;
+  padding: 18px 16px;
   font-size: 13px;
   color: var(--text-muted);
+  text-align: center;
 }
 .notification-popover .popover-list {
   list-style: none;
   margin: 0;
   padding: 0;
+  overflow-y: auto;
+  flex: 1;
 }
 .notification-popover .popover-list li {
-  margin-bottom: 4px;
+  margin: 0;
 }
-.notification-popover .popover-list li:last-child {
-  margin-bottom: 0;
+.notification-popover .popover-list li.unread {
+  background: var(--accent-soft);
 }
 .notification-popover .popover-row {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--border);
+  transition: background 0.15s;
 }
 .notification-popover .popover-row:last-child {
   border-bottom: 0;
 }
+.notification-popover .popover-row:hover {
+  background: var(--hover);
+}
+.notification-popover .popover-icon {
+  width: 32px;
+  height: 32px;
+  flex: 0 0 32px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  display: grid;
+  place-items: center;
+  transition: transform 0.15s, background 0.15s, border-color 0.15s, color 0.15s;
+}
+.notification-popover .popover-icon.unread {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.notification-popover .popover-row:hover .popover-icon {
+  transform: scale(1.05);
+}
 .notification-popover .popover-main {
   flex: 1;
   min-width: 0;
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
   text-align: left;
   background: transparent;
-  padding: 9px 0;
-  transition: background 0.12s;
+  padding: 2px 0;
+  transition: opacity 0.12s;
 }
-.notification-popover .popover-main:hover {
-  background: var(--hover);
+.notification-popover .popover-read {
+  opacity: 0.6;
 }
-.notification-popover .popover-main b {
-  display: block;
+.notification-popover .popover-title {
   font-size: 13px;
+  font-weight: 600;
   color: var(--text);
-  margin-bottom: 1px;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.notification-popover .popover-main span {
+.notification-popover .popover-message {
   font-size: 12px;
   color: var(--text-muted);
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.notification-popover .popover-main time {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 1px;
+}
+.notification-popover .popover-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  justify-content: flex-start;
+  padding-top: 2px;
 }
 .notification-popover .popover-row .notif-reply-toggle {
   flex: 0 0 auto;
-  padding: 5px 8px;
+  padding: 4px 8px;
+  font-size: 11px;
 }
 .notification-popover .popover-row .notif-reply {
   flex: 0 0 100%;
@@ -951,8 +995,20 @@ body {
   flex: 0 0 100%;
   padding-bottom: 8px;
 }
-.notification-popover .popover-read {
-  opacity: 0.55;
+.notification-popover .popover-row .notif-react-toggle {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+.notification-popover .popover-row .notif-react-picker {
+  margin: 2px 0 6px;
+}
+.notification-popover .popover-row .notif-react-sent {
+  flex: 0 0 100%;
+  padding-bottom: 8px;
+}
+.notification-popover .popover-row .notif-react-error {
+  padding-bottom: 8px;
 }
 .profile-popover {
   width: 220px;
@@ -2497,7 +2553,7 @@ body {
   background: var(--surface);
   box-shadow: 0 2px 8px rgba(28, 32, 51, 0.04);
 }
-.notif-list li {
+.notif-list > li {
   display: flex;
   gap: 12px;
   align-items: flex-start;
@@ -2506,17 +2562,33 @@ body {
   transition:
     background 0.2s,
     transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
-  flex-wrap: wrap;
 }
-.notif-list li:last-child {
+.notif-list > li:last-child {
   border-bottom: 0;
 }
-.notif-list li.unread {
+.notif-list > li.unread {
   background: var(--accent-soft);
 }
-.notif-list li:hover {
+.notif-list > li:hover {
   background: var(--hover);
   transform: translateX(2px);
+}
+/* Message notifications open a full-message modal on click */
+.notif-list > li.clickable {
+  cursor: pointer;
+  outline: none;
+}
+.notif-list > li.clickable:hover {
+  background: color-mix(in srgb, var(--accent-soft) 55%, var(--hover));
+}
+.notif-list > li.clickable:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+.notif-list > li.clickable .notif-body p {
+  color: var(--text);
+}
+.notif-list > li.clickable:hover .notif-body b {
+  color: var(--accent-text);
 }
 .notif-icon {
   width: 36px;
@@ -2525,19 +2597,21 @@ body {
   border-radius: 11px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  color: var(--accent-text);
+  color: var(--text-muted);
   display: grid;
   place-items: center;
   font-size: 15px;
   font-weight: 700;
   transition:
     transform 0.15s,
-    background 0.15s;
+    background 0.15s,
+    border-color 0.15s,
+    color 0.15s;
 }
-.notif-list li:hover .notif-icon {
+.notif-list > li:hover .notif-icon {
   transform: scale(1.05);
 }
-.notif-list li.unread .notif-icon {
+.notif-list > li.unread .notif-icon {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -2563,6 +2637,15 @@ body {
   margin-top: 4px;
   font-size: 11px;
   color: var(--text-faint);
+}
+.notif-actions {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  justify-content: flex-start;
+  padding-top: 2px;
 }
 .notif-read {
   background: transparent;
@@ -2666,6 +2749,386 @@ body {
   font-size: 12px;
   font-weight: 700;
   color: var(--success);
+}
+
+/* Quick emoji reactions on message notifications (Notifications view) —
+   .notif-react uses display:contents so its children lay out directly in the
+   wrapping flex row, exactly like the Reply affordance. */
+.notif-react {
+  display: contents;
+}
+.notif-react-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 7px;
+  transition:
+    background 0.12s,
+    transform 0.12s;
+  align-self: center;
+}
+.notif-react-toggle:hover {
+  background: var(--accent-border);
+}
+.notif-react-toggle.active {
+  background: var(--accent-border);
+}
+.notif-react-toggle:active {
+  transform: scale(0.95);
+}
+.notif-react-picker {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 1px 0 4px;
+}
+.notif-react-picker button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  transition:
+    background 0.15s,
+    transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1),
+    border-color 0.15s,
+    box-shadow 0.15s;
+}
+.notif-react-picker button:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(99, 91, 219, 0.12);
+}
+.notif-react-picker button:active {
+  transform: scale(0.9);
+}
+.notif-react-picker button.mine {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: 0 1px 3px rgba(99, 91, 219, 0.12);
+}
+.notif-react-picker button.mine:hover {
+  background: var(--accent-border);
+  border-color: var(--accent);
+}
+.notif-react-picker button:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+.notif-react-error {
+  flex: 0 0 100%;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+.notif-react-sent {
+  flex: 0 0 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+}
+
+/* ReactionBar — chips + quick set + wide catalog, shared by notification
+   rows, announcement cards and the task detail modal. */
+.reactbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  position: relative;
+  align-self: flex-start;
+  max-width: 100%;
+}
+.reactbar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.35;
+  transition: background 0.15s, border-color 0.15s, transform 0.12s;
+}
+.reactbar-chip:hover {
+  background: var(--hover);
+  border-color: var(--border-strong);
+}
+.reactbar-chip:active {
+  transform: scale(0.94);
+}
+.reactbar-chip.mine {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.reactbar-chip.mine:hover {
+  background: var(--accent-border);
+  border-color: var(--accent);
+}
+.reactbar-chip:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+.reactbar-chip-emoji {
+  font-size: 14px;
+  line-height: 1;
+}
+.reactbar-chip-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+.reactbar-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--accent-text);
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 4px 9px;
+  border-radius: 7px;
+  transition: background 0.12s, transform 0.12s;
+}
+.reactbar-toggle:hover,
+.reactbar-toggle[aria-expanded='true'] {
+  background: var(--accent-border);
+}
+.reactbar-toggle:active {
+  transform: scale(0.95);
+}
+.reactbar-quick {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+}
+.reactbar-quick button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 30px;
+  height: 27px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1;
+  transition: background 0.15s, transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.reactbar-quick button:hover {
+  background: var(--hover);
+  transform: translateY(-1px);
+}
+.reactbar-quick button:active {
+  transform: scale(0.9);
+}
+.reactbar-quick button.mine {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.reactbar-quick button:disabled {
+  opacity: 0.55;
+  cursor: default;
+  transform: none;
+}
+.reactbar-quick .reactbar-wide-trigger,
+.reactbar-quick .reactbar-close {
+  min-width: 26px;
+  height: 26px;
+  color: var(--text-muted);
+  border-color: var(--border);
+}
+.reactbar-quick .reactbar-wide-trigger:hover,
+.reactbar-quick .reactbar-close:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.reactbar-sent {
+  flex: 0 0 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--success);
+}
+.reactbar-error {
+  flex: 0 0 100%;
+  font-size: 11.5px;
+  color: var(--danger);
+}
+
+/* Wider catalog panel (search + category tabs). */
+.reactbar-wide {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 40;
+  width: 264px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: 0 12px 32px rgba(18, 22, 40, 0.18);
+}
+.reactbar-wide-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 8px;
+  height: 30px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text-muted);
+}
+.reactbar-wide-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 12.5px;
+}
+.reactbar-wide-search button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  background: transparent;
+  padding: 2px;
+  border-radius: 6px;
+}
+.reactbar-wide-search button:hover {
+  color: var(--text);
+  background: var(--hover);
+}
+.reactbar-wide-tabs {
+  display: flex;
+  gap: 2px;
+  margin: 8px 0 6px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.reactbar-wide-tabs button {
+  flex: 1;
+  height: 26px;
+  border-radius: 7px;
+  font-size: 15px;
+  background: transparent;
+  opacity: 0.55;
+  transition: opacity 0.12s, background 0.12s;
+}
+.reactbar-wide-tabs button:hover {
+  background: var(--hover);
+  opacity: 1;
+}
+.reactbar-wide-tabs button.active {
+  background: var(--accent-soft);
+  opacity: 1;
+}
+.reactbar-wide-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 2px;
+  max-height: 192px;
+  overflow-y: auto;
+}
+.reactbar-wide-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  border-radius: 7px;
+  font-size: 17px;
+  line-height: 1;
+  background: transparent;
+  transition: background 0.12s, transform 0.12s;
+}
+.reactbar-wide-item:hover {
+  background: var(--hover);
+  transform: scale(1.12);
+}
+.reactbar-wide-empty {
+  grid-column: 1 / -1;
+  padding: 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* In notification rows (Notifications page + bell popover) keep the widget
+   compact and aligned with the Reply affordance. */
+.notif-list .reactbar,
+.notification-popover .reactbar {
+  gap: 4px;
+  align-self: center;
+}
+.notif-list .reactbar-chip,
+.notification-popover .reactbar-chip {
+  padding: 1px 7px;
+  font-size: 13px;
+}
+.notif-list .reactbar-chip-emoji,
+.notification-popover .reactbar-chip-emoji {
+  font-size: 13px;
+}
+.notif-list .reactbar-chip-count,
+.notification-popover .reactbar-chip-count {
+  font-size: 10px;
+}
+.notif-list .reactbar-toggle,
+.notification-popover .reactbar-toggle {
+  padding: 3px 8px;
+}
+.notif-list .reactbar-quick,
+.notification-popover .reactbar-quick {
+  padding: 2px 3px;
+}
+.notif-list .reactbar-quick button,
+.notification-popover .reactbar-quick button {
+  min-width: 27px;
+  height: 25px;
+  font-size: 14px;
+}
+.notification-popover .reactbar-wide {
+  right: auto;
+  left: 0;
+}
+
+/* Task detail modal reaction strip. */
+.task-detail-reactions {
+  display: flex;
+  margin: 2px 0 14px;
 }
 
 /* Settings view */
@@ -18029,4 +18492,186 @@ textarea:focus-visible,
   border-radius: 12px;
   background: var(--surface);
   font-weight: 450;
+}
+
+/* Full-message modal opened from a message notification */
+.msgmodal-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 16px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+.msgmodal-state svg {
+  color: var(--text-faint);
+}
+.msgmodal-state b {
+  color: var(--text);
+  font-size: 14px;
+}
+.msgmodal-state p {
+  margin: 0;
+  max-width: 340px;
+  font-size: 12.5px;
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+.msgmodal-state .msgmodal-open {
+  margin-left: 0;
+  margin-top: 4px;
+}
+.msgmodal-loading {
+  gap: 12px;
+  padding: 44px 16px;
+}
+.msgmodal-loading .loading-spinner {
+  border-top-color: var(--accent);
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.msgmodal-loading .loading-text {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.3px;
+}
+.msgmodal-context {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.msgmodal-context svg {
+  color: var(--accent-text);
+  flex: 0 0 auto;
+}
+.msgmodal-context span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msgmodal-context time {
+  margin-left: auto;
+  font-weight: 400;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+.msgmodal-sender {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0 10px;
+}
+.msgmodal-sender > span {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.msgmodal-sender b {
+  font-size: 14px;
+  color: var(--text);
+  line-height: 1.25;
+}
+.msgmodal-sender small {
+  font-size: 11.5px;
+  color: var(--text-faint);
+}
+.msgmodal-content {
+  margin: 0;
+  font-size: 14.5px;
+  color: var(--text);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 340px;
+  overflow-y: auto;
+}
+.msgmodal-files {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.msgmodal-files a {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 8px 10px;
+  text-decoration: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.msgmodal-files a:hover {
+  border-color: var(--border-strong);
+  background: var(--hover);
+}
+.msgmodal-files a > svg:first-child {
+  color: var(--accent-text);
+  flex: 0 0 auto;
+}
+.msgmodal-files a > span {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+.msgmodal-files b {
+  font-size: 12.5px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.msgmodal-files small {
+  font-size: 11px;
+  color: var(--text-faint);
+}
+.msgmodal-file-open {
+  color: var(--text-faint);
+  flex: 0 0 auto;
+}
+.msgmodal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+.msgmodal-actions .notif-react,
+.msgmodal-actions .reactbar {
+  margin: 0;
+}
+.msgmodal-actions .msgmodal-open {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 12px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 9px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.12s;
+}
+.msgmodal-actions .msgmodal-open:hover {
+  background: var(--accent-hover);
+}
+.msgmodal-actions .msgmodal-open:active {
+  transform: translateY(1px);
 }

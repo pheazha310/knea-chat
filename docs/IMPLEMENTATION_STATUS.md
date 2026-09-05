@@ -111,6 +111,25 @@ Enforcement notes:
 - [x] **Replies** (reply_to with quoted context in the UI)
 - [x] **Mentions** — `@First Last` parsing, `mention` notifications,
       real-time notification events, autocomplete + highlighting in the UI
+- [x] **React to message notifications** — `mention` / `new_message` rows in
+      the bell popover and the Notifications view offer a quick **React**
+      action (same emoji set as the chat hover bar): picking an emoji adds it
+      to the underlying message through the existing reactions API
+      (idempotent — members see it live via `message_reacted`), picking it
+      again removes it, and a successful reaction acknowledges the
+      notification (marks it read). Mirrors the Reply affordance on the same
+      rows, so you never have to leave the notifications surface
+- [x] **Click a message notification to view the full message** — the server
+      only stores a 120-char preview on `mention` / `new_message` rows, so
+      clicking the row (bell popover or the Notifications page) opens a modal
+      that fetches the real message (`GET /api/messages/:id`, access-checked
+      like every other message read) and shows the complete untruncated body
+      with the sender, timestamp, conversation context, attachments and the
+      same React / Reply affordances as the row. Its **Open in conversation**
+      button closes the modal and jumps into the chat, flash-highlighting the
+      message when it is within the loaded window; clicking also marks the
+      notification read. Deleted or inaccessible messages get a graceful
+      "no longer available" state that still offers the conversation link
 - [x] **Attachments** — file upload with type (extension + MIME) and size
       validation, attachment chips, static file serving
 - [x] **Pinning** — pin/unpin messages with real-time broadcast

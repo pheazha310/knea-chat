@@ -234,6 +234,61 @@ export class AnnouncementController {
     }
   };
 
+  /** POST /api/announcements/:id/reactions — add an emoji reaction. */
+  addReaction = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const reaction = String(req.body.reaction || '').trim();
+      if (!reaction) {
+        res.status(400).json({
+          success: false,
+          message: 'Reaction is required',
+          errors: { reaction: 'Reaction emoji/text is required' },
+        });
+        return;
+      }
+      const reactions = await this.announcementService.addReaction(
+        Number(req.params.id),
+        req.user!.companyId,
+        req.user!.id,
+        reaction,
+      );
+      res.status(201).json({
+        success: true,
+        message: 'Reaction added successfully',
+        data: { reactions },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
+  /** DELETE /api/announcements/:id/reactions/:reactionType — remove a reaction. */
+  removeReaction = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const reactions = await this.announcementService.removeReaction(
+        Number(req.params.id),
+        req.user!.companyId,
+        req.user!.id,
+        String(req.params.reactionType),
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Reaction removed successfully',
+        data: { reactions },
+      });
+    } catch (error) {
+      res.status(400).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
   /** GET /api/announcements/:id/reads — read confirmation (manager+). */
   readers = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

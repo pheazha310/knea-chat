@@ -185,6 +185,26 @@ export interface WsEventMap {
     data: { id: number };
     timestamp?: string;
   };
+  announcement_reacted: {
+    type: 'announcement_reacted';
+    data: { announcementId: number; reactions: Reaction[] };
+    timestamp?: string;
+  };
+  announcement_unreacted: {
+    type: 'announcement_unreacted';
+    data: { announcementId: number; reactions: Reaction[] };
+    timestamp?: string;
+  };
+  task_reacted: {
+    type: 'task_reacted';
+    data: { taskId: number; reactions: Reaction[] };
+    timestamp?: string;
+  };
+  task_unreacted: {
+    type: 'task_unreacted';
+    data: { taskId: number; reactions: Reaction[] };
+    timestamp?: string;
+  };
   // --- Shared files (SRS §2) ---
   shared_file_created: {
     type: 'shared_file_created';

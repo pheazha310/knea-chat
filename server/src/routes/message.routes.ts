@@ -7,6 +7,9 @@ export const createMessageRouter = (messageController: MessageController, auth: 
 
   router.post('/', auth.authenticate, messageController.create);
 
+  /** GET /api/messages/:id — full message (+ sender/reactions/attachments). */
+  router.get('/:id', auth.authenticate, messageController.getOne);
+
   /**
    * POST /api/messages/upload
    * Multipart form: `conversation_id` + `file`.

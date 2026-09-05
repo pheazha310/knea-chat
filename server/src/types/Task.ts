@@ -34,6 +34,8 @@ export interface TaskRow {
   team_name?: string | null;
   // Computed by the service when a due date has passed without completion.
   is_overdue?: boolean;
+  /** Emoji reactions on this task (task_reactions). */
+  reactions?: TaskReactionRow[];
 }
 
 export interface CreateTaskData {
@@ -122,4 +124,21 @@ export interface CreateTaskAttachmentData {
   file_url: string;
   file_type: string | null;
   file_size: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Task reactions (migration 026)
+// ---------------------------------------------------------------------------
+
+export interface TaskReactionRow {
+  id: number;
+  task_id: number;
+  user_id: number;
+  reaction: string;
+  created_at: Date | string;
+  // Joined author columns
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  profile_picture?: string | null;
 }

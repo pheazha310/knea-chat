@@ -21,6 +21,7 @@ import { sendToUser } from '../websocket/connection.registry';
 import type {
   CreateTaskData,
   TaskFilters,
+  TaskReactionRow,
   TaskRow,
   UpdateTaskData,
   TaskCommentRow,
@@ -74,10 +75,36 @@ export class TaskService {
     private notificationRepository: NotificationRepository,
     private userRepository: UserRepository,
     private notificationPreferences?: NotificationPreferenceService | null,
+    /** Resolves whether emoji reactions are enabled for a company (optional —
+     *  absent in unit tests, where reactions are always allowed). */
+    private reactionsAllowed?: ((companyId: number) => Promise<boolean>) | null,
   ) {}
 
   private isManager(role: string): boolean {
     return MANAGER_ROLES.includes(role);
+  }
+
+  private async assertReactionsAllowed(companyId: number): Promise<void> {
+    if (!this.reactionsAllowed) return;
+    if (!(await this.reactionsAllowed(companyId))) {
+      throw new Error('Reactions are currently disabled');
+    }
+  }
+
+  /** Attach each task's reaction list (bulk query per list fetch). */
+  private async withReactions(tasks: TaskRow[]): Promise<void> {
+    const ids = tasks.map((t) => Number(t.id)).filter((n) => Number.isFinite(n));
+    if (ids.length === 0) return;
+    const reactions = await this.taskRepository.findReactionsByTaskIds(ids);
+    const byId = new Map<number, TaskReactionRow[]>();
+    for (const r of reactions) {
+      const list = byId.get(Number(r.task_id)) || [];
+      list.push(r);
+      byId.set(Number(r.task_id), list);
+    }
+    for (const task of tasks) {
+      task.reactions = byId.get(Number(task.id)) || [];
+    }
   }
 
   /** Mark overdue on rows whose due date passed without completion. */
@@ -128,6 +155,7 @@ export class TaskService {
     }
     const today = dateOnly(new Date());
     result.tasks.forEach((t) => this.annotateOverdue(t, today));
+    await this.withReactions(result.tasks);
     return result;
   }
 
@@ -174,6 +202,7 @@ export class TaskService {
 
     const task = await this.taskRepository.findById(taskId);
     if (!task) throw new Error('Failed to create task');
+    await this.withReactions([task]);
 
     if (assignee_id && Number(assignee_id) !== Number(data.created_by)) {
       await this.notifyAssigned(task, data.created_by);
@@ -235,6 +264,8 @@ export class TaskService {
     await this.taskRepository.update(taskId, payload);
     const refreshed = await this.taskRepository.findById(taskId);
     if (!refreshed) throw new Error('Task not found');
+
+    await this.withReactions([refreshed]);
 
     // Assignment changed → notify the new assignee.
     if (
@@ -340,6 +371,57 @@ export class TaskService {
   // -------------------------------------------------------------------------
   // Task comments
   // -------------------------------------------------------------------------
+
+  // -------------------------------------------------------------------------
+  // Reactions (migration 026)
+  // -------------------------------------------------------------------------
+
+  /** Idempotent add; returns the fresh list and live-syncs everyone who can see the task. */
+  async addReaction(
+    taskId: number,
+    userId: number,
+    reaction: string,
+  ): Promise<TaskReactionRow[]> {
+    const task = await this.taskRepository.findById(taskId);
+    if (!task) throw new Error('Task not found');
+    await this.assertCanViewTask(task, userId);
+    await this.assertReactionsAllowed(Number(task.company_id));
+    await this.taskRepository.addReaction(taskId, userId, reaction);
+    const reactions = await this.taskRepository.findReactions(taskId);
+    await this.broadcastReactions(task, 'task_reacted', reactions, userId);
+    return reactions;
+  }
+
+  /** Idempotent remove; returns the fresh list and live-syncs everyone who can see the task. */
+  async removeReaction(
+    taskId: number,
+    userId: number,
+    reaction: string,
+  ): Promise<TaskReactionRow[]> {
+    const task = await this.taskRepository.findById(taskId);
+    if (!task) throw new Error('Task not found');
+    await this.assertCanViewTask(task, userId);
+    await this.assertReactionsAllowed(Number(task.company_id));
+    await this.taskRepository.removeReaction(taskId, userId, reaction);
+    const reactions = await this.taskRepository.findReactions(taskId);
+    await this.broadcastReactions(task, 'task_unreacted', reactions, userId);
+    return reactions;
+  }
+
+  /** Push a reaction change to every user who may see the task (minus the actor). */
+  private async broadcastReactions(
+    task: TaskRow,
+    type: 'task_reacted' | 'task_unreacted',
+    reactions: TaskReactionRow[],
+    actorId: number,
+  ): Promise<void> {
+    const viewerIds = await this.taskRepository.findViewerUserIds(task);
+    const event = { type, data: { taskId: task.id, reactions } };
+    for (const id of viewerIds) {
+      if (Number(id) === Number(actorId)) continue;
+      sendToUser(Number(id), event);
+    }
+  }
 
   async addComment(taskId: number, userId: number, content: string): Promise<TaskCommentRow> {
     const trimmed = (content || '').trim();

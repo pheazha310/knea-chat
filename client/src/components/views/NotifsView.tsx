@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import Icon from '../common/Icon';
 import type { IconName } from '../common/Icon';
 import Modal from '../modals/Modal';
 import NotificationReplyAction from '../common/NotificationReplyAction';
+import NotificationReactionAction from '../common/NotificationReactionAction';
 import { useNotificationPreferenceStore } from '../../store/notificationPreferenceStore';
 import type { Notification } from '../../models';
 import { replyTargetOf } from '../../utils/notificationReply';
+import { reactableTargetOf } from '../../utils/reactions';
 
 interface NotifsViewProps {
   notifications: Notification[];
@@ -20,6 +22,8 @@ interface NotifsViewProps {
     content: string,
     messageId?: number,
   ) => Promise<boolean>;
+  /** Clicking a message notification opens its full message (marks it read). */
+  onOpenMessageNotification?: (notification: Notification) => void;
 }
 
 const relativeTime = (value?: string) => {
@@ -55,6 +59,7 @@ const NotifsView = ({
   onMarkAllRead,
   onReplyMissedCall,
   onReplyMessage,
+  onOpenMessageNotification,
 }: NotifsViewProps) => {
   const [showPreferences, setShowPreferences] = useState(false);
   const {
@@ -98,25 +103,64 @@ const NotifsView = ({
           {notifications.map((n) => {
             const unread = !n.is_read;
             const replyable = replyTargetOf(n, onReplyMissedCall, onReplyMessage) !== null;
+            const reactableTarget = reactableTargetOf(n);
+            const reactable = reactableTarget !== null;
+            // Message notifications (mention / new_message) open a modal with
+            // the full message content when clicked.
+            const canOpenMessage =
+              reactableTarget?.kind === 'message' && !!onOpenMessageNotification;
             return (
-              <li key={n.id} className={unread ? 'unread' : ''}>
-                <span className="notif-icon"><Icon name={ICONS[n.type] || 'bell'} size={15} /></span>
+              <li
+                key={n.id}
+                className={`${unread ? 'unread' : ''} ${canOpenMessage ? 'clickable' : ''}`}
+                role={canOpenMessage ? 'button' : undefined}
+                tabIndex={canOpenMessage ? 0 : undefined}
+                title={canOpenMessage ? 'View full message' : undefined}
+                onClick={() => {
+                  if (canOpenMessage) onOpenMessageNotification!(n);
+                }}
+                onKeyDown={
+                  canOpenMessage
+                    ? (e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          onOpenMessageNotification!(n);
+                        }
+                      }
+                    : undefined
+                }
+              >
+                <span className={`notif-icon ${unread ? 'unread' : ''}`}>
+                  <Icon name={ICONS[n.type] || 'bell'} size={15} />
+                </span>
                 <span className="notif-body">
                   <b>{n.title}</b>
                   {n.message && <p>{n.message}</p>}
                   <time>{relativeTime(n.created_at)}</time>
                 </span>
-                {replyable ? (
-                  <NotificationReplyAction
-                    notification={n}
-                    onReplyMissedCall={onReplyMissedCall}
-                    onReplyMessage={onReplyMessage}
-                    onSent={(item) => {
-                      if (!item.is_read) onMarkRead(item.id);
-                    }}
-                  />
-                ) : (
-                  unread && (
+                <div
+                  className="notif-actions"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {reactable && (
+                    <NotificationReactionAction
+                      notification={n}
+                      onAcknowledged={(item) => {
+                        if (!item.is_read) onMarkRead(item.id);
+                      }}
+                    />
+                  )}
+                  {replyable && (
+                    <NotificationReplyAction
+                      notification={n}
+                      onReplyMissedCall={onReplyMissedCall}
+                      onReplyMessage={onReplyMessage}
+                      onSent={(item) => {
+                        if (!item.is_read) onMarkRead(item.id);
+                      }}
+                    />
+                  )}
+                  {unread && !replyable && !reactable && (
                     <button
                       className="notif-read"
                       onClick={(e) => {
@@ -126,8 +170,8 @@ const NotifsView = ({
                     >
                       Mark read
                     </button>
-                  )
-                )}
+                  )}
+                </div>
               </li>
             );
           })}

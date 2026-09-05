@@ -6,7 +6,7 @@
 // that conversation's notifications read via `markConversationRead`.
 import { create } from 'zustand';
 import { NotificationModel } from '../models';
-import type { Notification } from '../models';
+import type { Notification, Reaction } from '../models';
 import { conversationIdOf } from '../utils/notifications';
 import { getErrorMessage } from './utils';
 
@@ -35,6 +35,9 @@ interface NotificationState {
   setNotifications: (list: Notification[]) => void;
   /** Prepend a single notification row (optimistic additions). */
   addNotification: (notification: Notification) => void;
+  /** Replace the reaction list attached to one row (used after quick reacts
+   *  and live `*_reacted` broadcasts). */
+  setNotificationReactions: (notificationId: number, reactions: Reaction[]) => void;
   load: () => Promise<void>;
   /** Re-fetch the list from the server (WS `notification` events use this). */
   refresh: () => Promise<void>;
@@ -59,6 +62,16 @@ export const useNotificationStore = create<NotificationState>()((set, get) => ({
   addNotification: (notification) => {
     const next = [notification, ...get().notifications];
     get().setNotifications(next);
+  },
+
+  setNotificationReactions: (notificationId, reactions) => {
+    const next = get().notifications.map((n) =>
+      n.id === notificationId ? { ...n, reactions } : n,
+    );
+    // Only touch state when something actually changed (rows may not exist).
+    if (next.some((n, i) => n !== get().notifications[i])) {
+      get().setNotifications(next);
+    }
   },
 
   load: async () => {

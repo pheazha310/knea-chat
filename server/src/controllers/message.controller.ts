@@ -147,6 +147,30 @@ export class MessageController {
     }
   };
 
+  /** GET /api/messages/:id — full message for a notification's "view" action. */
+  getOne = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const messageId = Number(req.params.id);
+      if (!Number.isFinite(messageId) || messageId <= 0) {
+        res.status(400).json({
+          success: false,
+          message: 'Invalid message id',
+          errors: { validation: 'A positive message id is required' },
+        });
+        return;
+      }
+
+      const data = await this.messageService.getSingleMessage(messageId, req.user!.id);
+      res.status(200).json({ success: true, data });
+    } catch (error) {
+      res.status(404).json({
+        success: false,
+        message: (error as Error).message,
+        errors: {},
+      });
+    }
+  };
+
   /**
    * POST /api/messages/upload
    * Multipart form: `conversation_id` + `file`.

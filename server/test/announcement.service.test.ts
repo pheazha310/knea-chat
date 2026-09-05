@@ -35,6 +35,10 @@ const announcementRepository = {
   findByIdWithStats: async () => null as AnnouncementRow | null,
   findDueScheduled: async () => [] as AnnouncementRow[],
   markPublished: async () => true,
+  findReactionsByAnnouncementIds: async () => [],
+  addReaction: async () => undefined,
+  removeReaction: async () => true,
+  findReactions: async () => [],
 };
 
 const notificationRepository = {

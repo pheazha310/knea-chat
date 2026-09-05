@@ -9,7 +9,7 @@
  * see everything in their company (including scheduled drafts).
  */
 import type { Db, ResultSetHeader } from '../database/connection';
-import type { AnnouncementReadRow, AnnouncementRow, AnnouncementScope } from '../types';
+import type { AnnouncementReadRow, AnnouncementReactionRow, AnnouncementRow, AnnouncementScope } from '../types';
 
 /**
  * Computed-column fragment shared by the list + single queries:
@@ -349,5 +349,43 @@ export class AnnouncementRepository {
       [now, id],
     );
     return result.affectedRows > 0;
+  }
+
+  // -------------------------------------------------------------------------
+  // Reactions (migration 025)
+  // -------------------------------------------------------------------------
+
+  /** Idempotent add — POST means "ensure this reaction exists". */
+  async addReaction(announcementId: number, userId: number, reaction: string): Promise<void> {
+    await this.db.query<ResultSetHeader>(
+      `INSERT INTO announcement_reactions (announcement_id, user_id, reaction)
+       VALUES (?, ?, ?)
+       ON DUPLICATE KEY UPDATE reaction = reaction`,
+      [announcementId, userId, reaction],
+    );
+  }
+
+  async removeReaction(announcementId: number, userId: number, reaction: string): Promise<boolean> {
+    const result = await this.db.query<ResultSetHeader>(
+      'DELETE FROM announcement_reactions WHERE announcement_id = ? AND user_id = ? AND reaction = ?',
+      [announcementId, userId, reaction],
+    );
+    return result.affectedRows > 0;
+  }
+
+  async findReactions(announcementId: number): Promise<AnnouncementReactionRow[]> {
+    return this.findReactionsByAnnouncementIds([announcementId]);
+  }
+
+  async findReactionsByAnnouncementIds(announcementIds: number[]): Promise<AnnouncementReactionRow[]> {
+    if (announcementIds.length === 0) return [];
+    return this.db.query<AnnouncementReactionRow[]>(
+      `SELECT ar.*, u.first_name, u.last_name, u.email, u.profile_picture
+       FROM announcement_reactions ar
+       JOIN users u ON ar.user_id = u.id
+       WHERE ar.announcement_id IN (?)
+       ORDER BY ar.created_at ASC`,
+      [announcementIds],
+    );
   }
 }

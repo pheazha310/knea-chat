@@ -12,6 +12,7 @@ import type {
   WsMessage,
 } from "../../models";
 import { useChatStore } from "../../store/chatStore";
+import { QUICK_REACTIONS } from "../../utils/emoji";
 
 // REST messages are snake_case, WebSocket messages are camelCase — read both.
 const asMessage = (m: ChatMessage) => m as Message;
@@ -165,7 +166,7 @@ const ContentText = ({ content }: { content: string }) => {
   );
 };
 
-const QUICK_REACTIONS = ["👍", "❤️", "😂", "🙏", "🎉", "🔥"];
+
 
 const fileIcon = (name: string): IconName => {
   const ext = name.split(".").pop()?.toLowerCase() || "";

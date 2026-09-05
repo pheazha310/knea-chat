@@ -415,3 +415,58 @@ describe('MessageService.getMessages', () => {
     assert.deepEqual(messages[1].reactions, [{ reaction: '👍' }]);
   });
 });
+
+describe('MessageService.getSingleMessage', () => {
+  it('returns the full message enriched with reactions, attachments and its conversation', async (t) => {
+    const withSender = t.mock.method(messageModel, 'findByIdWithSender', async () =>
+      baseMessage({ id: 42, content: 'The complete untruncated body.' }),
+    );
+    t.mock.method(messageModel, 'findReactions', async () => [
+      { id: 1, message_id: 42, user_id: 2, reaction: '👍' },
+    ]);
+    t.mock.method(messageModel, 'findAttachments', async () => [
+      { id: 9, message_id: 42, file_name: 'spec.pdf', file_url: '/uploads/spec.pdf' },
+    ]);
+
+    const result = await messageService.getSingleMessage(42, 2);
+
+    assert.equal(result.message.id, 42);
+    assert.equal(result.message.content, 'The complete untruncated body.');
+    assert.equal(result.message.first_name, 'Ann');
+    assert.equal(result.message.reactions?.length, 1);
+    assert.equal(result.message.attachments?.length, 1);
+    assert.equal(result.conversation.id, 7);
+    assert.equal(result.conversation.type, 'direct');
+    assert.equal(withSender.mock.calls.length, 1);
+  });
+
+  it('throws when the message does not exist', async (t) => {
+    t.mock.method(messageModel, 'findById', async () => null);
+    await assert.rejects(messageService.getSingleMessage(999, 1), /Message not found/);
+  });
+
+  it('throws when the message belongs to a missing conversation', async (t) => {
+    t.mock.method(conversationModel, 'findById', async () => null);
+    await assert.rejects(messageService.getSingleMessage(42, 1), /Conversation not found/);
+  });
+
+  it('rejects a non-member reading a message', async (t) => {
+    t.mock.method(conversationModel, 'isMember', async () => false);
+    const withSender = t.mock.method(messageModel, 'findByIdWithSender', async () => baseMessage({ id: 42 }));
+    await assert.rejects(messageService.getSingleMessage(42, 3), /not a member of this conversation/);
+    assert.equal(withSender.mock.calls.length, 0);
+  });
+
+  it('rejects an outsider reading a team conversation message', async (t) => {
+    t.mock.method(conversationModel, 'findById', async (id: number) => ({ id, type: 'team', name: 'Engineering' }));
+    t.mock.method(conversationModel, 'canAccessTeamConversation', async () => false);
+    await assert.rejects(messageService.getSingleMessage(42, 3), /must be a member of this team/);
+  });
+
+  it('skips the access check when no userId is provided', async (t) => {
+    const isMember = t.mock.method(conversationModel, 'isMember', async () => true);
+    const result = await messageService.getSingleMessage(42, null);
+    assert.equal(result.message.id, 42);
+    assert.equal(isMember.mock.calls.length, 0);
+  });
+});

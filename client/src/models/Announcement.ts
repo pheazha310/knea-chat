@@ -2,6 +2,7 @@
 // Holds the `Announcement` entity plus `AnnouncementModel`, the data access
 // for the /announcements endpoints (SRS FR-24).
 import api from '../services/api';
+import type { Reaction } from './Message';
 
 export type AnnouncementScope = 'company' | 'department' | 'team';
 
@@ -33,6 +34,8 @@ export interface Announcement {
   total_recipients?: number;
   /** 0/1 — whether the current user has read this announcement. */
   is_read?: number;
+  /** Emoji reactions on the announcement (publisher + audience). */
+  reactions?: Reaction[];
 }
 
 export interface AnnouncementReader {
@@ -85,4 +88,13 @@ export const AnnouncementModel = {
       success: boolean;
       data: { readers: AnnouncementReader[]; total_recipients: number };
     }>(`/announcements/${id}/reads`),
+  addReaction: (id: number, reaction: string) =>
+    api.post<{ success: boolean; data: { reactions: Reaction[] } }>(
+      `/announcements/${id}/reactions`,
+      { reaction },
+    ),
+  removeReaction: (id: number, reaction: string) =>
+    api.delete<{ success: boolean; data: { reactions: Reaction[] } }>(
+      `/announcements/${id}/reactions/${encodeURIComponent(reaction)}`,
+    ),
 };

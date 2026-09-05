@@ -35,8 +35,10 @@ const TABLES = [
   'password_resets',
   'user_sessions',
   'notifications',
-  // announcement enhancements (migration 022) — announcement_reads references
-  // announcements, so it is dropped first.
+  // announcement enhancements (migration 022) — announcement_reads and
+  // announcement_reactions (migration 025) reference announcements, so they
+  // are dropped first.
+  'announcement_reactions',
   'announcement_reads',
   'announcements',
   'attachments',
@@ -59,6 +61,7 @@ const TABLES = [
   'user_notification_preferences',
   // tasks feature (migrations 020/021) — children before parents (task_comments /
   // task_attachments reference tasks, and tasks.team_id references teams).
+  'task_reactions',
   'task_attachments',
   'task_comments',
   'tasks',
@@ -969,6 +972,55 @@ async function applyMigrations(admin) {
       );
       console.log('🔐 Added logged_out_at to user_sessions (migration 024).');
     }
+  }
+
+  // Migration 025: announcement reactions — emoji reactions on announcements
+  // (mirror of message_reactions, surfaced on announcement cards + their
+  // notification rows).
+  const [announcementReactionTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'announcement_reactions'`,
+    [DB_NAME],
+  );
+  if (announcementReactionTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE announcement_reactions (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        announcement_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        reaction VARCHAR(50) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_announcement_user_reaction (announcement_id, user_id, reaction),
+        INDEX idx_announcement_reactions_announcement (announcement_id),
+        FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🙂 Created announcement_reactions table (migration 025).');
+  }
+
+  // Migration 026: task reactions — emoji reactions on tasks (mirror of
+  // message_reactions, surfaced in the task detail view + notification rows).
+  const [taskReactionTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'task_reactions'`,
+    [DB_NAME],
+  );
+  if (taskReactionTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE task_reactions (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        task_id BIGINT UNSIGNED NOT NULL,
+        user_id BIGINT UNSIGNED NOT NULL,
+        reaction VARCHAR(50) NOT NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_task_user_reaction (task_id, user_id, reaction),
+        INDEX idx_task_reactions_task (task_id),
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🙂 Created task_reactions table (migration 026).');
   }
 
   const [noteTables] = await admin.query(

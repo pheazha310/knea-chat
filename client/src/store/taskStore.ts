@@ -2,7 +2,11 @@
 // status, comments, attachments).
 import { create } from 'zustand';
 import { TaskModel } from '../models';
-import type { Task, TaskComment, TaskAttachment, CreateTaskInput, TaskListParams } from '../models';
+import type { Task, TaskComment, TaskAttachment, CreateTaskInput, TaskListParams, Reaction } from '../models';
+import { useAuthStore } from './authStore';
+
+/** Task reactions with an in-flight toggle request (guards double-clicks). */
+const reactionInFlight = new Set<string>();
 
 interface TaskState {
   tasks: Task[];
@@ -25,6 +29,15 @@ interface TaskState {
   loadAttachments: (taskId: number) => Promise<TaskAttachment[]>;
   uploadAttachment: (taskId: number, file: File) => Promise<TaskAttachment | null>;
   deleteAttachment: (taskId: number, attachmentId: number) => Promise<boolean>;
+  /** Replace the reaction list on a cached task (live broadcasts). */
+  applyReactions: (taskId: number, reactions: Reaction[]) => void;
+  /** Add or remove the current user's emoji on a task. Resolves with the
+   *  fresh reaction list (null on failure). */
+  toggleReaction: (
+    taskId: number,
+    reaction: string,
+    knownMine?: boolean,
+  ) => Promise<Reaction[] | null>;
   clear: () => void;
 }
 
@@ -97,6 +110,39 @@ export const useTaskStore = create<TaskState>()((set, get) => ({
     } catch (error) {
       set({ error: (error as Error).message, isLoading: false });
       return false;
+    }
+  },
+
+  applyReactions: (taskId, reactions) =>
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === taskId ? { ...t, reactions } : t,
+      ),
+    })),
+
+  toggleReaction: async (taskId, reaction, knownMine) => {
+    const key = `${taskId}:${reaction}`;
+    if (reactionInFlight.has(key)) return null;
+    reactionInFlight.add(key);
+    try {
+      const current = get().tasks.find((t) => t.id === taskId);
+      const userId = useAuthStore.getState().user?.id ?? null;
+      const cachedMine =
+        current?.reactions?.some(
+          (r) => userId !== null && Number(r.user_id) === Number(userId) && r.reaction === reaction,
+        ) ?? false;
+      const mine = current ? cachedMine : (knownMine ?? false);
+      const res = mine
+        ? await TaskModel.removeReaction(taskId, reaction)
+        : await TaskModel.addReaction(taskId, reaction);
+      const reactions: Reaction[] = res.data?.data?.reactions || [];
+      get().applyReactions(taskId, reactions);
+      return reactions;
+    } catch (error) {
+      set({ error: (error as Error).message });
+      return null;
+    } finally {
+      reactionInFlight.delete(key);
     }
   },
 
