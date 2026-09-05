@@ -8,6 +8,12 @@ export const createUserRouter = (userController: UserController, auth: AuthMiddl
   router.get('/', auth.authenticate, userController.list);
   router.get('/search', auth.authenticate, userController.search);
   router.get('/:id', auth.authenticate, userController.getById);
+
+  /**
+   * GET /api/users/:id/sessions — login history for a user (admin+).
+   * Company admins are limited to their own workspace.
+   */
+  router.get('/:id/sessions', auth.authenticate, auth.authorizeAtLeast('admin'), userController.sessions);
   router.post('/', auth.authenticate, auth.authorizeAtLeast('admin'), userController.create);
 
   /**

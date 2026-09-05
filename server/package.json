@@ -24,6 +24,7 @@
     "test:e2e:attendance": "node e2e/attendance.e2e.js",
     "test:e2e:files": "node e2e/shared-files.e2e.js",
     "test:e2e:tasks": "node e2e/tasks-notifications.e2e.js",
+    "test:e2e:sessions": "node e2e/sessions.e2e.js",
     "lint": "eslint src/",
     "format": "prettier --write src/"
   },

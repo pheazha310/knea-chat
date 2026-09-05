@@ -69,6 +69,24 @@ Enforcement notes:
 
 ### Authentication & Users (US-01..US-04)
 - [x] Login / logout / register with JWT + bcrypt, 24h token, `user_sessions`
+- [x] **Login history + session management** — every sign-in is recorded
+      (device, IP, time) in `user_sessions` and **kept after logout** (soft
+      sign-out via `logged_out_at`, migration 024) so the history is never
+      wiped. Users review their own recent sign-ins with an
+      Active / Expired / Signed-out status (`GET /api/auth/sessions`) and can
+      **sign out all other devices** (`POST /api/auth/sessions/revoke-others`,
+      current session excluded); admins/super admins can inspect any
+      workspace user's login history (`GET /api/users/:id/sessions`, company
+      scoping enforced — company admins are limited to their own company).
+      UI: Profile → **Login history & sessions**; live E2E
+      (`server/e2e/sessions.e2e.js`, `npm run test:e2e:sessions` — 23 checks
+      against a running backend: sign-in recording, history status mapping,
+      revoke-others, soft logout preservation, admin scoping, metric cross-check).
+      Each login now issues a **unique JWT (`jti` claim)** — previously
+      identical payloads produced identical tokens, so concurrent sign-ins of
+      the same user shared one token/hash and "current session" lookups were
+      ambiguous (verified in headless Chrome: Profile renders the three
+      devices, "Sign out all other devices" keeps only the current one)
 - [x] Token refresh, password reset flow (forgot / reset / change password)
 - [x] Rate limiting on authentication endpoints
 - [x] Profile page — edit name, job title, status; change password
@@ -384,8 +402,9 @@ Enforcement notes:
       only the default smoke test.
 - [ ] **Reconnection queue persistence** — offline WS messages are queued
       in memory only; they are dropped on page reload.
-- [ ] **Token blacklist** — logout clears `user_sessions`, but JWT revocation
-      for issued-but-unexpired tokens is not enforced.
+- [ ] **Token blacklist** — logout marks `user_sessions` rows as logged out
+      (they are kept as login history), but JWT revocation for
+      issued-but-unexpired tokens is not enforced.
 - [ ] **Advanced features** — threads, video/voice, push notifications, AI
       assistant (deferred per SRS §26).
 

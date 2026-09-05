@@ -4,7 +4,7 @@ import { useAuthStore } from '../store';
 import Avatar from '../components/common/Avatar';
 import Icon from '../components/common/Icon';
 import { AuthModel, UserModel } from '../models';
-import type { PresenceStatus, User } from '../models';
+import type { LoginSession, PresenceStatus, User } from '../models';
 
 const STATUSES: Array<{ value: PresenceStatus; label: string; color: string }> = [
   { value: 'online', label: 'Online', color: 'bg-green-500' },
@@ -35,6 +35,90 @@ const Profile = () => {
   const [pwSaving, setPwSaving] = useState(false);
   const [pwMsg, setPwMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [showPw, setShowPw] = useState({ current: false, new: false, confirm: false });
+
+  const [sessions, setSessions] = useState<LoginSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(true);
+  const [sessionsError, setSessionsError] = useState<string | null>(null);
+  const [revoking, setRevoking] = useState(false);
+  const [sessionsMsg, setSessionsMsg] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const loadSessions = async () => {
+    try {
+      const res = await AuthModel.getSessions();
+      setSessions(res.data.data.sessions || []);
+      setSessionsError(null);
+    } catch (err: any) {
+      setSessionsError(err.response?.data?.message || 'Could not load login history');
+    } finally {
+      setSessionsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handleRevokeOthers = async () => {
+    if (!window.confirm('Sign out of KneaChat on all other devices? Your current device stays signed in.')) {
+      return;
+    }
+    setRevoking(true);
+    setSessionsMsg(null);
+    try {
+      const res = await AuthModel.revokeOtherSessions();
+      setSessionsMsg({ ok: true, text: res.data.message });
+      loadSessions();
+    } catch (err: any) {
+      setSessionsMsg({ ok: false, text: err.response?.data?.message || 'Could not sign out other devices' });
+    } finally {
+      setRevoking(false);
+    }
+  };
+
+  // Lightweight user-agent → “Browser · OS” formatting for the login list.
+  const formatDevice = (ua: string | null): string => {
+    if (!ua) return 'Unknown device';
+    const os = ua.match(/\(([^)]+)\)/)?.[1]?.split(';')[0]?.trim();
+    let browser = 'Browser';
+    if (/Edg\//.test(ua)) browser = 'Edge';
+    else if (/Chrome\//.test(ua)) browser = 'Chrome';
+    else if (/Firefox\//.test(ua)) browser = 'Firefox';
+    else if (/Safari\//.test(ua)) browser = 'Safari';
+    else if (/MSIE|Trident/.test(ua)) browser = 'Internet Explorer';
+    return `${browser}${os ? ` · ${os}` : ''}`;
+  };
+
+  const formatTime = (value: string | null): string => {
+    if (!value) return '—';
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) return value;
+    return d.toLocaleString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
+  const statusBadge = (s: LoginSession) => {
+    const styles: Record<LoginSession['status'], string> = {
+      active: 'bg-green-50 text-green-700 border-green-200',
+      expired: 'bg-gray-50 text-gray-500 border-gray-200',
+      logged_out: 'bg-amber-50 text-amber-700 border-amber-200',
+    };
+    const labels: Record<LoginSession['status'], string> = {
+      active: 'Active',
+      expired: 'Expired',
+      logged_out: 'Signed out',
+    };
+    return (
+      <span className={`inline-block px-2 py-0.5 rounded-full border text-xs font-medium ${styles[s.status]}`}>
+        {labels[s.status]}
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (user) {
@@ -330,6 +414,69 @@ const Profile = () => {
               {pwSaving ? 'Updating…' : 'Update password'}
             </button>
           </form>
+        </div>
+
+        <div className="profile-settings-card mt-5">
+          <div className="profile-card-heading">
+            <span>⌖</span>
+            <div>
+              <h2>Login history &amp; sessions</h2>
+              <p>Recent sign-ins to your account and the devices that hold an active session.</p>
+            </div>
+          </div>
+
+          {sessionsMsg && (
+            <div
+              className={`mb-4 p-3 rounded-lg text-sm ${
+                sessionsMsg.ok
+                  ? 'bg-green-50 border border-green-200 text-green-700'
+                  : 'bg-red-50 border border-red-200 text-red-700'
+              }`}
+            >
+              {sessionsMsg.text}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm text-gray-500">
+              {sessionsLoading
+                ? 'Loading login history…'
+                : `${sessions.length} sign-in${sessions.length === 1 ? '' : 's'} recorded`}
+            </p>
+            <button
+              type="button"
+              onClick={handleRevokeOthers}
+              disabled={revoking || sessionsLoading}
+              className="profile-security-btn disabled:bg-gray-300 disabled:cursor-not-allowed"
+            >
+              {revoking ? 'Signing out…' : 'Sign out all other devices'}
+            </button>
+          </div>
+
+          {sessionsError ? (
+            <p className="text-sm text-red-600">{sessionsError}</p>
+          ) : sessions.length === 0 && !sessionsLoading ? (
+            <p className="text-sm text-gray-500">No login history yet.</p>
+          ) : (
+            <ul className="divide-y divide-gray-100 border border-gray-100 rounded-lg overflow-hidden">
+              {sessions.map((s) => (
+                <li key={s.id} className="flex items-center justify-between gap-3 px-4 py-3 bg-white">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-ink truncate">{formatDevice(s.device_info)}</p>
+                    <p className="text-xs text-gray-500">
+                      {s.ip_address || 'Unknown IP'} · signed in {formatTime(s.created_at as string)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-none">
+                    <span className="text-xs text-gray-400 hidden sm:block">
+                      {s.status === 'active' ? `expires ${formatTime(s.expires_at as string)}` : ''}
+                    </span>
+                    {statusBadge(s)}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </main>
     </div>

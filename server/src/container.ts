@@ -291,6 +291,7 @@ const userController = new UserController(
   auditLogService,
   companySettingService,
   subscriptionService,
+  authService,
 );
 const messageController = new MessageController(
   messageService,

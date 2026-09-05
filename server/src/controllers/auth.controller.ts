@@ -247,6 +247,39 @@ export class AuthController {
     }
   };
 
+  /** GET /api/auth/sessions — the caller's login history (device, IP, times). */
+  sessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const sessions = await this.authService.getLoginHistory(req.user!.id);
+      res.status(200).json({
+        success: true,
+        message: 'Login history retrieved',
+        data: { sessions },
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
+  /** POST /api/auth/sessions/revoke-others — sign out every other device. */
+  revokeOtherSessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : authHeader;
+      const result = await this.authService.revokeOtherSessions(req.user!.id, token);
+      res.status(200).json({
+        success: true,
+        message:
+          result.revoked > 0
+            ? `Signed out ${result.revoked} other session${result.revoked === 1 ? '' : 's'}`
+            : 'No other active sessions',
+        data: result,
+      });
+    } catch (error) {
+      next(error);
+    }
+  };
+
   /** GET /api/auth/me — return the authenticated user's profile. */
   me = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {

@@ -11,9 +11,10 @@ import type { NotificationRepository } from '../repositories/notificationReposit
 import type { CompanyRepository } from '../repositories/companyRepository';
 import type { SessionRepository } from '../repositories/sessionRepository';
 import { generateToken } from '../utils/auth.utils';
+import { ROLES } from '../utils/roles';
 import type { CompanySettingService } from './CompanySetting.service';
 import type { SubscriptionService } from './Subscription.service';
-import type { LoginResult, SystemSettings, User, UserRow } from '../types';
+import type { AuthUser, LoginResult, SystemSettings, User, UserRow, UserSessionView } from '../types';
 
 /** Platform-neutral baseline used when only the company policy matters. */
 const NEUTRAL_PLATFORM = {
@@ -124,11 +125,15 @@ export class AuthService {
       throw new Error('Invalid email or password');
     }
 
+    // jti makes the JWT unique per sign-in — without it, identical payloads
+    // produce identical tokens, so concurrent logins of the same user would
+    // share one token and one token_hash (breaking session tracking).
     const tokenPayload = {
       id: user.id,
       email: user.email,
       role: user.role,
       companyId: user.company_id ?? 0,
+      jti: uuidv4(),
     };
 
     const token = generateToken(tokenPayload, '24h');
@@ -167,15 +172,79 @@ export class AuthService {
       email: user.email,
       role: user.role,
       companyId: user.company_id ?? 0,
+      jti: uuidv4(),
     };
 
     const token = generateToken(tokenPayload, '24h');
     return { token, expiresIn: '24h' };
   }
 
+  /**
+   * Soft sign-out: sessions are marked logged out (not deleted) so the user's
+   * login history stays intact.
+   */
   async logout(userId: number): Promise<void> {
     await this.userRepository.updateStatus(userId, 'offline');
-    await this.sessionRepository.deleteSessionsByUser(userId);
+    await this.sessionRepository.logoutSessionsByUser(userId);
+  }
+
+  /**
+   * Login history for a user (newest first). Never exposes token hashes; each
+   * row carries a computed status (active / expired / logged_out).
+   */
+  async getLoginHistory(userId: number, limit = 20): Promise<UserSessionView[]> {
+    const sessions = await this.sessionRepository.listSessionsByUser(userId, limit);
+    return sessions.map((s) => {
+      const loggedOut = s.logged_out_at != null;
+      const expired = new Date(s.expires_at).getTime() <= Date.now();
+      return {
+        id: s.id,
+        device_info: s.device_info,
+        ip_address: s.ip_address,
+        created_at: s.created_at,
+        expires_at: s.expires_at,
+        logged_out_at: s.logged_out_at,
+        status: loggedOut ? 'logged_out' : expired ? 'expired' : 'active',
+      };
+    });
+  }
+
+  /**
+   * "Sign out all other devices" — every session except the caller's current
+   * one is marked logged out. The current session is identified by the SHA-256
+   * hash of the token the caller authenticated with.
+   */
+  async revokeOtherSessions(userId: number, currentToken: string): Promise<{ revoked: number }> {
+    const tokenHash = crypto.createHash('sha256').update(currentToken).digest('hex');
+    const currentSessionId = await this.sessionRepository.findSessionIdByTokenHash(tokenHash);
+    if (!currentSessionId) {
+      return { revoked: 0 };
+    }
+    const revoked = await this.sessionRepository.logoutOtherSessions(userId, currentSessionId);
+    return { revoked };
+  }
+
+  /**
+   * Admin view: login history for any user. Company admins may only inspect
+   * users inside their own company; super admins may inspect anyone.
+   */
+  async getUserLoginHistory(
+    requester: AuthUser,
+    targetUserId: number,
+    limit = 20,
+  ): Promise<UserSessionView[]> {
+    const target = await this.userRepository.findById(targetUserId);
+    if (!target) {
+      throw new Error('User not found');
+    }
+    if (
+      requester.role !== ROLES.SUPER_ADMIN &&
+      requester.companyId !== undefined &&
+      Number(requester.companyId) !== Number(target.company_id)
+    ) {
+      throw new Error('Unauthorized');
+    }
+    return this.getLoginHistory(targetUserId, limit);
   }
 
   async forgotPassword(email: string): Promise<{ message: string; resetToken?: string }> {

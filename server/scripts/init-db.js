@@ -947,6 +947,30 @@ async function applyMigrations(admin) {
     console.log('🛠️  Added administration module tables + plan columns (migration 023).');
   }
 
+  // Migration 024: login history + session management. Sessions are now kept
+  // after logout (soft sign-out via logged_out_at) instead of being deleted,
+  // so the user's login history (device, IP, times) can be surfaced in the UI.
+  const [sessionTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'user_sessions'`,
+    [DB_NAME],
+  );
+  if (sessionTables[0].count > 0) {
+    const [loggedOutCols] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.columns
+       WHERE table_schema = ? AND table_name = 'user_sessions' AND column_name = 'logged_out_at'`,
+      [DB_NAME],
+    );
+    if (loggedOutCols[0].count === 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE user_sessions
+         ADD COLUMN logged_out_at DATETIME NULL AFTER expires_at,
+         ADD INDEX idx_sessions_user_logged_out (user_id, logged_out_at);`,
+      );
+      console.log('🔐 Added logged_out_at to user_sessions (migration 024).');
+    }
+  }
+
   const [noteTables] = await admin.query(
     `SELECT COUNT(*) AS count FROM information_schema.tables
      WHERE table_schema = ? AND table_name = 'meeting_notes'`,

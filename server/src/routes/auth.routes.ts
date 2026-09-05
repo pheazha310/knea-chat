@@ -16,6 +16,10 @@ export const createAuthRouter = (authController: AuthController, auth: AuthMiddl
   router.post('/reset-password', authLimiter, authController.resetPassword);
   router.post('/change-password', auth.authenticate, authController.changePassword);
 
+  // Login history + session management.
+  router.get('/sessions', auth.authenticate, authController.sessions);
+  router.post('/sessions/revoke-others', auth.authenticate, authController.revokeOtherSessions);
+
   /**
    * GET /api/auth/me
    * Return the authenticated user's profile.

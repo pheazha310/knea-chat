@@ -7,6 +7,7 @@ export interface SessionRow {
   device_info: string | null;
   ip_address: string | null;
   expires_at: Date | string;
+  logged_out_at: Date | string | null;
   created_at: Date | string;
 }
 
@@ -16,6 +17,17 @@ export interface CreateSessionData {
   device_info?: string | null;
   ip_address?: string | null;
   expires_at: Date;
+}
+
+/** Login-history row returned to clients — never includes the token hash. */
+export interface UserSessionView {
+  id: number;
+  device_info: string | null;
+  ip_address: string | null;
+  created_at: Date | string;
+  expires_at: Date | string;
+  logged_out_at: Date | string | null;
+  status: 'active' | 'expired' | 'logged_out';
 }
 
 export interface PasswordResetRow {

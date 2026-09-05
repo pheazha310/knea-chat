@@ -10,6 +10,17 @@ export interface AuthResponse {
   user: User;
 }
 
+/** One row of the user's login history (device, IP, times, status). */
+export interface LoginSession {
+  id: number;
+  device_info: string | null;
+  ip_address: string | null;
+  created_at: string;
+  expires_at: string;
+  logged_out_at: string | null;
+  status: 'active' | 'expired' | 'logged_out';
+}
+
 export const AuthModel = {
   login: (credentials: { email: string; password: string }) =>
     api.post<{ success: boolean; message: string; data: AuthResponse }>(
@@ -50,4 +61,12 @@ export const AuthModel = {
       newPassword,
       confirmPassword: newPassword,
     }),
+  getSessions: () =>
+    api.get<{ success: boolean; message: string; data: { sessions: LoginSession[] } }>(
+      '/auth/sessions',
+    ),
+  revokeOtherSessions: () =>
+    api.post<{ success: boolean; message: string; data: { revoked: number } }>(
+      '/auth/sessions/revoke-others',
+    ),
 };

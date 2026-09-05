@@ -9,6 +9,7 @@ import path from 'path';
 import fs from 'fs';
 import type { NextFunction, Request, Response } from 'express';
 import type { UserService } from '../services/User.service';
+import type { AuthService } from '../services/Auth.service';
 import type { AuditLogService } from '../services/AuditLog.service';
 import type { CompanySettingService } from '../services/CompanySetting.service';
 import type { SubscriptionService } from '../services/Subscription.service';
@@ -67,6 +68,7 @@ export class UserController {
     private auditLogService?: AuditLogService | null,
     private companySettingService?: CompanySettingService | null,
     private subscriptionService?: SubscriptionService | null,
+    private authService?: AuthService | null,
   ) {}
 
   /** Best-effort audit record for administrative user actions. */
@@ -365,6 +367,31 @@ export class UserController {
         message: (error as Error).message,
         errors: {},
       });
+    }
+  };
+
+  /**
+   * GET /api/users/:id/sessions — a user's login history for admins.
+   * Company admins may only inspect users inside their own workspace
+   * (enforced in AuthService.getUserLoginHistory); super admins inspect anyone.
+   */
+  sessions = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (!this.authService) {
+        res.status(501).json({ success: false, message: 'Session service unavailable', errors: {} });
+        return;
+      }
+      const sessions = await this.authService.getUserLoginHistory(
+        req.user!,
+        Number(req.params.id),
+      );
+      res.status(200).json({
+        success: true,
+        message: 'Login history retrieved',
+        data: { sessions },
+      });
+    } catch (error) {
+      next(error);
     }
   };
 

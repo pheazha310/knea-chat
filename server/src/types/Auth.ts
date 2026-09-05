@@ -14,6 +14,12 @@ export interface JwtPayload {
   email: string;
   role: string;
   companyId: number;
+  /**
+   * Random per-issuance claim — makes each login's JWT (and therefore its
+   * session token_hash) unique, so concurrent sign-ins of the same user get
+   * distinct tokens and "current session" lookups stay unambiguous.
+   */
+  jti?: string;
 }
 
 export interface LoginResult {

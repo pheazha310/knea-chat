@@ -51,7 +51,8 @@ export class PlatformMetricRepository {
          (SELECT COUNT(*) FROM tasks) AS tasks,
          (SELECT COUNT(*) FROM meetings) AS meetings,
          (SELECT COUNT(*) FROM announcements) AS announcements,
-         (SELECT COUNT(*) FROM user_sessions WHERE expires_at > NOW()) AS active_sessions`,
+         (SELECT COUNT(*) FROM user_sessions
+          WHERE expires_at > NOW() AND logged_out_at IS NULL) AS active_sessions`,
     );
     const row = rows[0] || ({} as CountRow);
     const num = (value: unknown): number => Number(value) || 0;
