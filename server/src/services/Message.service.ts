@@ -7,6 +7,7 @@ import type { ReactionRepository } from '../repositories/reactionRepository';
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import type { NotificationRepository } from '../repositories/notificationRepository';
 import type { NotificationPreferenceService } from './NotificationPreference.service';
+import type { ExternalContactRepository } from '../repositories/externalContactRepository';
 import { extractMentionedUserIds } from '../utils/mentions.utils';
 import type {
   CreateFileMessageData,
@@ -22,7 +23,32 @@ export class MessageService {
     private conversationRepository: ConversationRepository,
     private notificationRepository: NotificationRepository,
     private notificationPreferences?: NotificationPreferenceService | null,
+    private externalContactRepository?: ExternalContactRepository | null,
   ) {}
+
+  /**
+   * Omni-channel guard: external conversations (e.g. Telegram) are handled by
+   * their channel adapter (POST /api/telegram/messages). Silently persisting
+   * a message here would leave the customer without a reply, so reject it.
+   * Fails open when the external tables are missing (migration 024 not yet
+   * applied) so pre-existing message flows keep working unchanged.
+   */
+  private async assertNotExternalConversation(conversationId: number): Promise<void> {
+    if (!this.externalContactRepository) return;
+    try {
+      const external = await this.externalContactRepository.findByConversationId(conversationId);
+      if (external) {
+        throw new Error('External channel conversations must be replied to through the channel endpoint');
+      }
+    } catch (error) {
+      const message = (error as { message?: string }).message || '';
+      if (message.includes("doesn't exist")) {
+        // external_conversations table not migrated yet — nothing to guard.
+        return;
+      }
+      throw error;
+    }
+  }
 
   /**
    * Authorization rule for message access. Team conversations are restricted
@@ -111,6 +137,7 @@ export class MessageService {
       throw new Error('Conversation not found');
     }
 
+    await this.assertNotExternalConversation(conversation_id);
     await this.assertConversationAccess(conversation, sender_id);
 
     const createdId = await this.messageRepository.create({
@@ -166,6 +193,7 @@ export class MessageService {
     if (!targetConversation) {
       throw new Error('Target conversation not found');
     }
+    await this.assertNotExternalConversation(targetConversationId);
 
     const sourceConversation = await this.conversationRepository.findById(source.conversation_id);
     if (sourceConversation) {
@@ -212,6 +240,7 @@ export class MessageService {
       throw new Error('Conversation not found');
     }
 
+    await this.assertNotExternalConversation(conversation_id);
     await this.assertConversationAccess(conversation, sender_id);
 
     const { file_name, file_url, file_type, file_size } = file;

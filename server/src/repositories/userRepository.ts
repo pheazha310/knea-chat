@@ -107,6 +107,17 @@ export class UserRepository {
     return rows.map((row) => row.id);
   }
 
+  /**
+   * Ids of every non-external user (active internal accounts). Used to
+   * auto-join omni-channel inbox conversations to all agents.
+   */
+  async findInternalUserIds(): Promise<number[]> {
+    const rows = await this.db.query<Array<{ id: number }>>(
+      "SELECT id FROM users WHERE role <> 'external' AND is_active = 1",
+    );
+    return rows.map((row) => row.id);
+  }
+
   async search(companyId: number, search: string, limit = 20): Promise<UserRow[]> {
     return this.db.query<UserRow[]>(
       'SELECT id, first_name, last_name, email, role, job_title, profile_picture, status FROM users WHERE company_id = ? AND (first_name LIKE ? OR last_name LIKE ? OR email LIKE ?) AND is_active = 1 LIMIT ?',

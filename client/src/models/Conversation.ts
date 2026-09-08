@@ -21,6 +21,12 @@ export interface Conversation {
   members?: ConversationMember[];
   created_at?: string;
   updated_at?: string;
+  /** Omni-channel adapter backing this conversation (e.g. 'telegram'). */
+  channel?: string;
+  /** Agent assigned to this omni-channel conversation (nullable). */
+  assigned_agent_id?: number | null;
+  /** Display name of the assigned agent. */
+  assigned_agent_name?: string | null;
 }
 
 export const ConversationModel = {

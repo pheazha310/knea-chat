@@ -34,6 +34,7 @@ import { createAuditLogRouter } from './routes/auditLog.routes';
 import { createCompanySettingRouter } from './routes/companySetting.routes';
 import { createSubscriptionRouter } from './routes/subscription.routes';
 import { createPlatformMetricRouter } from './routes/platformMetric.routes';
+import { createTelegramRouter } from './integrations/telegram/telegram.routes';
 
 export const app = express();
 
@@ -54,7 +55,9 @@ app.use(
     },
     credentials: true,
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    // X-Telegram-Bot-Api-Secret-Token is sent by Telegram's webhook deliveries
+    // and by local browser tooling while testing the webhook endpoint.
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token'],
   }),
 );
 
@@ -82,6 +85,12 @@ app.get('/api/health', (req, res) => {
     timestamp: new Date().toISOString(),
   });
 });
+
+// ============ TELEGRAM (Omni-Channel) ============
+// The webhook + health routes are public (Telegram calls the webhook; health
+// reveals no secrets); the reply and webhook-administration routes apply their
+// own auth inside the router.
+app.use('/api/telegram', createTelegramRouter(container.telegramController, container.auth));
 
 // ============ PROTECTED ROUTES (Authentication Required) ============
 // All routes below require authentication

@@ -1,6 +1,6 @@
 /** Auth types — the JWT payload and the authenticated-user shape on req.user. */
 
-export type Role = 'super_admin' | 'admin' | 'manager' | 'employee';
+export type Role = 'super_admin' | 'admin' | 'manager' | 'employee' | 'external';
 
 export interface AuthUser {
   id: number;

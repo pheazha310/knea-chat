@@ -82,6 +82,10 @@ export interface WsEventMap {
     data: { userId: number; profilePicture: string | null };
   };
   user_status_changed: { type: 'user_status_changed'; data: PresenceData & { status: string } };
+  telegram_assignment_changed: {
+    type: 'telegram_assignment_changed';
+    data: { conversationId: number; assignedAgentId: number | null };
+  };
   workspace_changed: {
     type: 'workspace_changed';
     data: { kind: 'teams' | 'channels' };

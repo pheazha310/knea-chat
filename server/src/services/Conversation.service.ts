@@ -5,6 +5,7 @@
 import type { ConversationRepository } from '../repositories/conversationRepository';
 import type { MessageRepository } from '../repositories/messageRepository';
 import type { UserRepository } from '../repositories/userRepository';
+import type { ExternalContactRepository } from '../repositories/externalContactRepository';
 import type { ChannelRepository } from '../repositories/channelRepository';
 import type { ChannelMemberRepository } from '../repositories/channelMemberRepository';
 import type { TeamRepository } from '../repositories/teamRepository';
@@ -20,6 +21,7 @@ export class ConversationService {
     private channelMemberRepository: ChannelMemberRepository,
     private teamRepository: TeamRepository,
     private teamMemberRepository: TeamMemberRepository,
+    private externalContactRepository?: ExternalContactRepository | null,
   ) {}
 
   async getConversations(filters: {
@@ -55,6 +57,7 @@ export class ConversationService {
     for (const conv of accessible) {
       conv.members = await this.conversationRepository.findMembers(conv.id);
     }
+    await this.attachChannel(accessible);
 
     return {
       conversations: accessible,
@@ -100,6 +103,7 @@ export class ConversationService {
     if (userId) {
       await this.assertCanAccess(conversation, userId);
     }
+    await this.attachChannel([conversation]);
     return conversation;
   }
 
@@ -180,8 +184,50 @@ export class ConversationService {
 
     const conversation = (await this.conversationRepository.findById(conversationId)) as Conversation;
     conversation.members = await this.conversationRepository.findMembers(conversationId);
+    await this.attachChannel([conversation]);
 
     return conversation;
+  }
+
+  /**
+   * Tag conversations that are backed by an omni-channel adapter (e.g.
+   * 'telegram') so the inbox can render and route them appropriately. The
+   * conversation row itself stays untouched — this is response decoration
+   * only.
+   */
+  private async attachChannel(conversations: ConversationRow[]): Promise<void> {
+    if (!this.externalContactRepository || conversations.length === 0) return;
+    try {
+      const rows = await this.externalContactRepository.findByConversationIds(
+        conversations.map((c) => c.id),
+      );
+      const byConversationId = new Map(rows.map((r) => [r.conversation_id, r]));
+
+      // Resolve assigned-agent names in one batch for inbox rendering.
+      const agentIds = rows
+        .map((r) => r.assigned_agent_id)
+        .filter((id): id is number => id !== null && id !== undefined);
+      const agents = agentIds.length ? await this.userRepository.findByIds(agentIds) : [];
+      const agentNames = new Map(
+        agents.map((a) => [a.id, `${a.first_name} ${a.last_name}`.trim()]),
+      );
+
+      for (const conv of conversations) {
+        const row = byConversationId.get(conv.id);
+        if (row) {
+          conv.channel = row.channel;
+          conv.assigned_agent_id = row.assigned_agent_id;
+          conv.assigned_agent_name =
+            row.assigned_agent_id != null ? agentNames.get(row.assigned_agent_id) || null : null;
+        }
+      }
+    } catch (error) {
+      // Fail open when the external tables are missing (migration 024 not yet
+      // applied) so existing conversation listing keeps working unchanged.
+      const message = (error as { message?: string }).message || '';
+      if (message.includes("doesn't exist")) return;
+      throw error;
+    }
   }
 
   /**

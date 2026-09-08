@@ -8,6 +8,7 @@ export * from './Channel';
 export * from './Company';
 export * from './Conversation';
 export * from './Department';
+export * from './ExternalContact';
 export * from './Message';
 export * from './Notification';
 export * from './NotificationPreference';

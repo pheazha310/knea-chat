@@ -152,6 +152,8 @@ const Dashboard = () => {
     openTeamConversation,
     openConversationById,
     sendMessage,
+    assignConversation,
+    unassignConversation,
     sendTyping,
     updateMessage,
     deleteMessage,
@@ -1177,6 +1179,10 @@ const Dashboard = () => {
               onOpenConversation={handleOpenConversation}
               onOpenDirect={handleSelectPerson}
               onCreateChat={() => setShowChatModal(true)}
+              onAssignConversation={(id, agentId) =>
+                void assignConversation(id, agentId)
+              }
+              onUnassignConversation={(id) => void unassignConversation(id)}
             />
           ) : view === "channels" ? (
             <ChannelsView

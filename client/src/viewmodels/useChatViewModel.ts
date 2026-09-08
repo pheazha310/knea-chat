@@ -86,6 +86,8 @@ export function useChatViewModel() {
     openTeamConversation: chat.openTeamConversation,
     openConversationById: chat.openConversationById,
     sendMessage: chat.sendMessage,
+    assignConversation: chat.assignConversation,
+    unassignConversation: chat.unassignConversation,
     sendDirectMessage: chat.sendDirectMessage,
     sendTyping: chat.sendTyping,
     updateMessage: chat.sendMessageEdit,

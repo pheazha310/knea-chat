@@ -207,6 +207,16 @@ export function registerWsListeners(): () => void {
     }),
   );
 
+  // --- Omni-channel assignment (telegram claim/unclaim) ---------------------
+  // Server pushes `telegram_assignment_changed` when an agent claims or
+  // releases an inbox conversation — refetch the list so every agent sees the
+  // fresh assignee.
+  unsubs.push(
+    wsService.on('telegram_assignment_changed', () => {
+      void useChatStore.getState().refreshConversations();
+    }),
+  );
+
   // --- Workspace (teams / channels) -----------------------------------------
   // The server broadcasts a lightweight `workspace_changed` notice whenever a
   // team or channel changes (create / update / delete / member ops). Clients

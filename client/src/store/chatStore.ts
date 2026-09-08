@@ -6,7 +6,7 @@
 // conversations). Real-time events from the WebSocket client are dispatched
 // here by wsListeners.ts, so the UI updates automatically.
 import { create } from "zustand";
-import { ChannelModel, ConversationModel, MessageModel } from "../models";
+import { ChannelModel, ConversationModel, MessageModel, TelegramModel } from "../models";
 import type {
   Channel,
   ChatMessage,
@@ -84,6 +84,12 @@ interface ChatState {
   load: () => Promise<void>;
   /** Refetch only the channels list (server applies per-user filtering). */
   refreshChannels: () => Promise<void>;
+  /** Refetch only the conversation list (used after assignment changes). */
+  refreshConversations: () => Promise<void>;
+  /** Claim (assign to self/another agent) a Telegram inbox conversation. */
+  assignConversation: (conversationId: number, agentId?: number) => Promise<void>;
+  /** Unassign the agent from a Telegram inbox conversation. */
+  unassignConversation: (conversationId: number) => Promise<void>;
   loadConversation: (
     conversationId: number,
     force?: boolean,
@@ -367,6 +373,33 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     await fetchChannels();
   },
 
+  refreshConversations: async () => {
+    try {
+      const res = await ConversationModel.getAll();
+      get().setConversations(res.data.data?.conversations || []);
+    } catch {
+      /* keep the current list on failure */
+    }
+  },
+
+  assignConversation: async (conversationId, agentId) => {
+    try {
+      await TelegramModel.assign(conversationId, agentId);
+      await get().refreshConversations();
+    } catch (err) {
+      set({ error: getErrorMessage(err, "Could not assign conversation") });
+    }
+  },
+
+  unassignConversation: async (conversationId) => {
+    try {
+      await TelegramModel.unassign(conversationId);
+      await get().refreshConversations();
+    } catch (err) {
+      set({ error: getErrorMessage(err, "Could not unassign conversation") });
+    }
+  },
+
   loadConversation: async (conversationId, force) => {
     // Only fetch when we have nothing cached yet (prevents stale partial state),
     // unless the caller explicitly asks for a fresh fetch (`force`).
@@ -538,6 +571,22 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   sendMessage: (conversationId, content, replyTo) => {
     const trimmed = content.trim();
     if (!trimmed) return;
+
+    // Omni-channel conversations (e.g. Telegram) are replied to through the
+    // channel endpoint: the server delivers to the customer, persists the
+    // outbound message and broadcasts it to the inbox agents.
+    const conv = get().conversations.find((c) => c.id === conversationId);
+    if (conv?.channel === "telegram") {
+      void TelegramModel.reply(conversationId, trimmed, replyTo)
+        .then((res) => {
+          const message = res.data?.data?.message;
+          if (message) get().addMessage(conversationId, message as ChatMessage);
+        })
+        .catch((err) => {
+          set({ error: getErrorMessage(err, "Could not send Telegram reply") });
+        });
+      return;
+    }
 
     // Sent over WebSocket; the server persists it and the ack/broadcast
     // handlers in wsListeners.ts append the stored message to the cache.

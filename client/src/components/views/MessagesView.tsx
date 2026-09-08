@@ -14,6 +14,10 @@ interface MessagesViewProps {
   onOpenConversation: (id: number) => void;
   onOpenDirect: (user: User) => void;
   onCreateChat: () => void;
+  /** Claim a Telegram inbox conversation for an agent (defaults to self). */
+  onAssignConversation: (id: number, agentId?: number) => void;
+  /** Release a Telegram inbox conversation. */
+  onUnassignConversation: (id: number) => void;
 }
 
 /** The other participant's name for a direct conversation. */
@@ -36,6 +40,8 @@ const MessagesView = ({
   onOpenConversation,
   onOpenDirect,
   onCreateChat,
+  onAssignConversation,
+  onUnassignConversation,
 }: MessagesViewProps) => {
   const recent = conversations.filter(
     (c) =>
@@ -93,10 +99,43 @@ const MessagesView = ({
                       {conv.type === 'group' && <em className="group-tag">Group</em>}
                       {conv.type === 'team' && <em className="group-tag">Team</em>}
                       {conv.type === 'channel' && <em className="group-tag">Channel</em>}
+                      {conv.channel === 'telegram' && (
+                        <em className="group-tag">Telegram</em>
+                      )}
                       {name}
                     </b>
                     <small className="list-row-preview">{previewOf(conv)}</small>
                   </span>
+                  {conv.channel === 'telegram' &&
+                    (conv.assigned_agent_name ? (
+                      <span className="row-meta">
+                        <em className="group-tag assigned-tag">
+                          Assigned: {conv.assigned_agent_name}
+                        </em>
+                        <button
+                          className="icon-btn-unassign"
+                          title="Unassign agent"
+                          aria-label="Unassign agent"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onUnassignConversation(conv.id);
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </span>
+                    ) : (
+                      <button
+                        className="claim-btn"
+                        title="Claim this conversation"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onAssignConversation(conv.id);
+                        }}
+                      >
+                        Claim
+                      </button>
+                    ))}
                   {unread > 0 && <span className="unread-dot">{unread}</span>}
                 </button>
               );

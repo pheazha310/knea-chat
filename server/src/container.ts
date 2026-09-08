@@ -42,6 +42,7 @@ import { HolidayRepository } from './repositories/holidayRepository';
 import { NotificationPreferenceRepository } from './repositories/notificationPreferenceRepository';
 import { TaskRepository } from './repositories/taskRepository';
 import { GlobalSearchRepository } from './repositories/globalSearchRepository';
+import { ExternalContactRepository } from './repositories/externalContactRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -71,6 +72,7 @@ import { LeaveService } from './services/Leave.service';
 import { HolidayService } from './services/Holiday.service';
 import { NotificationPreferenceService } from './services/NotificationPreference.service';
 import { TaskService } from './services/Task.service';
+import { TelegramInboxService } from './services/TelegramInbox.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -99,6 +101,10 @@ import { LeaveRequestController } from './controllers/leaveRequest.controller';
 import { HolidayController } from './controllers/holiday.controller';
 import { NotificationPreferenceController } from './controllers/notificationPreference.controller';
 import { TaskController } from './controllers/task.controller';
+
+// Telegram integration
+import telegramApi from './integrations/telegram/telegram.service';
+import { TelegramController } from './integrations/telegram/telegram.controller';
 
 // Middleware
 import { createAuthMiddleware } from './middleware/auth.middleware';
@@ -148,6 +154,7 @@ const holidayRepository = new HolidayRepository(db);
 const notificationPreferenceRepository = new NotificationPreferenceRepository(db);
 const taskRepository = new TaskRepository(db);
 const globalSearchRepository = new GlobalSearchRepository(db);
+const externalContactRepository = new ExternalContactRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -197,6 +204,7 @@ const conversationService = new ConversationService(
   channelMemberRepository,
   teamRepository,
   teamMemberRepository,
+  externalContactRepository,
 );
 const messageService = new MessageService(
   messageRepository,
@@ -204,6 +212,7 @@ const messageService = new MessageService(
   conversationRepository,
   notificationRepository,
   notificationPreferenceService,
+  externalContactRepository,
 );
 const companyService = new CompanyService(companyRepository);
 const searchService = new SearchService(messageRepository, userRepository, globalSearchRepository);
@@ -341,6 +350,21 @@ const notificationPreferenceController = new NotificationPreferenceController(no
 const taskController = new TaskController(taskService);
 
 // ---------------------------------------------------------------------------
+// Telegram omni-channel (controller → inbox service → repositories + API client)
+// ---------------------------------------------------------------------------
+const telegramInboxService = new TelegramInboxService(
+  telegramApi,
+  externalContactRepository,
+  userRepository,
+  companyRepository,
+  conversationRepository,
+  messageRepository,
+  messageService,
+  broadcastToConversation,
+);
+const telegramController = new TelegramController(telegramInboxService, telegramApi);
+
+// ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks and
 // the permission service for per-company capability overrides)
 // ---------------------------------------------------------------------------
@@ -383,6 +407,7 @@ export const container = {
   notificationPreferenceRepository,
   taskRepository,
   globalSearchRepository,
+  externalContactRepository,
   // services
   systemSettingService,
   auditLogService,
@@ -411,6 +436,7 @@ export const container = {
   holidayService,
   notificationPreferenceService,
   taskService,
+  telegramInboxService,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -445,6 +471,7 @@ export const container = {
   holidayController,
   notificationPreferenceController,
   taskController,
+  telegramController,
   attendanceEventPublisher,
   // middleware
   auth,
