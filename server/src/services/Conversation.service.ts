@@ -216,6 +216,7 @@ export class ConversationService {
         const row = byConversationId.get(conv.id);
         if (row) {
           conv.channel = row.channel;
+          conv.external_status = row.status;
           conv.assigned_agent_id = row.assigned_agent_id;
           conv.assigned_agent_name =
             row.assigned_agent_id != null ? agentNames.get(row.assigned_agent_id) || null : null;

@@ -61,6 +61,7 @@ import MeetingsView from "../components/views/MeetingsView";
 import AttendanceView from "../components/views/AttendanceView";
 import ManagerAttendanceView from "../components/views/ManagerAttendanceView";
 import TasksView from "../components/views/TasksView";
+import OmniInboxView from "../components/views/OmniInboxView";
 
 /** Shape used by the members panel (conversation members or user fallback). */
 type PanelMember = {
@@ -1179,6 +1180,18 @@ const Dashboard = () => {
               onOpenConversation={handleOpenConversation}
               onOpenDirect={handleSelectPerson}
               onCreateChat={() => setShowChatModal(true)}
+              onAssignConversation={(id, agentId) =>
+                void assignConversation(id, agentId)
+              }
+              onUnassignConversation={(id) => void unassignConversation(id)}
+            />
+          ) : view === "omni" ? (
+            <OmniInboxView
+              conversations={conversations}
+              currentUserId={currentUserId}
+              messages={messages}
+              unreadMap={unreadByConversation}
+              onOpenConversation={handleOpenConversation}
               onAssignConversation={(id, agentId) =>
                 void assignConversation(id, agentId)
               }

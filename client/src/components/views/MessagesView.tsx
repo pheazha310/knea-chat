@@ -14,9 +14,9 @@ interface MessagesViewProps {
   onOpenConversation: (id: number) => void;
   onOpenDirect: (user: User) => void;
   onCreateChat: () => void;
-  /** Claim a Telegram inbox conversation for an agent (defaults to self). */
+  /** Claim an omni-channel inbox conversation for an agent (defaults to self). */
   onAssignConversation: (id: number, agentId?: number) => void;
-  /** Release a Telegram inbox conversation. */
+  /** Release an omni-channel inbox conversation. */
   onUnassignConversation: (id: number) => void;
 }
 
@@ -83,7 +83,19 @@ const MessagesView = ({
                 (other ? unreadMap[`user:${other.id}`] || 0 : 0);
               const name = otherName(conv, currentUserId);
               return (
-                <button key={conv.id} className="list-row" onClick={() => onOpenConversation(conv.id)}>
+                <div
+                  key={conv.id}
+                  className="list-row"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => onOpenConversation(conv.id)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onOpenConversation(conv.id);
+                    }
+                  }}
+                >
                   {conv.type === 'team' || conv.type === 'channel' ? (
                     <span className="team-row-icon">
                       <Icon
@@ -99,14 +111,14 @@ const MessagesView = ({
                       {conv.type === 'group' && <em className="group-tag">Group</em>}
                       {conv.type === 'team' && <em className="group-tag">Team</em>}
                       {conv.type === 'channel' && <em className="group-tag">Channel</em>}
-                      {conv.channel === 'telegram' && (
-                        <em className="group-tag">Telegram</em>
+                      {conv.channel && (
+                        <em className="group-tag">{conv.channel}</em>
                       )}
                       {name}
                     </b>
                     <small className="list-row-preview">{previewOf(conv)}</small>
                   </span>
-                  {conv.channel === 'telegram' &&
+                  {conv.channel &&
                     (conv.assigned_agent_name ? (
                       <span className="row-meta">
                         <em className="group-tag assigned-tag">
@@ -137,7 +149,7 @@ const MessagesView = ({
                       </button>
                     ))}
                   {unread > 0 && <span className="unread-dot">{unread}</span>}
-                </button>
+                </div>
               );
             })}
           </div>
@@ -154,7 +166,19 @@ const MessagesView = ({
             const name = `${person.first_name} ${person.last_name}`;
             const unread = unreadMap[`user:${person.id}`] || 0;
             return (
-              <button key={person.id} className="list-row" onClick={() => onOpenDirect(person)}>
+              <div
+                key={person.id}
+                className="list-row"
+                role="button"
+                tabIndex={0}
+                onClick={() => onOpenDirect(person)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onOpenDirect(person);
+                  }
+                }}
+              >
                 <Avatar person={person} className="small" showStatus />
                 <span className="list-row-main">
                   <b>{name}</b>
@@ -162,7 +186,7 @@ const MessagesView = ({
                 </span>
                 {person.status === 'online' && <span className="online-chip">Online</span>}
                 {unread > 0 && <span className="unread-dot">{unread}</span>}
-              </button>
+              </div>
             );
           })}
         </div>

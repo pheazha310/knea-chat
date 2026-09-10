@@ -18,6 +18,8 @@ export interface ConversationRow {
   last_message_at?: Date | string | null;
   /** Omni-channel adapter backing this conversation (e.g. 'telegram'). */
   channel?: string;
+  /** Inbox status of an external conversation ('open' | 'closed'). */
+  external_status?: 'open' | 'closed' | null;
   /** Agent assigned to this omni-channel conversation (nullable). */
   assigned_agent_id?: number | null;
   /** Display name of the assigned agent (resolved for inbox rendering). */

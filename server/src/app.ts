@@ -35,6 +35,8 @@ import { createCompanySettingRouter } from './routes/companySetting.routes';
 import { createSubscriptionRouter } from './routes/subscription.routes';
 import { createPlatformMetricRouter } from './routes/platformMetric.routes';
 import { createTelegramRouter } from './integrations/telegram/telegram.routes';
+import { createWebsiteRouter } from './integrations/website/website.routes';
+import { createOmniRouter } from './integrations/omni/omni.routes';
 
 export const app = express();
 
@@ -86,7 +88,19 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// ============ TELEGRAM (Omni-Channel) ============
+// ============ OMNI-CHANNEL ============
+// Generic channel surface: shared inbox actions (assign / status / reply) +
+// per-channel health probes. Channel webhooks are mounted by each channel's
+// own router (see the Website and Telegram sections below) so every webhook
+// keeps its provider-specific secret validation.
+app.use('/api/omni', createOmniRouter(container.omniController, container.auth));
+
+// ============ WEBSITE (Omni-Channel) ==========
+// The webhook + health routes are public; the reply and administration routes
+// apply their own auth inside the router.
+app.use('/api/website', createWebsiteRouter(container.websiteController, container.auth));
+
+// ============ TELEGRAM (Omni-Channel) ==========
 // The webhook + health routes are public (Telegram calls the webhook; health
 // reveals no secrets); the reply and webhook-administration routes apply their
 // own auth inside the router.

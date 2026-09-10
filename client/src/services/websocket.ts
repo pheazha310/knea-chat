@@ -86,6 +86,15 @@ export interface WsEventMap {
     type: 'telegram_assignment_changed';
     data: { conversationId: number; assignedAgentId: number | null };
   };
+  // --- Omni-channel (shared by every external channel adapter) --------------
+  omni_assignment_changed: {
+    type: 'omni_assignment_changed';
+    data: { conversationId: number; assignedAgentId: number | null };
+  };
+  omni_conversation_status_changed: {
+    type: 'omni_conversation_status_changed';
+    data: { conversationId: number; status: 'open' | 'closed' };
+  };
   workspace_changed: {
     type: 'workspace_changed';
     data: { kind: 'teams' | 'channels' };

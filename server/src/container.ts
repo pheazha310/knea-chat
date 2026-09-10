@@ -72,7 +72,7 @@ import { LeaveService } from './services/Leave.service';
 import { HolidayService } from './services/Holiday.service';
 import { NotificationPreferenceService } from './services/NotificationPreference.service';
 import { TaskService } from './services/Task.service';
-import { TelegramInboxService } from './services/TelegramInbox.service';
+import { OmniChannelService } from './services/OmniChannel.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -102,9 +102,14 @@ import { HolidayController } from './controllers/holiday.controller';
 import { NotificationPreferenceController } from './controllers/notificationPreference.controller';
 import { TaskController } from './controllers/task.controller';
 
-// Telegram integration
+// Omni-channel integrations (channel adapters + shared engine)
 import telegramApi from './integrations/telegram/telegram.service';
+import { TelegramChannelAdapter } from './integrations/telegram/telegram.adapter';
+import { WebsiteChannelAdapter } from './integrations/website/website.adapter';
+import { ChannelRegistry } from './integrations/omni/channelRegistry';
 import { TelegramController } from './integrations/telegram/telegram.controller';
+import { WebsiteController } from './integrations/website/website.controller';
+import { OmniController } from './integrations/omni/omni.controller';
 
 // Middleware
 import { createAuthMiddleware } from './middleware/auth.middleware';
@@ -350,10 +355,15 @@ const notificationPreferenceController = new NotificationPreferenceController(no
 const taskController = new TaskController(taskService);
 
 // ---------------------------------------------------------------------------
-// Telegram omni-channel (controller → inbox service → repositories + API client)
+// Omni-channel (channel adapters → registry → shared engine → controllers)
+// Adding a channel = register one more adapter here; the engine is unchanged.
 // ---------------------------------------------------------------------------
-const telegramInboxService = new TelegramInboxService(
-  telegramApi,
+const channelRegistry = new ChannelRegistry();
+channelRegistry.register(new TelegramChannelAdapter(telegramApi));
+channelRegistry.register(new WebsiteChannelAdapter());
+
+const omniService = new OmniChannelService(
+  channelRegistry,
   externalContactRepository,
   userRepository,
   companyRepository,
@@ -362,7 +372,9 @@ const telegramInboxService = new TelegramInboxService(
   messageService,
   broadcastToConversation,
 );
-const telegramController = new TelegramController(telegramInboxService, telegramApi);
+const telegramController = new TelegramController(omniService);
+const websiteController = new WebsiteController(omniService);
+const omniController = new OmniController(omniService);
 
 // ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks and
@@ -436,7 +448,8 @@ export const container = {
   holidayService,
   notificationPreferenceService,
   taskService,
-  telegramInboxService,
+  omniService,
+  channelRegistry,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -472,6 +485,8 @@ export const container = {
   notificationPreferenceController,
   taskController,
   telegramController,
+  websiteController,
+  omniController,
   attendanceEventPublisher,
   // middleware
   auth,

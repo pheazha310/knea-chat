@@ -6,7 +6,7 @@
 // conversations). Real-time events from the WebSocket client are dispatched
 // here by wsListeners.ts, so the UI updates automatically.
 import { create } from "zustand";
-import { ChannelModel, ConversationModel, MessageModel, TelegramModel } from "../models";
+import { ChannelModel, ConversationModel, MessageModel, OmniModel } from "../models";
 import type {
   Channel,
   ChatMessage,
@@ -90,6 +90,8 @@ interface ChatState {
   assignConversation: (conversationId: number, agentId?: number) => Promise<void>;
   /** Unassign the agent from a Telegram inbox conversation. */
   unassignConversation: (conversationId: number) => Promise<void>;
+  /** Apply an external conversation's inbox status from a WebSocket event. */
+  applyOmniStatus: (conversationId: number, status: 'open' | 'closed') => void;
   loadConversation: (
     conversationId: number,
     force?: boolean,
@@ -384,7 +386,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   assignConversation: async (conversationId, agentId) => {
     try {
-      await TelegramModel.assign(conversationId, agentId);
+      await OmniModel.assign(conversationId, agentId);
       await get().refreshConversations();
     } catch (err) {
       set({ error: getErrorMessage(err, "Could not assign conversation") });
@@ -393,12 +395,19 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   unassignConversation: async (conversationId) => {
     try {
-      await TelegramModel.unassign(conversationId);
+      await OmniModel.unassign(conversationId);
       await get().refreshConversations();
     } catch (err) {
       set({ error: getErrorMessage(err, "Could not unassign conversation") });
     }
   },
+
+  applyOmniStatus: (conversationId, status) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId ? { ...c, external_status: status } : c,
+      ),
+    })),
 
   loadConversation: async (conversationId, force) => {
     // Only fetch when we have nothing cached yet (prevents stale partial state),
@@ -572,18 +581,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
     const trimmed = content.trim();
     if (!trimmed) return;
 
-    // Omni-channel conversations (e.g. Telegram) are replied to through the
+    // Omni-channel conversations are replied to through the
     // channel endpoint: the server delivers to the customer, persists the
     // outbound message and broadcasts it to the inbox agents.
     const conv = get().conversations.find((c) => c.id === conversationId);
-    if (conv?.channel === "telegram") {
-      void TelegramModel.reply(conversationId, trimmed, replyTo)
+    if (conv?.channel) {
+      void OmniModel.reply(conversationId, trimmed, replyTo)
         .then((res) => {
           const message = res.data?.data?.message;
           if (message) get().addMessage(conversationId, message as ChatMessage);
         })
         .catch((err) => {
-          set({ error: getErrorMessage(err, "Could not send Telegram reply") });
+          set({ error: getErrorMessage(err, `Could not send ${conv.channel} reply`) });
         });
       return;
     }

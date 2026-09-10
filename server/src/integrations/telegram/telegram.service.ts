@@ -5,7 +5,7 @@
  *   getMe / sendMessage / setWebhook / deleteWebhook / getWebhookInfo.
  *
  * It contains NO database logic and NO Express request/response logic — the
- * application layer (TelegramInboxService) orchestrates contacts, conversations
+ * application layer (OmniChannelService) orchestrates contacts, conversations
  * and messages on top of this client.
  *
  * Security notes:

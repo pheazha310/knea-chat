@@ -6,7 +6,7 @@ import Avatar from '../common/Avatar';
 import Modal from '../modals/Modal';
 import type { User } from '../../models';
 
-export type AppView = 'home' | 'search' | 'messages' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'attendance' | 'tasks' | 'notifs' | 'bookmarks' | 'files' | 'settings';
+export type AppView = 'home' | 'search' | 'messages' | 'omni' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'attendance' | 'tasks' | 'notifs' | 'bookmarks' | 'files' | 'settings';
 
 interface NavItemBase {
   label: string;
@@ -43,6 +43,7 @@ const NAV_GROUPS: NavGroup[] = [
     title: 'Communication',
     items: [
       { kind: 'view', id: 'messages', label: 'Messages', icon: 'message' },
+      { kind: 'view', id: 'omni', label: 'Omni Inbox', icon: 'external' },
       { kind: 'view', id: 'channels', label: 'Channels', icon: 'hash' },
       { kind: 'view', id: 'teams', label: 'Teams', icon: 'grid' },
       { kind: 'view', id: 'announcements', label: 'Announcements', icon: 'megaphone' },

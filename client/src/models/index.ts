@@ -28,3 +28,4 @@ export * from './AuditLog';
 export * from './Subscription';
 export * from './PlatformMetric';
 export * from './Telegram';
+export * from './Omni';

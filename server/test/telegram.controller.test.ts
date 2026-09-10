@@ -1,11 +1,10 @@
 'use strict';
 
-import { describe, it, beforeEach } from 'node:test';
+import { describe, it, beforeEach, after } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { TelegramController } from '../src/integrations/telegram/telegram.controller';
-import type { TelegramService } from '../src/integrations/telegram/telegram.service';
-import type { TelegramInboxService } from '../src/services/TelegramInbox.service';
+import type { OmniChannelService } from '../src/services/OmniChannel.service';
 
 interface FakeRes {
   statusCode: number;
@@ -35,13 +34,12 @@ const makeRes = (): FakeRes => {
   return res;
 };
 
-const makeController = (overrides: Partial<Record<'handleWebhookUpdate', unknown>> = {}) => {
-  const inbox = {
-    handleWebhookUpdate: async () => null,
+const makeController = (overrides: Record<string, unknown> = {}) => {
+  const omni = {
+    processInbound: async () => ({ processed: 0, ignored: 0 }),
     ...overrides,
-  } as unknown as TelegramInboxService;
-  const telegramApi = { isConfigured: () => true } as unknown as TelegramService;
-  return new TelegramController(inbox, telegramApi);
+  } as unknown as OmniChannelService;
+  return new TelegramController(omni);
 };
 
 describe('TelegramController — webhook', () => {
@@ -65,9 +63,9 @@ describe('TelegramController — webhook', () => {
   it('rejects a request with the wrong secret (401) without processing', async () => {
     let processed = false;
     const controller = makeController({
-      handleWebhookUpdate: async () => {
+      processInbound: async () => {
         processed = true;
-        return null;
+        return { processed: 1, ignored: 0 };
       },
     });
     const res = makeRes();
@@ -85,9 +83,9 @@ describe('TelegramController — webhook', () => {
   it('accepts a request with the correct secret and acknowledges with 200', async () => {
     let processed = false;
     const controller = makeController({
-      handleWebhookUpdate: async () => {
+      processInbound: async () => {
         processed = true;
-        return null;
+        return { processed: 1, ignored: 0 };
       },
     });
     const res = makeRes();
@@ -105,9 +103,9 @@ describe('TelegramController — webhook', () => {
   it('acknowledges malformed updates with 200 without processing', async () => {
     let processed = false;
     const controller = makeController({
-      handleWebhookUpdate: async () => {
+      processInbound: async () => {
         processed = true;
-        return null;
+        return { processed: 1, ignored: 0 };
       },
     });
     const res = makeRes();
@@ -124,7 +122,7 @@ describe('TelegramController — webhook', () => {
 
   it('never crashes the server when processing throws (logs + 500)', async () => {
     const controller = makeController({
-      handleWebhookUpdate: async () => {
+      processInbound: async () => {
         throw new Error('db down');
       },
     });
@@ -145,5 +143,83 @@ describe('TelegramController — webhook', () => {
     } else {
       process.env.TELEGRAM_WEBHOOK_SECRET = originalSecret;
     }
+  });
+});
+
+describe('TelegramController — setupWebhook', () => {
+  const originalUrl = process.env.TELEGRAM_WEBHOOK_URL;
+
+  after(() => {
+    if (originalUrl === undefined) {
+      delete process.env.TELEGRAM_WEBHOOK_URL;
+    } else {
+      process.env.TELEGRAM_WEBHOOK_URL = originalUrl;
+    }
+  });
+
+  it('defaults to the TELEGRAM_WEBHOOK_URL environment variable', async () => {
+    process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/api/telegram/webhook';
+    let calledWith = '';
+    const controller = makeController({
+      setupWebhook: async (_channel: string, url: string) => {
+        calledWith = url;
+        return { ok: true };
+      },
+    });
+    const res = makeRes();
+    const req = { body: {} } as never;
+
+    await controller.setupWebhook(req as never, res as unknown as never);
+
+    assert.equal(calledWith, 'https://example.com/api/telegram/webhook');
+    assert.equal(res.statusCode, 200);
+    assert.equal((res.body as { success: boolean }).success, true);
+  });
+
+  it('prefers a webhookUrl in the request body over the environment', async () => {
+    process.env.TELEGRAM_WEBHOOK_URL = 'https://env.example.com/api/telegram/webhook';
+    let calledWith = '';
+    const controller = makeController({
+      setupWebhook: async (_channel: string, url: string) => {
+        calledWith = url;
+        return { ok: true };
+      },
+    });
+    const res = makeRes();
+    const req = {
+      body: { webhookUrl: 'https://posted.example.com/api/telegram/webhook' },
+    } as never;
+
+    await controller.setupWebhook(req as never, res as unknown as never);
+
+    assert.equal(calledWith, 'https://posted.example.com/api/telegram/webhook');
+    assert.equal(res.statusCode, 200);
+  });
+
+  it('rejects a non-HTTPS URL with 400', async () => {
+    process.env.TELEGRAM_WEBHOOK_URL = '';
+    const controller = makeController({
+      setupWebhook: async () => ({ ok: true }),
+    });
+    const res = makeRes();
+    const req = { body: { webhookUrl: 'http://insecure.example.com/webhook' } } as never;
+
+    await controller.setupWebhook(req as never, res as unknown as never);
+
+    assert.equal(res.statusCode, 400);
+  });
+
+  it('maps a Telegram rejection to 502', async () => {
+    process.env.TELEGRAM_WEBHOOK_URL = 'https://example.com/api/telegram/webhook';
+    const controller = makeController({
+      setupWebhook: async () => ({ ok: false, description: 'wrong url specified' }),
+    });
+    const res = makeRes();
+    const req = { body: {} } as never;
+
+    await controller.setupWebhook(req as never, res as unknown as never);
+
+    assert.equal(res.statusCode, 502);
+    assert.match((res.body as { message: string }).message, /wrong url specified/);
   });
 });

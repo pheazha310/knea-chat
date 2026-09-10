@@ -207,13 +207,24 @@ export function registerWsListeners(): () => void {
     }),
   );
 
-  // --- Omni-channel assignment (telegram claim/unclaim) ---------------------
-  // Server pushes `telegram_assignment_changed` when an agent claims or
+  // --- Omni-channel (telegram claim/unclaim + open/close) -------------------
+  // The server pushes `omni_assignment_changed` when an agent claims or
   // releases an inbox conversation — refetch the list so every agent sees the
-  // fresh assignee.
+  // fresh assignee. `telegram_assignment_changed` is kept as a legacy alias
+  // for older servers.
+  const refreshOnAssignment = () => {
+    void useChatStore.getState().refreshConversations();
+  };
+  unsubs.push(wsService.on('omni_assignment_changed', refreshOnAssignment));
+  unsubs.push(wsService.on('telegram_assignment_changed', refreshOnAssignment));
+
+  // Open/close is applied in place so the inbox badge updates immediately.
   unsubs.push(
-    wsService.on('telegram_assignment_changed', () => {
-      void useChatStore.getState().refreshConversations();
+    wsService.on('omni_conversation_status_changed', (payload) => {
+      const convId = payload?.data?.conversationId;
+      const status = payload?.data?.status;
+      if (convId === undefined || (status !== 'open' && status !== 'closed')) return;
+      useChatStore.getState().applyOmniStatus(Number(convId), status);
     }),
   );
 

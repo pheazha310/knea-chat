@@ -1023,6 +1023,121 @@ async function applyMigrations(admin) {
     console.log('🙂 Created task_reactions table (migration 026).');
   }
 
+  // Migration 027: Telegram omni-channel — external contacts, conversations,
+  // messages tables + the 'external' user role for shadow contact accounts.
+  const [roleColumnType] = await admin.query(
+    `SELECT COLUMN_TYPE FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'users' AND column_name = 'role'`,
+    [DB_NAME],
+  );
+  if (roleColumnType[0]?.COLUMN_TYPE && !roleColumnType[0].COLUMN_TYPE.includes('external')) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; ALTER TABLE users
+       MODIFY COLUMN role ENUM('super_admin','admin','manager','employee','external') NOT NULL DEFAULT 'employee';`,
+    );
+    console.log('🎫 Added external role to users.role (migration 027).');
+  }
+
+  // The dedicated company that hosts external-contact shadow users —
+  // OmniChannel.service refuses the first inbound message without it
+  // (mirrors migration 024 in database/migrations/).
+  const [omniCompany] = await admin.query(
+    `SELECT id FROM \`${DB_NAME}\`.companies WHERE domain = 'omni-channel.external' LIMIT 1`,
+  );
+  if (omniCompany.length === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; INSERT INTO companies (name, domain)
+       SELECT 'Omni-Channel External', 'omni-channel.external'
+       WHERE NOT EXISTS (SELECT 1 FROM companies WHERE domain = 'omni-channel.external');`,
+    );
+    console.log('🎫 Created Omni-Channel External company (migration 027).');
+  }
+
+  const [externalContactTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'external_contacts'`,
+    [DB_NAME],
+  );
+  if (externalContactTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE external_contacts (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        user_id BIGINT UNSIGNED NOT NULL,
+        channel VARCHAR(50) NOT NULL,
+        external_contact_id VARCHAR(191) NOT NULL,
+        username VARCHAR(255) NULL,
+        first_name VARCHAR(100) NULL,
+        last_name VARCHAR(100) NULL,
+        metadata JSON NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_external_contact_channel_id (channel, external_contact_id),
+        INDEX idx_external_contacts_channel (channel),
+        INDEX idx_external_contacts_user (user_id),
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🎫 Created external_contacts table (migration 027).');
+  }
+
+  const [externalConvTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'external_conversations'`,
+    [DB_NAME],
+  );
+  if (externalConvTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE external_conversations (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        conversation_id BIGINT UNSIGNED NOT NULL,
+        contact_id BIGINT UNSIGNED NOT NULL,
+        channel VARCHAR(50) NOT NULL,
+        status ENUM('open','closed') NOT NULL DEFAULT 'open',
+        assigned_agent_id BIGINT UNSIGNED NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_external_conversation_contact (contact_id, channel),
+        INDEX idx_external_conversations_conversation (conversation_id),
+        INDEX idx_external_conversations_channel (channel),
+        INDEX idx_external_conversations_agent (assigned_agent_id),
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE,
+        FOREIGN KEY (contact_id) REFERENCES external_contacts(id) ON DELETE CASCADE,
+        FOREIGN KEY (assigned_agent_id) REFERENCES users(id) ON DELETE SET NULL
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🎫 Created external_conversations table (migration 027).');
+  }
+
+  const [externalMsgTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'external_messages'`,
+    [DB_NAME],
+  );
+  if (externalMsgTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE external_messages (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        message_id BIGINT UNSIGNED NOT NULL,
+        conversation_id BIGINT UNSIGNED NOT NULL,
+        external_message_id VARCHAR(191) NULL,
+        channel VARCHAR(50) NOT NULL,
+        direction ENUM('inbound','outbound') NOT NULL,
+        sender_type ENUM('customer','agent','system') NOT NULL DEFAULT 'customer',
+        content TEXT NOT NULL,
+        external_timestamp DATETIME NULL,
+        metadata JSON NULL,
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_external_message_channel_id (channel, external_message_id),
+        INDEX idx_external_messages_conversation (conversation_id),
+        INDEX idx_external_messages_message (message_id),
+        INDEX idx_external_messages_channel (channel),
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    console.log('🎫 Created external_messages table (migration 027).');
+  }
+
   const [noteTables] = await admin.query(
     `SELECT COUNT(*) AS count FROM information_schema.tables
      WHERE table_schema = ? AND table_name = 'meeting_notes'`,

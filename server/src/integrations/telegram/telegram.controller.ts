@@ -1,32 +1,30 @@
 /**
- * TelegramController — HTTP handlers for the Telegram integration.
+ * TelegramController — HTTP handlers for the Telegram channel.
  *
- * The controller stays thin: it validates the request, delegates business
- * logic to TelegramInboxService (webhook orchestration, agent replies) or
- * TelegramService (health, webhook administration), and maps errors.
+ * Keeps Telegram's documented route surface (/api/telegram/*) while delegating
+ * ALL business logic to the channel-agnostic OmniChannelService — the same
+ * engine any future channel uses.
  *
- * All database and Telegram API logic lives in the services — never here.
+ * The controller stays thin: request validation, the Telegram webhook secret
+ * check, and error mapping only.
  */
 import type { Request, Response } from 'express';
-import type { TelegramInboxService } from '../../services/TelegramInbox.service';
-import type { TelegramService } from './telegram.service';
-import { TelegramApiError } from './telegram.service';
+import type { OmniChannelService } from '../../services/OmniChannel.service';
 import type { TelegramUpdate } from './telegram.types';
 
 /** Header Telegram sends with every webhook delivery (lower-cased by Express). */
 const WEBHOOK_SECRET_HEADER = 'x-telegram-bot-api-secret-token';
 
+const CHANNEL = 'telegram';
+
 export class TelegramController {
-  constructor(
-    private inboxService: TelegramInboxService,
-    private telegramService: TelegramService,
-  ) {}
+  constructor(private omniService: OmniChannelService) {}
 
   /**
    * POST /api/telegram/webhook
    *
    * 1. Validate the X-Telegram-Bot-Api-Secret-Token header (401 on mismatch).
-   * 2. Parse the update and delegate processing to the inbox service.
+   * 2. Delegate update processing to the omni-channel engine.
    * 3. Acknowledge quickly; never let an update crash the Express server.
    */
   webhook = async (req: Request, res: Response): Promise<void> => {
@@ -53,11 +51,8 @@ export class TelegramController {
       }
 
       try {
-        await this.inboxService.handleWebhookUpdate(update);
+        await this.omniService.processInbound(CHANNEL, update);
       } catch (error) {
-        // Log diagnostics without the token; acknowledge so Telegram does not
-        // retry an update that will fail again. Transient failures still get a
-        // 500 so Telegram's retry (with the dedupe guard) can re-deliver.
         const err = error as Error;
         console.error(`[telegram] Webhook processing failed: ${err.message}`);
         res.status(500).json({ success: false, message: 'Telegram update could not be processed' });
@@ -89,9 +84,9 @@ export class TelegramController {
         return;
       }
 
-      const message = await this.inboxService.sendAgentReply(
-        req.user!.id,
+      const message = await this.omniService.sendAgentReply(
         Number(conversationId),
+        req.user!.id,
         String(text),
         replyToMessageId ? Number(replyToMessageId) : null,
       );
@@ -102,10 +97,6 @@ export class TelegramController {
         data: { message },
       });
     } catch (error) {
-      if (error instanceof TelegramApiError) {
-        res.status(502).json({ success: false, message: error.message, errors: {} });
-        return;
-      }
       const statusCode = (error as { statusCode?: number }).statusCode;
       res.status(statusCode || 400).json({
         success: false,
@@ -132,7 +123,7 @@ export class TelegramController {
         return;
       }
       const agentId = req.body?.agentId ? Number(req.body.agentId) : req.user!.id;
-      const result = await this.inboxService.assignAgent(conversationId, req.user!.id, agentId);
+      const result = await this.omniService.assignAgent(conversationId, req.user!.id, agentId);
       res.status(200).json({
         success: true,
         message: 'Conversation assigned',
@@ -160,7 +151,7 @@ export class TelegramController {
         });
         return;
       }
-      const result = await this.inboxService.assignAgent(conversationId, req.user!.id, null);
+      const result = await this.omniService.assignAgent(conversationId, req.user!.id, null);
       res.status(200).json({
         success: true,
         message: 'Conversation unassigned',
@@ -182,36 +173,27 @@ export class TelegramController {
    */
   health = async (req: Request, res: Response): Promise<void> => {
     try {
-      const health = await this.inboxService.getHealth();
+      const health = await this.omniService.getHealth(CHANNEL);
       if (health.connected) {
         res.status(200).json({
           success: true,
-          channel: 'telegram',
+          channel: CHANNEL,
           connected: true,
-          bot: health.bot,
-        });
-        return;
-      }
-      if (!this.telegramService.isConfigured()) {
-        res.status(200).json({
-          success: false,
-          channel: 'telegram',
-          connected: false,
-          message: 'TELEGRAM_BOT_TOKEN is not configured',
+          bot: (health.info?.bot as { id?: number; username?: string }) || undefined,
         });
         return;
       }
       res.status(200).json({
         success: false,
-        channel: 'telegram',
+        channel: CHANNEL,
         connected: false,
-        message: 'Telegram API unreachable or bot token invalid',
+        message: 'Telegram bot is not configured or unreachable',
       });
     } catch (error) {
       console.error('[telegram] Health check error:', (error as Error).message);
       res.status(200).json({
         success: false,
-        channel: 'telegram',
+        channel: CHANNEL,
         connected: false,
         message: 'Telegram health check failed',
       });
@@ -221,16 +203,23 @@ export class TelegramController {
   /** POST /api/telegram/setup-webhook — admin only. */
   setupWebhook = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { webhookUrl } = req.body;
-      if (!webhookUrl || !/^https:\/\/.+/.test(String(webhookUrl))) {
+      // Default to TELEGRAM_WEBHOOK_URL when the client does not post one.
+      const webhookUrl =
+        String(req.body?.webhookUrl || '').trim() ||
+        process.env.TELEGRAM_WEBHOOK_URL ||
+        '';
+      if (!webhookUrl || !/^https:\/\/.+/.test(webhookUrl)) {
         res.status(400).json({
           success: false,
           message: 'A public HTTPS webhook URL is required',
-          errors: { webhookUrl: 'Must be an https:// URL' },
+          errors: {
+            webhookUrl:
+              'Set TELEGRAM_WEBHOOK_URL in the environment or pass {"webhookUrl": "https://..."}',
+          },
         });
         return;
       }
-      const result = await this.inboxService.setupWebhook(String(webhookUrl));
+      const result = await this.omniService.setupWebhook(CHANNEL, String(webhookUrl));
       if (!result || (result as { ok?: boolean }).ok === false) {
         res.status(502).json({
           success: false,
@@ -245,11 +234,8 @@ export class TelegramController {
         data: result,
       });
     } catch (error) {
-      if (error instanceof TelegramApiError) {
-        res.status(502).json({ success: false, message: error.message, errors: {} });
-        return;
-      }
-      res.status(500).json({
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      res.status(statusCode || 500).json({
         success: false,
         message: (error as Error).message,
         errors: {},
@@ -260,21 +246,18 @@ export class TelegramController {
   /** GET /api/telegram/webhook-info — admin only. */
   getWebhookInfo = async (req: Request, res: Response): Promise<void> => {
     try {
-      const result = await this.inboxService.getWebhookInfo();
+      const result = await this.omniService.getWebhookInfo(CHANNEL);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
-      if (error instanceof TelegramApiError) {
-        res.status(502).json({ success: false, message: error.message, errors: {} });
-        return;
-      }
-      res.status(500).json({ success: false, message: (error as Error).message, errors: {} });
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      res.status(statusCode || 500).json({ success: false, message: (error as Error).message, errors: {} });
     }
   };
 
   /** DELETE /api/telegram/webhook — admin only. */
   deleteWebhook = async (req: Request, res: Response): Promise<void> => {
     try {
-      const result = await this.inboxService.deleteWebhook();
+      const result = await this.omniService.deleteWebhook(CHANNEL);
       if (!result || (result as { ok?: boolean }).ok === false) {
         res.status(502).json({
           success: false,
@@ -285,11 +268,8 @@ export class TelegramController {
       }
       res.status(200).json({ success: true, message: 'Telegram webhook removed', data: result });
     } catch (error) {
-      if (error instanceof TelegramApiError) {
-        res.status(502).json({ success: false, message: error.message, errors: {} });
-        return;
-      }
-      res.status(500).json({ success: false, message: (error as Error).message, errors: {} });
+      const statusCode = (error as { statusCode?: number }).statusCode;
+      res.status(statusCode || 500).json({ success: false, message: (error as Error).message, errors: {} });
     }
   };
 }

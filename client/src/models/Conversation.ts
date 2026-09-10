@@ -27,6 +27,8 @@ export interface Conversation {
   assigned_agent_id?: number | null;
   /** Display name of the assigned agent. */
   assigned_agent_name?: string | null;
+  /** Inbox status for omni-channel conversations ('open' / 'closed'). */
+  external_status?: 'open' | 'closed' | null;
 }
 
 export const ConversationModel = {
