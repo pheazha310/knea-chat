@@ -22,6 +22,7 @@ import { createReminderRouter } from './routes/reminder.routes';
 import { createBookmarkMessageRouter, createBookmarkListRouter } from './routes/bookmark.routes';
 import { createSharedFileRouter } from './routes/sharedFile.routes';
 import { errorHandler } from './middleware/error.middleware';
+import { resolveUploadDir } from './utils/uploads';
 import { createMeetingRouter } from './routes/meeting.routes';
 import { createAttendanceRouter } from './routes/attendance.routes';
 import { createOvertimeRouter } from './routes/overtime.routes';
@@ -73,8 +74,9 @@ app.use((req, res, next) => {
   next();
 });
 
-// Serve uploaded files (SRS FR-17)
-app.use('/uploads', express.static(path.join(__dirname, '..', '..', 'uploads')));
+// Serve uploaded files (SRS FR-17). Writers and this route share
+// resolveUploadDir() so stored files and the static route can never diverge.
+app.use('/uploads', express.static(resolveUploadDir()));
 
 // ============ PUBLIC ROUTES (No Authentication Required) ============
 app.use('/api/auth', createAuthRouter(container.authController, container.auth));

@@ -12,14 +12,9 @@ import { sendToUser } from '../websocket/connection.registry';
 import multer from 'multer';
 import path from 'path';
 import fs from 'fs';
+import { resolveUploadDir } from '../utils/uploads';
 
-const UPLOAD_DIR = path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  process.env.UPLOAD_DIR || 'uploads',
-);
+const UPLOAD_DIR = resolveUploadDir();
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_FILE_TYPES = (

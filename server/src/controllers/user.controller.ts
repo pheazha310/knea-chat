@@ -17,17 +17,12 @@ import type { UserRepository } from '../repositories/userRepository';
 import { broadcastToAll } from '../websocket/broadcast.utils';
 import { wssRef } from '../websocket/websocket.server';
 import type { SystemSettingService } from '../services/SystemSetting.service';
+import { resolveUploadDir } from '../utils/uploads';
 
 // ---------------------------------------------------------------------------
 // Profile picture upload (SRS FR-17 pattern — store the file, save its URL)
 // ---------------------------------------------------------------------------
-const AVATAR_UPLOAD_DIR = path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  process.env.UPLOAD_DIR || 'uploads',
-);
+const AVATAR_UPLOAD_DIR = resolveUploadDir();
 fs.mkdirSync(AVATAR_UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_AVATAR_TYPES = ['jpg', 'jpeg', 'png', 'gif', 'webp'];

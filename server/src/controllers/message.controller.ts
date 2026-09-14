@@ -14,17 +14,12 @@ import type { SystemSettingService } from '../services/SystemSetting.service';
 import type { BroadcastToConversation } from '../websocket/broadcast.utils';
 import { serializeMessage } from '../websocket/message.utils';
 import { sendToUser } from '../websocket/connection.registry';
+import { resolveUploadDir } from '../utils/uploads';
 
 // ---------------------------------------------------------------------------
 // File upload configuration (SRS §19: validate file type and size)
 // ---------------------------------------------------------------------------
-const UPLOAD_DIR = path.join(
-  __dirname,
-  '..',
-  '..',
-  '..',
-  process.env.UPLOAD_DIR || 'uploads',
-);
+const UPLOAD_DIR = resolveUploadDir();
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
 
 const ALLOWED_FILE_TYPES = (

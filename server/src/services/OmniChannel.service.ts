@@ -20,6 +20,7 @@ import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
 import bcrypt from 'bcrypt';
+import { resolveUploadDir } from '../utils/uploads';
 import type { ExternalContactRow, ExternalConversationRow, OutgoingMessage } from '../types';
 import type { ChannelAdapter, OmniInboundMessage, OmniMedia } from '../integrations/omni/omni.types';
 import type { ChannelRegistry } from '../integrations/omni/channelRegistry';
@@ -379,12 +380,7 @@ export class OmniChannelService {
         return null;
       }
 
-      const uploadDir = path.join(
-        __dirname,
-        '..',
-        '..',
-        process.env.UPLOAD_DIR || 'uploads',
-      );
+      const uploadDir = resolveUploadDir();
       fs.mkdirSync(uploadDir, { recursive: true });
       const ext = path.extname(media.fileName).toLowerCase();
       const base = path
