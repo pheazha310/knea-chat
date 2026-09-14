@@ -276,6 +276,10 @@ describe('AnnouncementService.createAnnouncement', () => {
   });
 
   it('keeps a future-scheduled announcement unpublished and sends no notifications', async (t) => {
+    // Pin the clock so the fixture's schedule stays in the future no matter
+    // when the suite runs (a hardcoded date otherwise ages into the past and
+    // the service publishes immediately instead).
+    t.mock.timers.enable({ apis: ['Date'], now: Date.parse('2026-09-01T00:00:00Z') });
     const create = t.mock.method(announcementRepository, 'create', async () => 12);
     t.mock.method(announcementRepository, 'findById', async () =>
       makeAnnouncement({ id: 12, is_published: 0, scheduled_at: '2026-09-10T09:00:00Z' }));

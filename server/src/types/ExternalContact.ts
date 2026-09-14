@@ -27,6 +27,12 @@ export interface ExternalConversationRow {
   channel: string;
   status: 'open' | 'closed';
   assigned_agent_id: number | null;
+  /** Consecutive failed agent replies (0 = healthy). Migration 028. */
+  delivery_fail_count?: number;
+  /** Provider error description from the last failed reply. */
+  last_delivery_error?: string | null;
+  /** When the last failure was recorded. */
+  last_delivery_failure_at?: Date | string | null;
   created_at: Date | string;
   updated_at: Date | string;
 }

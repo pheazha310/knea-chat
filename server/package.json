@@ -20,6 +20,8 @@
     "test": "npm run build && node --test dist/test/*.test.js",
     "test:e2e": "node e2e/notifications.e2e.js",
     "test:e2e:avatar": "node e2e/avatar-upload.e2e.js",
+    "test:e2e:telegram": "node e2e/telegram-omni.e2e.js",
+    "test:e2e:omni-inbox": "node e2e/omni-inbox-browser.e2e.js",
     "test:e2e:permissions": "node e2e/permissions.e2e.js",
     "test:e2e:attendance": "node e2e/attendance.e2e.js",
     "test:e2e:files": "node e2e/shared-files.e2e.js",

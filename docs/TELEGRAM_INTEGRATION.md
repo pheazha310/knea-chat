@@ -252,6 +252,35 @@ The relevant tests live in `server/test/`:
 
 All Telegram API requests are mocked; no real bot token is used in tests.
 
+### End-to-end (real bot, local server)
+
+```bash
+npm run test:e2e:telegram
+```
+
+`server/e2e/telegram-omni.e2e.js` runs against a live backend and the real
+Telegram Bot API (health + webhook configuration are verified read-only; no
+tunnel required):
+
+- posts a synthetic customer message to the local webhook and asserts the
+  full inbound pipeline (persistence, WS `receive_message` + notification,
+  external ledger row),
+- asserts an agent reply to an unregistered Telegram chat fails with 502
+  "chat not found" and persists nothing (deliver-before-persist contract),
+- smoke-tests assignment + open/close on the omni conversation.
+
+Everything carries a unique per-run marker and is cleaned up afterwards; the
+synthetic customer ("E2E BotCustomer") is kept as a fixture so later runs
+reuse its conversation. `--keep` disables cleanup.
+
+The one path the script cannot exercise safely by default is a real outbound
+delivery (it would message a human's Telegram chat). Run it once the bot has
+a real conversation:
+
+```bash
+E2E_REAL_DELIVERY=1 npm run test:e2e:telegram
+```
+
 ## Media messages
 
 Photos, voice notes, documents, videos, audio and stickers sent by the

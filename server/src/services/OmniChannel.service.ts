@@ -197,7 +197,10 @@ export class OmniChannelService {
     if (existing) {
       if (existing.status === 'closed') {
         await this.externalRepository.updateConversationStatus(existing.conversation_id, 'open');
-        return { ...existing, status: 'open' };
+        // New inbound activity proves the customer's chat is reachable again —
+        // reset any recorded delivery failures alongside the reopen.
+        await this.externalRepository.clearDeliveryFailureOnReopen(existing.conversation_id);
+        return { ...existing, status: 'open', delivery_fail_count: 0, last_delivery_error: null, last_delivery_failure_at: null };
       }
       return existing;
     }
@@ -468,8 +471,31 @@ export class OmniChannelService {
     // Deliver through the channel first — only persist on success.
     const sent = await adapter.sendMessage(chatId, trimmed, { replyToExternalMessageId });
     if (!sent.ok) {
-      throw deliveryError(sent.description ?? 'Channel delivery failed');
+      const description = sent.description ?? 'Channel delivery failed';
+      // Surface the provider's own reason in the server log (the HTTP error
+      // body carries `description` to the agent; the code helps diagnosis —
+      // e.g. 400 chat not found, 403 bot blocked).
+      console.error(
+        `[omni:${external.channel}] Delivery failed for conversation ${conversationId} (chat ${chatId}${sent.errorCode ? `, code ${sent.errorCode}` : ''}): ${description}`,
+      );
+      // Record the failure so the inbox can flag conversations whose channel
+      // delivery keeps failing (migration 028 delivery health).
+      await this.externalRepository.recordDeliveryFailure(conversationId, description);
+      const deliveryFailCount = Number(external.delivery_fail_count ?? 0) + 1;
+      await this.broadcastToConversation(conversationId, {
+        type: 'omni_delivery_failed',
+        data: {
+          conversationId,
+          channel: external.channel,
+          deliveryFailCount,
+          lastDeliveryError: description.slice(0, 255),
+        },
+      });
+      throw deliveryError(description);
     }
+
+    // Delivery succeeded — reset any previously recorded failure state.
+    await this.externalRepository.clearDeliveryFailure(conversationId);
 
     const messageId = await this.messageRepository.create({
       conversation_id: conversationId,

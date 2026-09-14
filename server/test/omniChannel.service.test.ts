@@ -90,6 +90,30 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
       if (row) row.assigned_agent_id = agentId;
       return true;
     },
+    recordDeliveryFailure: async (conversationId: number, description: string) => {
+      const row = externalConversations.find((c) => c.conversation_id === conversationId);
+      if (row) {
+        row.delivery_fail_count = Number(row.delivery_fail_count ?? 0) + 1;
+        row.last_delivery_error = description.slice(0, 255);
+        row.last_delivery_failure_at = new Date();
+      }
+    },
+    clearDeliveryFailure: async (conversationId: number) => {
+      const row = externalConversations.find((c) => c.conversation_id === conversationId);
+      if (row) {
+        row.delivery_fail_count = 0;
+        row.last_delivery_error = null;
+        row.last_delivery_failure_at = null;
+      }
+    },
+    clearDeliveryFailureOnReopen: async (conversationId: number) => {
+      const row = externalConversations.find((c) => c.conversation_id === conversationId);
+      if (row) {
+        row.delivery_fail_count = 0;
+        row.last_delivery_error = null;
+        row.last_delivery_failure_at = null;
+      }
+    },
     findMessageByExternalId: async (_channel: string, externalMessageId: string) =>
       externalMessages.find((m) => m.external_message_id === externalMessageId) || null,
     findByMessageId: async (messageId: number) =>
@@ -435,6 +459,42 @@ describe('OmniChannelService — agent reply', () => {
       },
     );
     assert.equal(h.externalMessages.length, 1, 'only the inbound message persisted');
+  });
+
+  it('flags the conversation for the inbox when delivery fails (migration 028)', async () => {
+    h = makeHarness({
+      sendMessage: async () => ({ ok: false, description: 'chat not found', errorCode: 400 }),
+    });
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'Hello?'));
+
+    const row = h.externalConversations[0];
+    assert.equal(row.delivery_fail_count, 1);
+    assert.match(String(row.last_delivery_error), /chat not found/);
+    assert.ok(row.last_delivery_failure_at);
+
+    // A second failure increments the consecutive counter (not reset).
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'Hello again?'));
+    assert.equal(row.delivery_fail_count, 2);
+  });
+
+  it('clears the delivery-failure flag after a successful send', async () => {
+    let sendResult: { ok: boolean; description?: string; errorCode?: number } = {
+      ok: false,
+      description: 'chat not found',
+      errorCode: 400,
+    };
+    h = makeHarness({ sendMessage: async () => sendResult });
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'Hello?'));
+    assert.equal(h.externalConversations[0].delivery_fail_count, 1);
+
+    // The channel recovers (e.g. the customer finally contacted the bot).
+    sendResult = { ok: true };
+    await h.service.sendAgentReply(500, 7, 'Now it works');
+    assert.equal(h.externalConversations[0].delivery_fail_count, 0);
+    assert.equal(h.externalConversations[0].last_delivery_error, null);
   });
 });
 

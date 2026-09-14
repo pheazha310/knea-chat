@@ -164,6 +164,45 @@ export class ExternalContactRepository {
     return result.affectedRows > 0;
   }
 
+  /**
+   * Record a failed agent reply: increment the consecutive-failure counter
+   * and remember the provider's error (migration 028 delivery health).
+   */
+  async recordDeliveryFailure(conversationId: number, description: string): Promise<void> {
+    await this.db.query(
+      `UPDATE external_conversations
+       SET delivery_fail_count = delivery_fail_count + 1,
+           last_delivery_error = ?,
+           last_delivery_failure_at = NOW()
+       WHERE conversation_id = ?`,
+      [String(description || 'Channel delivery failed').slice(0, 255), conversationId],
+    );
+  }
+
+  /** Clear the delivery-failure state after a successful send. */
+  async clearDeliveryFailure(conversationId: number): Promise<void> {
+    await this.db.query(
+      `UPDATE external_conversations
+       SET delivery_fail_count = 0,
+           last_delivery_error = NULL,
+           last_delivery_failure_at = NULL
+       WHERE conversation_id = ? AND delivery_fail_count <> 0`,
+      [conversationId],
+    );
+  }
+
+  /** Reset the failure counter when the conversation reopens on new traffic. */
+  async clearDeliveryFailureOnReopen(conversationId: number): Promise<void> {
+    await this.db.query(
+      `UPDATE external_conversations
+       SET delivery_fail_count = 0,
+           last_delivery_error = NULL,
+           last_delivery_failure_at = NULL
+       WHERE conversation_id = ?`,
+      [conversationId],
+    );
+  }
+
   /** Find the external ledger entry for an internal message id (reply mapping). */
   async findByMessageId(messageId: number): Promise<ExternalMessageRow | null> {
     const rows = await this.db.query<ExternalMessageRow[]>(

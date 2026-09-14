@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import Avatar from '../common/Avatar';
 import Icon from '../common/Icon';
 import type { ChatMessage, Conversation, User } from '../../models';
@@ -34,7 +34,13 @@ const OmniInboxView = ({
   onAssignConversation,
   onUnassignConversation,
 }: OmniInboxViewProps) => {
-  const external = conversations.filter((c) => !!c.channel);
+  const [hideFailing, setHideFailing] = useState(false);
+
+  const allExternal = conversations.filter((c) => !!c.channel);
+  const isFailing = (conv: Conversation): boolean =>
+    Number(conv.delivery_fail_count ?? 0) > 0;
+  const failingCount = allExternal.filter(isFailing).length;
+  const external = hideFailing ? allExternal.filter((c) => !isFailing(c)) : allExternal;
 
   const previewOf = (conv: Conversation) => {
     const list = messages[conv.id];
@@ -49,6 +55,21 @@ const OmniInboxView = ({
           <h1>Omni Inbox</h1>
           <p>External conversations from all channels.</p>
         </div>
+        {failingCount > 0 && (
+          <button
+            className={`delivery-toggle${hideFailing ? ' active' : ''}`}
+            onClick={() => setHideFailing((v) => !v)}
+            title={
+              hideFailing
+                ? 'Show conversations with delivery problems'
+                : 'Hide conversations with delivery problems'
+            }
+          >
+            <Icon name="alert" size={13} />
+            {failingCount} delivery issue{failingCount > 1 ? 's' : ''}
+            {hideFailing ? ' · hidden' : ''}
+          </button>
+        )}
       </div>
 
       {external.length > 0 ? (
@@ -56,12 +77,17 @@ const OmniInboxView = ({
           {external.map((conv) => {
             const other = conv.members?.find((m) => m.id !== currentUserId);
             const unread = unreadMap[conv.id] || 0;
+            const failing = isFailing(conv);
+            const errorTitle = failing
+              ? `Delivery failing (${conv.delivery_fail_count} consecutive): ${conv.last_delivery_error || 'unknown error'}`
+              : undefined;
             return (
               <div
                 key={conv.id}
-                className="list-row"
+                className={`list-row${failing ? ' delivery-failing' : ''}`}
                 role="button"
                 tabIndex={0}
+                title={errorTitle}
                 onClick={() => onOpenConversation(conv.id)}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' || e.key === ' ') {
@@ -78,8 +104,21 @@ const OmniInboxView = ({
                       {conv.channel}
                     </em>
                     {conv.name}
+                    {failing && (
+                      <em
+                        className="group-tag delivery-warning-tag"
+                        title={errorTitle}
+                        aria-label={errorTitle}
+                      >
+                        <Icon name="alert" size={11} /> delivery failing
+                      </em>
+                    )}
                   </b>
-                  <small className="list-row-preview">{previewOf(conv)}</small>
+                  <small className="list-row-preview">
+                    {failing && conv.last_delivery_error
+                      ? `⚠ ${conv.last_delivery_error}`
+                      : previewOf(conv)}
+                  </small>
                 </span>
                 {conv.assigned_agent_name ? (
                   <span className="row-meta">
@@ -114,6 +153,13 @@ const OmniInboxView = ({
               </div>
             );
           })}
+        </div>
+      ) : hideFailing && failingCount > 0 ? (
+        <div className="empty-state">
+          <span className="empty-state-icon">
+            <Icon name="alert" size={18} />
+          </span>
+          All conversations hidden — {failingCount} with delivery problems.
         </div>
       ) : (
         <div className="empty-state">

@@ -220,6 +220,11 @@ export class ConversationService {
           conv.assigned_agent_id = row.assigned_agent_id;
           conv.assigned_agent_name =
             row.assigned_agent_id != null ? agentNames.get(row.assigned_agent_id) || null : null;
+          // Delivery health (migration 028): consecutive failed agent replies
+          // + the provider's last error, for inbox flagging/hiding.
+          conv.delivery_fail_count = Number(row.delivery_fail_count ?? 0);
+          conv.last_delivery_error = row.last_delivery_error ?? null;
+          conv.last_delivery_failure_at = row.last_delivery_failure_at ?? null;
         }
       }
     } catch (error) {

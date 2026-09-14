@@ -39,6 +39,8 @@ interface ChatState {
   reminders: Record<number, { id: number; remind_at: string } | null>;
   /** Bookmarked message ids for the current user. */
   bookmarkedMessageIds: Set<number>;
+  /** Hide omni conversations whose channel delivery keeps failing (inbox toggle). */
+  hideFailingDeliveries: boolean;
 
   // --- setters (used by loads and WebSocket listeners) ---
   setChannels: (channels: Channel[]) => void;
@@ -92,6 +94,13 @@ interface ChatState {
   unassignConversation: (conversationId: number) => Promise<void>;
   /** Apply an external conversation's inbox status from a WebSocket event. */
   applyOmniStatus: (conversationId: number, status: 'open' | 'closed') => void;
+  /** Apply a delivery-failure report from a WebSocket event. */
+  applyOmniDeliveryFailure: (
+    conversationId: number,
+    failure: { deliveryFailCount: number; lastDeliveryError: string | null },
+  ) => void;
+  /** Toggle whether delivery-failing conversations are hidden in the inbox. */
+  setHideFailing: (hide: boolean) => void;
   loadConversation: (
     conversationId: number,
     force?: boolean,
@@ -217,6 +226,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   viewingChat: false,
   reminders: {},
   bookmarkedMessageIds: new Set<number>(),
+  hideFailingDeliveries: false,
 
   setChannels: (channels) => set({ channels }),
   addChannel: (channel) =>
@@ -408,6 +418,21 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         c.id === conversationId ? { ...c, external_status: status } : c,
       ),
     })),
+
+  applyOmniDeliveryFailure: (conversationId, failure) =>
+    set((state) => ({
+      conversations: state.conversations.map((c) =>
+        c.id === conversationId
+          ? {
+              ...c,
+              delivery_fail_count: failure.deliveryFailCount,
+              last_delivery_error: failure.lastDeliveryError,
+            }
+          : c,
+      ),
+    })),
+
+  setHideFailing: (hide) => set({ hideFailingDeliveries: hide }),
 
   loadConversation: async (conversationId, force) => {
     // Only fetch when we have nothing cached yet (prevents stale partial state),

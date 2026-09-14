@@ -95,6 +95,15 @@ export interface WsEventMap {
     type: 'omni_conversation_status_changed';
     data: { conversationId: number; status: 'open' | 'closed' };
   };
+  omni_delivery_failed: {
+    type: 'omni_delivery_failed';
+    data: {
+      conversationId: number;
+      channel: string;
+      deliveryFailCount: number;
+      lastDeliveryError: string | null;
+    };
+  };
   workspace_changed: {
     type: 'workspace_changed';
     data: { kind: 'teams' | 'channels' };

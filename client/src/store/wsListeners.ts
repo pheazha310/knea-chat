@@ -228,6 +228,19 @@ export function registerWsListeners(): () => void {
     }),
   );
 
+  // Delivery failures arrive in real time so every agent's inbox can flag the
+  // conversation the moment an agent reply cannot reach the customer.
+  unsubs.push(
+    wsService.on('omni_delivery_failed', (payload) => {
+      const convId = payload?.data?.conversationId;
+      if (convId === undefined) return;
+      useChatStore.getState().applyOmniDeliveryFailure(Number(convId), {
+        deliveryFailCount: Number(payload?.data?.deliveryFailCount) || 1,
+        lastDeliveryError: payload?.data?.lastDeliveryError ?? null,
+      });
+    }),
+  );
+
   // --- Workspace (teams / channels) -----------------------------------------
   // The server broadcasts a lightweight `workspace_changed` notice whenever a
   // team or channel changes (create / update / delete / member ops). Clients

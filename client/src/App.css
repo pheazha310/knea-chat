@@ -2502,6 +2502,47 @@ body {
   background: var(--accent-border);
 }
 
+/* Omni inbox: delivery-health flagging (migration 028) */
+.delivery-warning-tag {
+  color: #92400e;
+  background: #fef3c7;
+  margin-left: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.delivery-warning-tag:hover {
+  background: #fde68a;
+}
+.list-row.delivery-failing {
+  background: rgba(254, 243, 199, 0.35);
+}
+.list-row.delivery-failing:hover {
+  background: rgba(254, 243, 199, 0.6);
+}
+.delivery-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #92400e;
+  background: #fef3c7;
+  border: 1px solid #fde68a;
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.delivery-toggle:hover {
+  background: #fde68a;
+}
+.delivery-toggle.active {
+  color: #fff;
+  background: #d97706;
+  border-color: #d97706;
+}
+
 /* Team conversation row icon (Messages view) */
 .team-row-icon {
   width: 24px;

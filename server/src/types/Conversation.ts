@@ -24,6 +24,12 @@ export interface ConversationRow {
   assigned_agent_id?: number | null;
   /** Display name of the assigned agent (resolved for inbox rendering). */
   assigned_agent_name?: string | null;
+  /** Consecutive failed agent replies through the channel (0 = healthy). */
+  delivery_fail_count?: number;
+  /** Provider error from the last failed reply (migration 028). */
+  last_delivery_error?: string | null;
+  /** When the last delivery failure was recorded. */
+  last_delivery_failure_at?: Date | string | null;
 }
 
 export interface ConversationMember {

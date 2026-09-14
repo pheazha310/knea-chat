@@ -29,6 +29,12 @@ export interface Conversation {
   assigned_agent_name?: string | null;
   /** Inbox status for omni-channel conversations ('open' / 'closed'). */
   external_status?: 'open' | 'closed' | null;
+  /** Consecutive failed agent replies through the channel (0 = healthy). */
+  delivery_fail_count?: number;
+  /** Provider error from the last failed reply (e.g. "chat not found"). */
+  last_delivery_error?: string | null;
+  /** When the last delivery failure was recorded. */
+  last_delivery_failure_at?: string | null;
 }
 
 export const ConversationModel = {

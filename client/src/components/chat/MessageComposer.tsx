@@ -38,6 +38,16 @@ const MessageComposer = ({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
 
+  // External-channel conversations (Telegram / omni inbox) accept text replies
+  // only — the server rejects file uploads there (files cannot be relayed
+  // through the channel adapter), so the composer hides the file entry points.
+  const isExternalChannel = !!active?.channel;
+  const fileBlockedNotice = () =>
+    showToast(
+      `Files can't be sent in ${active?.channel || "external channel"} conversations — type a reply instead`,
+      { type: "error" },
+    );
+
   // ---- voice messages (MediaRecorder → upload as a file) -------------------
   const [recording, setRecording] = useState(false);
   const [recordSeconds, setRecordSeconds] = useState(0);
@@ -163,6 +173,10 @@ const MessageComposer = ({
     e.preventDefault();
     dragDepth.current = 0;
     setDragOver(false);
+    if (isExternalChannel) {
+      fileBlockedNotice();
+      return;
+    }
     const file = e.dataTransfer.files?.[0];
     if (file && !uploading) onSendFile(file);
   };
@@ -301,6 +315,11 @@ const MessageComposer = ({
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    if (isExternalChannel) {
+      fileBlockedNotice();
+      e.target.value = "";
+      return;
+    }
     if (file && !uploading) onSendFile(file);
     e.target.value = "";
   };
@@ -308,6 +327,11 @@ const MessageComposer = ({
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const file = e.clipboardData?.files?.[0];
     if (file && !uploading) {
+      if (isExternalChannel) {
+        e.preventDefault();
+        fileBlockedNotice();
+        return;
+      }
       // Pasting an image/file from the clipboard attaches it instead of
       // dropping a broken path into the message text.
       e.preventDefault();
@@ -447,16 +471,18 @@ const MessageComposer = ({
                 <Icon name="calendar" size={15} />
               </button>
             )}
-            <button
-              type="button"
-              className="attach-button"
-              title={uploading ? "Uploading…" : "Attach a file"}
-              aria-label={uploading ? "Uploading file" : "Attach a file"}
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-            >
-              <Icon name="paperclip" size={15} />
-            </button>
+            {!isExternalChannel && (
+              <button
+                type="button"
+                className="attach-button"
+                title={uploading ? "Uploading…" : "Attach a file"}
+                aria-label={uploading ? "Uploading file" : "Attach a file"}
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+              >
+                <Icon name="paperclip" size={15} />
+              </button>
+            )}
             <button
               type="button"
               className={`emoji-toggle${emojiOpen ? " active" : ""}`}
@@ -467,23 +493,27 @@ const MessageComposer = ({
             >
               <Icon name="emoji" size={15} />
             </button>
-            <span className="tool-divider" />
-            <button
-              type="button"
-              className={`mic-toggle${recording ? " active" : ""}`}
-              title={
-                recording
-                  ? "Recording… click to send"
-                  : "Record a voice message"
-              }
-              aria-label={
-                recording ? "Finish recording and send" : "Record a voice message"
-              }
-              onClick={recording ? stopRecording : startRecording}
-              disabled={uploading}
-            >
-              <Icon name="mic" size={15} />
-            </button>
+            {!isExternalChannel && (
+              <>
+                <span className="tool-divider" />
+                <button
+                  type="button"
+                  className={`mic-toggle${recording ? " active" : ""}`}
+                  title={
+                    recording
+                      ? "Recording… click to send"
+                      : "Record a voice message"
+                  }
+                  aria-label={
+                    recording ? "Finish recording and send" : "Record a voice message"
+                  }
+                  onClick={recording ? stopRecording : startRecording}
+                  disabled={uploading}
+                >
+                  <Icon name="mic" size={15} />
+                </button>
+              </>
+            )}
             <input
               ref={fileInputRef}
               type="file"

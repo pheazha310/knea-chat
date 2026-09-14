@@ -1138,6 +1138,37 @@ async function applyMigrations(admin) {
     console.log('🎫 Created external_messages table (migration 027).');
   }
 
+  // Migration 028: omni-channel delivery health — per-conversation delivery
+  // failure tracking so the inbox can flag/hide conversations whose channel
+  // delivery keeps failing (e.g. "chat not found"). Idempotent: only adds the
+  // columns when the external_conversations table exists without them.
+  const [deliveryHealthCols] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'external_conversations'
+       AND column_name = 'delivery_fail_count'`,
+    [DB_NAME],
+  );
+  if (deliveryHealthCols[0].count === 0) {
+    const [externalConvExists] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.tables
+       WHERE table_schema = ? AND table_name = 'external_conversations'`,
+      [DB_NAME],
+    );
+    if (externalConvExists[0].count > 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE external_conversations
+         ADD COLUMN delivery_fail_count INT UNSIGNED NOT NULL DEFAULT 0
+           COMMENT 'Consecutive failed agent replies (0 = healthy)',
+         ADD COLUMN last_delivery_error VARCHAR(255) NULL
+           COMMENT 'Provider error description from the last failed reply',
+         ADD COLUMN last_delivery_failure_at DATETIME NULL
+           COMMENT 'When the last failure was recorded',
+         ADD INDEX idx_external_conversations_delivery_health (delivery_fail_count);`,
+      );
+      console.log('🩺 Added delivery-health columns to external_conversations (migration 028).');
+    }
+  }
+
   const [noteTables] = await admin.query(
     `SELECT COUNT(*) AS count FROM information_schema.tables
      WHERE table_schema = ? AND table_name = 'meeting_notes'`,
