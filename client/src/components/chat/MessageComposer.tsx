@@ -19,6 +19,12 @@ interface MessageComposerProps {
   uploading: boolean;
   uploadProgress: number | null;
   onCreateMeeting?: () => void;
+  /**
+   * Whether the active conversation's external channel can relay outbound
+   * file/voice (from GET /api/omni/capabilities). Only meaningful when
+   * `active.channel` is set; undefined = unknown → controls stay visible.
+   */
+  channelSupportsMedia?: boolean;
 }
 
 const MessageComposer = ({
@@ -33,20 +39,20 @@ const MessageComposer = ({
   uploading,
   uploadProgress,
   onCreateMeeting,
+  channelSupportsMedia,
 }: MessageComposerProps) => {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const { showToast } = useToast();
 
-  // External-channel conversations (Telegram / omni inbox) accept text replies
-  // only — the server rejects file uploads there (files cannot be relayed
-  // through the channel adapter), so the composer hides the file entry points.
-  const isExternalChannel = !!active?.channel;
-  const fileBlockedNotice = () =>
-    showToast(
-      `Files can't be sent in ${active?.channel || "external channel"} conversations — type a reply instead`,
-      { type: "error" },
-    );
+  // External-channel conversations (Telegram / omni inbox) accept file and
+  // voice replies through the channel adapter (Telegram
+  // sendPhoto/sendVoice/sendDocument) — but only when the channel's adapter
+  // actually implements sendMedia (the website widget does not). Unknown
+  // capabilities keep the controls visible so a failed capability fetch can
+  // never hide working entry points; the server still guards with a 400.
+  const mediaBlocked =
+    !!active?.channel && channelSupportsMedia === false;
 
   // ---- voice messages (MediaRecorder → upload as a file) -------------------
   const [recording, setRecording] = useState(false);
@@ -173,8 +179,11 @@ const MessageComposer = ({
     e.preventDefault();
     dragDepth.current = 0;
     setDragOver(false);
-    if (isExternalChannel) {
-      fileBlockedNotice();
+    if (mediaBlocked) {
+      showToast(
+        `Files can't be sent in ${active?.channel || "external channel"} conversations — type a reply instead`,
+        { type: "error" },
+      );
       return;
     }
     const file = e.dataTransfer.files?.[0];
@@ -315,8 +324,11 @@ const MessageComposer = ({
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (isExternalChannel) {
-      fileBlockedNotice();
+    if (mediaBlocked) {
+      showToast(
+        `Files can't be sent in ${active?.channel || "external channel"} conversations — type a reply instead`,
+        { type: "error" },
+      );
       e.target.value = "";
       return;
     }
@@ -327,9 +339,12 @@ const MessageComposer = ({
   const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     const file = e.clipboardData?.files?.[0];
     if (file && !uploading) {
-      if (isExternalChannel) {
+      if (mediaBlocked) {
         e.preventDefault();
-        fileBlockedNotice();
+        showToast(
+          `Files can't be sent in ${active?.channel || "external channel"} conversations — type a reply instead`,
+          { type: "error" },
+        );
         return;
       }
       // Pasting an image/file from the clipboard attaches it instead of
@@ -471,7 +486,7 @@ const MessageComposer = ({
                 <Icon name="calendar" size={15} />
               </button>
             )}
-            {!isExternalChannel && (
+            {!mediaBlocked && (
               <button
                 type="button"
                 className="attach-button"
@@ -493,7 +508,7 @@ const MessageComposer = ({
             >
               <Icon name="emoji" size={15} />
             </button>
-            {!isExternalChannel && (
+            {!mediaBlocked && (
               <>
                 <span className="tool-divider" />
                 <button

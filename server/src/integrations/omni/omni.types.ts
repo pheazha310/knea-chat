@@ -35,6 +35,16 @@ export interface OmniInboundMessage {
   metadata?: unknown;
 }
 
+/** Binary media an agent sends outbound through a channel adapter. */
+export interface OmniOutboundMedia {
+  kind: 'image' | 'voice' | 'file';
+  buffer: Buffer;
+  fileName: string;
+  mimeType: string | null;
+  /** Optional caption carried along with the file (channel length limits apply). */
+  caption?: string | null;
+}
+
 /** Result of a channel's outbound send. */
 export interface OmniOutboundResult {
   ok: boolean;
@@ -67,6 +77,17 @@ export interface ChannelAdapter {
   sendMessage(
     chatId: number,
     text: string,
+    options?: { replyToExternalMessageId?: string | null },
+  ): Promise<OmniOutboundResult>;
+
+  /**
+   * Optional file/voice delivery — only channels that can relay media
+   * implement it (Telegram does through sendPhoto/sendVoice/sendDocument;
+   * the engine answers 400 "does not support media delivery" when absent).
+   */
+  sendMedia?(
+    chatId: number,
+    media: OmniOutboundMedia,
     options?: { replyToExternalMessageId?: string | null },
   ): Promise<OmniOutboundResult>;
 

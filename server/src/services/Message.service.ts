@@ -244,10 +244,11 @@ export class MessageService {
     await this.assertConversationAccess(conversation, sender_id);
 
     const { file_name, file_url, file_type, file_size } = file;
+    const isImage = (file_type || '').startsWith('image/');
     const messageId = await this.messageRepository.create({
       conversation_id,
       sender_id,
-      content: type === 'voice' ? '' : file_name,
+      content: type === 'voice' || isImage ? '' : file_name,
       type: type || 'file',
       reply_to: null,
     });

@@ -21,10 +21,10 @@ touching the shared engine.
 
 | Piece | File | Responsibility |
 | --- | --- | --- |
-| Channel contract | `server/src/integrations/omni/omni.types.ts` | `ChannelAdapter` interface (`parseInbound`, `sendMessage`, `downloadMedia?`, `getHealth`, `setupWebhook?`, …). |
+| Channel contract | `server/src/integrations/omni/omni.types.ts` | `ChannelAdapter` interface (`parseInbound`, `sendMessage`, `sendMedia?`, `downloadMedia?`, `getHealth`, `setupWebhook?`, …). |
 | Channel registry | `server/src/integrations/omni/channelRegistry.ts` | Maps channel keys (`telegram`) to their adapter instances. |
 | Shared engine | `server/src/services/OmniChannel.service.ts` | Contact / conversation / message persistence, duplicate prevention, notifications, WebSocket fan-out, agent replies — identical for every channel. |
-| Telegram API client | `server/src/integrations/telegram/telegram.service.ts` | Telegram Bot API only (`getMe`, `sendMessage`, `setWebhook`, `deleteWebhook`, `getWebhookInfo`, `getFile`, `downloadFile`). No DB, no Express. |
+| Telegram API client | `server/src/integrations/telegram/telegram.service.ts` | Telegram Bot API only (`getMe`, `sendMessage`, `sendMedia` → sendPhoto/sendVoice/sendDocument, `setWebhook`, `deleteWebhook`, `getWebhookInfo`, `getFile`, `downloadFile`). No DB, no Express. |
 | Telegram adapter | `server/src/integrations/telegram/telegram.adapter.ts` | Everything Telegram-specific: update parsing (text + media), media download, outbound delivery, health, webhook administration. |
 | HTTP handlers | `server/src/integrations/telegram/telegram.controller.ts` | Thin request/response handling + `X-Telegram-Bot-Api-Secret-Token` validation. |
 | Data access | `server/src/repositories/externalContactRepository.ts` | `external_contacts`, `external_conversations`, `external_messages` tables. |
@@ -57,6 +57,17 @@ touching the shared engine.
   server-side from the stored contact — never trusted from the client. A
   message is persisted only after Telegram confirms delivery; `MessageService`
   also rejects internal sending into external conversations.
+- **Files and voice notes are relayed through the channel.** Agents can attach
+  files or record voice notes on external conversations too: the composer
+  uploads to `POST /api/omni/conversations/:id/media` (multipart, same file
+  policy as internal chat) and the engine delivers the bytes through the
+  adapter's `sendMedia` (Telegram `sendPhoto`/`sendVoice`/`sendDocument`) —
+  persisting the message + attachment only after the provider confirms
+  delivery. Voice notes recorded by the browser (WebM/Opus) travel as
+  documents because Telegram's `sendVoice` only accepts OGG/Opus; GIFs go
+  through `sendAnimation`-compatible `sendDocument`. Channels whose adapter
+  lacks `sendMedia` (website widget) answer `400 ... does not support media
+  delivery`.
 - **Channels own their webhooks.** `/api/telegram/webhook` validates
   `X-Telegram-Bot-Api-Secret-Token`. There is deliberately no generic
   `POST /api/omni/webhook/:channel` route, so no channel can be reached without
@@ -165,7 +176,9 @@ the message appears without a page refresh (WebSocket).
 | GET | `/api/telegram/webhook-info` | admin+ | Current webhook configuration. |
 | DELETE | `/api/telegram/webhook` | admin+ | Unregister the webhook. |
 | GET | `/api/omni/health/:channel` | public | Channel-agnostic health probe (e.g. `/api/omni/health/telegram`). |
+| GET | `/api/omni/capabilities` | public | Per-channel feature map — `{ channels: { telegram: { media: true }, website: { media: false } } }`. The composer hides its attach/voice controls for channels with `media: false`. |
 | POST | `/api/omni/conversations/:id/messages` | any agent | Channel-agnostic reply (same engine as `/api/telegram/messages`). |
+| POST | `/api/omni/conversations/:id/media` | any agent | Channel-agnostic file / voice reply — multipart `file` + optional `caption`, `replyToMessageId`. Delivered through the adapter's `sendMedia`; persisted only on provider success. |
 | PATCH | `/api/omni/conversations/:id/status` | any inbox member | Open / close an inbox conversation (`{ status: "open" \| "closed" }`). |
 | POST | `/api/omni/conversations/:id/assign` | any inbox member | Channel-agnostic assign (defaults to self). |
 | DELETE | `/api/omni/conversations/:id/assign` | any inbox member | Channel-agnostic unassign. |

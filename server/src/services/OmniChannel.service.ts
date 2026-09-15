@@ -23,6 +23,7 @@ import bcrypt from 'bcrypt';
 import { resolveUploadDir } from '../utils/uploads';
 import type { ExternalContactRow, ExternalConversationRow, OutgoingMessage } from '../types';
 import type { ChannelAdapter, OmniInboundMessage, OmniMedia } from '../integrations/omni/omni.types';
+import type { OmniOutboundMedia } from '../integrations/omni/omni.types';
 import type { ChannelRegistry } from '../integrations/omni/channelRegistry';
 import type { ExternalContactRepository } from '../repositories/externalContactRepository';
 import type { UserRepository } from '../repositories/userRepository';
@@ -432,6 +433,204 @@ export class OmniChannelService {
       throw badRequest('Message text is required');
     }
 
+    const resolved = await this.resolveExternalConversation(conversationId, agentId, replyToMessageId);
+
+    // Deliver through the channel first — only persist on success.
+    const sent = await resolved.adapter.sendMessage(resolved.chatId, trimmed, {
+      replyToExternalMessageId: resolved.replyToExternalMessageId,
+    });
+    if (!sent.ok) {
+      await this.reportDeliveryFailure(resolved, sent.description ?? 'Channel delivery failed', sent.errorCode);
+    }
+
+    // Delivery succeeded — reset any previously recorded failure state.
+    await this.externalRepository.clearDeliveryFailure(conversationId);
+
+    const messageId = await this.messageRepository.create({
+      conversation_id: conversationId,
+      sender_id: agentId,
+      content: trimmed,
+      type: 'text',
+      reply_to: null,
+    });
+    await this.externalRepository.createMessage({
+      message_id: messageId,
+      conversation_id: conversationId,
+      external_message_id: sent.externalMessageId || null,
+      channel: resolved.channel,
+      direction: 'outbound',
+      sender_type: 'agent',
+      content: trimmed,
+      external_timestamp: new Date(),
+      metadata: sent.externalMessageId
+        ? { [resolved.channel]: { message_id: sent.externalMessageId } }
+        : null,
+    });
+
+    const message = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
+    message.reactions = [];
+    message.attachments = [];
+    message.notifiedUserIds = await this.messageService.createMessageNotifications(
+      message,
+      agentId,
+      conversationId,
+      trimmed,
+      [],
+    );
+
+    // Sync the reply to every other inbox member (the sender gets the REST
+    // response directly, mirroring the message-handler ack convention).
+    await this.broadcastToConversation(
+      conversationId,
+      { type: 'receive_message', message: serializeMessage(message), channel: resolved.channel },
+      { excludeUserId: agentId },
+    );
+    this.notifyMembers(message, conversationId, message.notifiedUserIds || []);
+
+    return message;
+  }
+
+  /**
+   * Send an agent file / voice note to the external customer through the
+   * conversation's channel adapter. The bytes are uploaded from the agent's
+   * request (already validated by the multer filter) and delivered to the
+   * channel FIRST — the message + attachment are persisted only when the
+   * provider confirms delivery, mirroring sendAgentReply.
+   */
+  async sendAgentMediaReply(
+    conversationId: number,
+    agentId: number,
+    media: OmniOutboundMedia,
+    replyToMessageId?: number | null,
+  ): Promise<OutgoingMessage> {
+    if (!media.buffer || media.buffer.length === 0) {
+      throw badRequest('A non-empty file is required');
+    }
+
+    const resolved = await this.resolveExternalConversation(conversationId, agentId, replyToMessageId);
+    const adapter = resolved.adapter;
+    if (!adapter.sendMedia) {
+      throw badRequest(`Channel ${resolved.channel} does not support media delivery`);
+    }
+
+    const sent = await adapter.sendMedia(resolved.chatId, media, {
+      replyToExternalMessageId: resolved.replyToExternalMessageId,
+    });
+    if (!sent.ok) {
+      await this.reportDeliveryFailure(
+        resolved,
+        sent.description ?? 'Channel media delivery failed',
+        sent.errorCode,
+      );
+    }
+
+    await this.externalRepository.clearDeliveryFailure(conversationId);
+
+    // Keep the bytes locally so agents can replay the attachment in the chat
+    // history even if the provider copy becomes unreachable.
+    const stored = this.storeOutboundMediaBuffer(media);
+    const fileUrl = stored?.fileUrl || '';
+
+    const displayName = (media.caption || '').trim() || media.fileName;
+    const messageId = await this.messageRepository.create({
+      conversation_id: conversationId,
+      sender_id: agentId,
+      content: media.kind === 'image' ? '' : displayName,
+      type: media.kind === 'voice' ? 'voice' : media.kind === 'image' ? 'image' : 'file',
+      reply_to: replyToMessageId || null,
+    });
+    await this.messageRepository.createAttachment({
+      message_id: messageId,
+      file_name: media.fileName,
+      file_url: fileUrl,
+      file_type: media.mimeType,
+      file_size: media.buffer.length,
+    });
+    await this.externalRepository.createMessage({
+      message_id: messageId,
+      conversation_id: conversationId,
+      external_message_id: sent.externalMessageId || null,
+      channel: resolved.channel,
+      direction: 'outbound',
+      sender_type: 'agent',
+      content: displayName,
+      external_timestamp: new Date(),
+      metadata: {
+        media: {
+          kind: media.kind,
+          file_name: media.fileName,
+          ...(fileUrl ? { file_url: fileUrl } : {}),
+          ...(sent.externalMessageId
+            ? { [resolved.channel]: { message_id: sent.externalMessageId } }
+            : {}),
+        },
+      },
+    });
+
+    const message = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
+    message.reactions = [];
+    message.attachments = await this.messageRepository.findAttachments(messageId);
+    message.notifiedUserIds = await this.messageService.createMessageNotifications(
+      message,
+      agentId,
+      conversationId,
+      displayName,
+      [],
+    );
+
+    await this.broadcastToConversation(
+      conversationId,
+      { type: 'receive_message', message: serializeMessage(message), channel: resolved.channel },
+      { excludeUserId: agentId },
+    );
+    this.notifyMembers(message, conversationId, message.notifiedUserIds || []);
+
+    return message;
+  }
+
+  /**
+   * Store an outbound media buffer under the shared uploads directory using
+   * the same naming scheme as every other upload writer. Returns null when
+   * the disk write fails — the message still records (delivery already
+   * succeeded) minus the local replay copy.
+   */
+  private storeOutboundMediaBuffer(
+    media: OmniOutboundMedia,
+  ): { fileUrl: string; fileName: string; fileSize: number } | null {
+    try {
+      const uploadDir = resolveUploadDir();
+      fs.mkdirSync(uploadDir, { recursive: true });
+      const ext = path.extname(media.fileName).toLowerCase();
+      const base = path
+        .basename(media.fileName, ext)
+        .replace(/[^a-zA-Z0-9-_]/g, '_')
+        .slice(0, 60);
+      const storedName = `${Date.now()}-${Math.round(Math.random() * 1e6)}-${base}${ext}`;
+      fs.writeFileSync(path.join(uploadDir, storedName), media.buffer);
+      return { fileUrl: `/uploads/${storedName}`, fileName: media.fileName, fileSize: media.buffer.length };
+    } catch (error) {
+      console.error('[omni] Could not store the outbound media copy:', (error as Error).message);
+      return null;
+    }
+  }
+
+  /**
+   * Shared outbound resolution: verify the conversation is external, the
+   * agent a member, resolve the provider chat id + adapter, and map an
+   * internal reply-to id onto the provider's message id.
+   */
+  private async resolveExternalConversation(
+    conversationId: number,
+    agentId: number,
+    replyToMessageId?: number | null,
+  ): Promise<{
+    conversationId: number;
+    channel: string;
+    adapter: ChannelAdapter;
+    chatId: number;
+    replyToExternalMessageId: string | null;
+    deliveryFailCount: number;
+  }> {
     const conversation = await this.conversationRepository.findById(conversationId);
     if (!conversation) {
       throw badRequest('Conversation not found');
@@ -464,77 +663,49 @@ export class OmniChannelService {
       }
     }
 
-    // Deliver through the channel first — only persist on success.
-    const sent = await adapter.sendMessage(chatId, trimmed, { replyToExternalMessageId });
-    if (!sent.ok) {
-      const description = sent.description ?? 'Channel delivery failed';
-      // Surface the provider's own reason in the server log (the HTTP error
-      // body carries `description` to the agent; the code helps diagnosis —
-      // e.g. 400 chat not found, 403 bot blocked).
-      console.error(
-        `[omni:${external.channel}] Delivery failed for conversation ${conversationId} (chat ${chatId}${sent.errorCode ? `, code ${sent.errorCode}` : ''}): ${description}`,
-      );
-      // Record the failure so the inbox can flag conversations whose channel
-      // delivery keeps failing (migration 028 delivery health).
-      await this.externalRepository.recordDeliveryFailure(conversationId, description);
-      const deliveryFailCount = Number(external.delivery_fail_count ?? 0) + 1;
-      await this.broadcastToConversation(conversationId, {
-        type: 'omni_delivery_failed',
-        data: {
-          conversationId,
-          channel: external.channel,
-          deliveryFailCount,
-          lastDeliveryError: description.slice(0, 255),
-        },
-      });
-      throw deliveryError(description);
-    }
-
-    // Delivery succeeded — reset any previously recorded failure state.
-    await this.externalRepository.clearDeliveryFailure(conversationId);
-
-    const messageId = await this.messageRepository.create({
-      conversation_id: conversationId,
-      sender_id: agentId,
-      content: trimmed,
-      type: 'text',
-      reply_to: null,
-    });
-    await this.externalRepository.createMessage({
-      message_id: messageId,
-      conversation_id: conversationId,
-      external_message_id: sent.externalMessageId || null,
+    return {
+      conversationId,
       channel: external.channel,
-      direction: 'outbound',
-      sender_type: 'agent',
-      content: trimmed,
-      external_timestamp: new Date(),
-      metadata: sent.externalMessageId
-        ? { [external.channel]: { message_id: sent.externalMessageId } }
-        : null,
+      adapter,
+      chatId,
+      replyToExternalMessageId,
+      deliveryFailCount: Number(external.delivery_fail_count ?? 0),
+    };
+  }
+
+  /**
+   * Record + fan out a failed channel delivery (migration 028 delivery
+   * health) and raise the 502 the controller surfaces to the agent.
+   */
+  private async reportDeliveryFailure(
+    resolved: {
+      conversationId: number;
+      channel: string;
+      deliveryFailCount: number;
+    },
+    description: string,
+    errorCode?: number,
+  ): Promise<never> {
+    // Surface the provider's own reason in the server log (the HTTP error
+    // body carries `description` to the agent; the code helps diagnosis —
+    // e.g. 400 chat not found, 403 bot blocked).
+    console.error(
+      `[omni:${resolved.channel}] Delivery failed for conversation ${resolved.conversationId} (${description}${errorCode ? `, code ${errorCode}` : ''})`,
+    );
+    // Record the failure so the inbox can flag conversations whose channel
+    // delivery keeps failing.
+    await this.externalRepository.recordDeliveryFailure(resolved.conversationId, description);
+    const deliveryFailCount = resolved.deliveryFailCount + 1;
+    await this.broadcastToConversation(resolved.conversationId, {
+      type: 'omni_delivery_failed',
+      data: {
+        conversationId: resolved.conversationId,
+        channel: resolved.channel,
+        deliveryFailCount,
+        lastDeliveryError: description.slice(0, 255),
+      },
     });
-
-    const message = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
-    message.reactions = [];
-    message.attachments = [];
-    message.notifiedUserIds = await this.messageService.createMessageNotifications(
-      message,
-      agentId,
-      conversationId,
-      trimmed,
-      [],
-    );
-
-    // Sync the reply to every other inbox member (the sender gets the REST
-    // response directly, mirroring the message-handler ack convention).
-    await this.broadcastToConversation(
-      conversationId,
-      { type: 'receive_message', message: serializeMessage(message), channel: external.channel },
-      { excludeUserId: agentId },
-    );
-    this.notifyMembers(message, conversationId, message.notifiedUserIds || []);
-
-    return message;
+    throw deliveryError(description);
   }
 
   /** Push real-time notification events to members (same shape as chat). */
@@ -672,6 +843,20 @@ export class OmniChannelService {
   /** Registered channel keys. */
   channels(): string[] {
     return this.registry.channels();
+  }
+
+  /**
+   * Per-channel client capabilities, derived from what each adapter actually
+   * implements. `media` mirrors the optional `sendMedia` contract — the
+   * composer hides its file/voice entry points for channels that cannot relay
+   * attachments (e.g. the website widget) instead of letting agents hit a 400.
+   */
+  getCapabilities(): Record<string, { media: boolean }> {
+    const capabilities: Record<string, { media: boolean }> = {};
+    for (const channel of this.registry.channels()) {
+      capabilities[channel] = { media: !!this.registry.get(channel)?.sendMedia };
+    }
+    return capabilities;
   }
 
   private requireAdapter(channel: string): ChannelAdapter {

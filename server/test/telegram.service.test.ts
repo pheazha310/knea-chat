@@ -3,7 +3,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { TelegramService, TelegramApiError } from '../src/integrations/telegram/telegram.service';
+import { TelegramService, TelegramApiError, telegramMediaMethodFor } from '../src/integrations/telegram/telegram.service';
 import type { HttpLike } from '../src/integrations/telegram/telegram.service';
 
 const TOKEN = '123456:TEST-SECRET-TOKEN';
@@ -27,6 +27,12 @@ const makeHttp = (handler?: (call: CapturedCall) => Promise<{ data: unknown }>):
     },
     async post<T>(url: string, body?: unknown): Promise<{ data: T }> {
       const call: CapturedCall = { method: 'post', url, body };
+      calls.push(call);
+      if (handler) return handler(call) as Promise<{ data: T }>;
+      return { data: { ok: true, result: { message_id: 99 } } as T };
+    },
+    async postForm<T>(url: string, form: FormData): Promise<{ data: T }> {
+      const call: CapturedCall = { method: 'post' as const, url, body: form };
       calls.push(call);
       if (handler) return handler(call) as Promise<{ data: T }>;
       return { data: { ok: true, result: { message_id: 99 } } as T };
@@ -183,5 +189,81 @@ describe('TelegramService', () => {
       assert.equal(http.calls.length, 0, 'no API call without a token');
       return true;
     });
+  });
+
+  it('sendMedia posts multipart to sendPhoto for images', async () => {
+    const http = makeHttp();
+    const service = new TelegramService(TOKEN, 'https://api.telegram.org/bot', http);
+
+    const result = await service.sendMedia(123456789, {
+      kind: 'image',
+      buffer: Buffer.from('png-bytes'),
+      fileName: 'shot.png',
+      mimeType: 'image/png',
+      caption: 'Look at this',
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(http.calls.length, 1);
+    assert.ok(http.calls[0].url.endsWith(`/bot${TOKEN}/sendPhoto`));
+    const form = http.calls[0].body as FormData;
+    assert.ok(form instanceof FormData);
+    assert.equal(form.get('chat_id'), '123456789');
+    assert.equal(form.get('caption'), 'Look at this');
+    const file = form.get('photo');
+    assert.ok(file instanceof File);
+    assert.equal((file as File).name, 'shot.png');
+  });
+
+  it('sendMedia routes webm voice notes through sendDocument (sendVoice needs ogg)', async () => {
+    const http = makeHttp();
+    const service = new TelegramService(TOKEN, 'https://api.telegram.org/bot', http);
+
+    await service.sendMedia(123456789, {
+      kind: 'voice',
+      buffer: Buffer.from('webm-bytes'),
+      fileName: 'voice-1.webm',
+      mimeType: 'audio/webm;codecs=opus',
+    });
+
+    assert.ok(http.calls[0].url.endsWith('/sendDocument'));
+    const form = http.calls[0].body as FormData;
+    assert.ok(form.has('document'));
+    assert.equal(form.get('caption'), null, 'no caption field when none given');
+  });
+
+  it('sendMedia uses sendVoice for ogg voice notes', async () => {
+    const http = makeHttp();
+    const service = new TelegramService(TOKEN, 'https://api.telegram.org/bot', http);
+
+    await service.sendMedia(123456789, {
+      kind: 'voice',
+      buffer: Buffer.from('ogg-bytes'),
+      fileName: 'voice_2.ogg',
+      mimeType: 'audio/ogg',
+    });
+
+    assert.ok(http.calls[0].url.endsWith('/sendVoice'));
+    assert.ok((http.calls[0].body as FormData).has('voice'));
+  });
+
+  it('sendMedia throws a safe error when the token is missing', async () => {
+    const http = makeHttp();
+    const service = new TelegramService('', 'https://api.telegram.org/bot', http);
+
+    await assert.rejects(
+      service.sendMedia(1, { kind: 'file', buffer: Buffer.from('x'), fileName: 'a.pdf', mimeType: 'application/pdf' }),
+      /TELEGRAM_BOT_TOKEN/,
+    );
+    assert.equal(http.calls.length, 0);
+  });
+
+  it('telegramMediaMethodFor maps kinds + extensions onto Bot API methods', () => {
+    assert.deepEqual(telegramMediaMethodFor('image', 'p.jpg', 'image/jpeg'), { method: 'sendPhoto', field: 'photo' });
+    // GIFs must travel as documents — sendPhoto rejects them.
+    assert.deepEqual(telegramMediaMethodFor('image', 'anim.gif', 'image/gif'), { method: 'sendDocument', field: 'document' });
+    assert.deepEqual(telegramMediaMethodFor('voice', 'v.ogg', 'audio/ogg'), { method: 'sendVoice', field: 'voice' });
+    assert.deepEqual(telegramMediaMethodFor('voice', 'v.m4a', 'audio/mp4'), { method: 'sendDocument', field: 'document' });
+    assert.deepEqual(telegramMediaMethodFor('file', 'r.pdf', 'application/pdf'), { method: 'sendDocument', field: 'document' });
   });
 });

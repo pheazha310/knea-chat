@@ -335,8 +335,8 @@ async function main() {
   } catch (e) { bad('Omni Inbox baseline', e); }
 
   // ---- 2b. Composer adapts to the conversation type ----------------------
-  // External channels accept text replies only — the file + voice controls
-  // must disappear for them and stay for internal conversations.
+  // External channels relay files + voice through the channel adapter, so the
+  // composer offers the attach + voice controls there too (same as internal).
   try {
     await evaluate(`document.querySelector('.list-card .list-row')?.click()`);
     await waitFor(`!!document.querySelector('.composer-wrap')`, { label: 'composer for a Telegram conversation', timeout: 15000 });
@@ -344,10 +344,10 @@ async function main() {
       attach: !!document.querySelector('button[title="Attach a file"]'),
       mic: !!document.querySelector('.mic-toggle'),
     })`);
-    if (!extState.attach && !extState.mic) {
-      ok('Telegram conversation: composer hides the file + voice controls');
+    if (extState.attach && extState.mic) {
+      ok('Telegram conversation: composer offers attach + voice (channel relay)');
     } else {
-      bad('Telegram conversation: composer hides the file + voice controls', `attach=${extState.attach} mic=${extState.mic}`);
+      bad('Telegram conversation: composer offers attach + voice (channel relay)', `attach=${extState.attach} mic=${extState.mic}`);
     }
     await clickNav('Messages');
     await waitFor(`!!document.querySelector('.list-card .list-row, .conversation-list .list-row')`, { label: 'messages list', timeout: 15000 });

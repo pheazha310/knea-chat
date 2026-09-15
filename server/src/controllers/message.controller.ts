@@ -14,32 +14,15 @@ import type { SystemSettingService } from '../services/SystemSetting.service';
 import type { BroadcastToConversation } from '../websocket/broadcast.utils';
 import { serializeMessage } from '../websocket/message.utils';
 import { sendToUser } from '../websocket/connection.registry';
-import { resolveUploadDir } from '../utils/uploads';
+import { resolveUploadDir, isAllowedUpload, MAX_FILE_SIZE } from '../utils/uploads';
 
 // ---------------------------------------------------------------------------
-// File upload configuration (SRS §19: validate file type and size)
+// File upload configuration (SRS §19: validate file type and size) — the
+// shared policy from utils/uploads (same list the omni-channel media relay
+// enforces, so the composer behaves identically everywhere).
 // ---------------------------------------------------------------------------
 const UPLOAD_DIR = resolveUploadDir();
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const ALLOWED_FILE_TYPES = (
-  process.env.ALLOWED_FILE_TYPES ||
-  'jpg,jpeg,png,gif,webp,pdf,doc,docx,xls,xlsx,txt,csv,zip,mp3,m4a,wav,ogg,oga,opus,webm,aac'
-).split(',').map((t) => t.trim().toLowerCase());
-
-// MIME-type allowlist (SRS §19: validate file type — extension AND content type).
-const ALLOWED_MIME_PREFIXES = ['image/', 'audio/', 'application/pdf', 'text/plain', 'text/csv'];
-const ALLOWED_MIME_EXACT = new Set([
-  'application/msword',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-  'application/vnd.ms-excel',
-  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-  'application/zip',
-  'application/x-zip-compressed',
-  'application/octet-stream',
-]);
-
-const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE || '10485760', 10);
 
 /** Effective per-workspace feature policy (platform AND company settings). */
 interface FeaturePolicy {
@@ -66,14 +49,7 @@ const upload = multer({
   storage,
   limits: { fileSize: MAX_FILE_SIZE },
   fileFilter: (req, file, cb) => {
-    const ext = path.extname(file.originalname).toLowerCase().slice(1);
-    if (!ALLOWED_FILE_TYPES.includes(ext)) {
-      return cb(new Error(`File type ".${ext}" is not allowed`));
-    }
-
-    const mime = (file.mimetype || '').toLowerCase();
-    const mimeOk = ALLOWED_MIME_EXACT.has(mime) || ALLOWED_MIME_PREFIXES.some((p) => mime.startsWith(p));
-    if (!mimeOk) {
+    if (!isAllowedUpload(file)) {
       return cb(new Error(`File content type "${file.mimetype}" is not allowed`));
     }
     cb(null, true);

@@ -41,6 +41,13 @@ interface ChatState {
   bookmarkedMessageIds: Set<number>;
   /** Hide omni conversations whose channel delivery keeps failing (inbox toggle). */
   hideFailingDeliveries: boolean;
+  /**
+   * Per-channel outbound capabilities from GET /api/omni/capabilities (e.g.
+   * which channels relay file/voice). Undefined until the first fetch lands;
+   * the composer treats unknown channels as media-capable so a failed fetch
+   * can never hide working controls.
+   */
+  channelCapabilities: Record<string, { media: boolean }> | null;
 
   // --- setters (used by loads and WebSocket listeners) ---
   setChannels: (channels: Channel[]) => void;
@@ -101,6 +108,8 @@ interface ChatState {
   ) => void;
   /** Toggle whether delivery-failing conversations are hidden in the inbox. */
   setHideFailing: (hide: boolean) => void;
+  /** Fetch the per-channel capability map (best-effort, keeps old data). */
+  loadChannelCapabilities: () => Promise<void>;
   loadConversation: (
     conversationId: number,
     force?: boolean,
@@ -134,6 +143,15 @@ interface ChatState {
   sendMessageDelete: (messageId: number) => void;
   sendMessageForward: (messageId: number, targetConversationId: number) => void;
   uploadAttachment: (
+    conversationId: number,
+    file: File,
+    onProgress?: (pct: number) => void,
+  ) => Promise<Message | null>;
+  /**
+   * Send a file / voice note through an external channel (omni inbox).
+   * The server delivers to the customer first, then persists + broadcasts.
+   */
+  uploadExternalAttachment: (
     conversationId: number,
     file: File,
     onProgress?: (pct: number) => void,
@@ -227,6 +245,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
   reminders: {},
   bookmarkedMessageIds: new Set<number>(),
   hideFailingDeliveries: false,
+  channelCapabilities: null,
 
   setChannels: (channels) => set({ channels }),
   addChannel: (channel) =>
@@ -351,6 +370,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   load: async () => {
     set({ isLoading: true, error: null });
+    void get().loadChannelCapabilities();
     try {
       const [channelsRes, convRes] = await Promise.allSettled([
         ChannelModel.getAll(),
@@ -434,6 +454,16 @@ export const useChatStore = create<ChatState>()((set, get) => ({
 
   setHideFailing: (hide) => set({ hideFailingDeliveries: hide }),
 
+  loadChannelCapabilities: async () => {
+    try {
+      const res = await OmniModel.capabilities();
+      set({ channelCapabilities: res.data?.data?.channels || {} });
+    } catch {
+      // Keep the previous map (or null) — the composer defaults to showing
+      // the controls when the capability is unknown.
+    }
+  },
+
   loadConversation: async (conversationId, force) => {
     // Only fetch when we have nothing cached yet (prevents stale partial state),
     // unless the caller explicitly asks for a fresh fetch (`force`).
@@ -469,12 +499,13 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       connectionStatus: "disconnected",
       connectionAttempt: 0,
       connectionMaxAttempts: 8,
-      isLoading: true,
-      error: null,
-      viewingChat: false,
-      reminders: {},
-      bookmarkedMessageIds: new Set<number>(),
-    }),
+    isLoading: true,
+    error: null,
+    viewingChat: false,
+    reminders: {},
+    bookmarkedMessageIds: new Set<number>(),
+    channelCapabilities: null,
+  }),
 
   selectConversation: (conversationId) => {
     set({ activeId: conversationId });
@@ -684,6 +715,18 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       return message || null;
     } catch (err) {
       throw new Error(getErrorMessage(err, "Upload failed"));
+    }
+  },
+
+  /** File/voice through the conversation's channel adapter (omni inbox). */
+  uploadExternalAttachment: async (conversationId, file, onProgress) => {
+    try {
+      const res = await OmniModel.replyMedia(conversationId, file, {}, onProgress);
+      const message = res.data?.data?.message;
+      if (message) get().addMessage(conversationId, message as ChatMessage);
+      return message || null;
+    } catch (err) {
+      throw new Error(getErrorMessage(err, "Could not send the file"));
     }
   },
 

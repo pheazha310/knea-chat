@@ -405,8 +405,8 @@ const MessageList = ({
           ? messages.find((m) => m.id === replyId) || null
           : null;
         const isFile =
-          ["file", "voice"].includes(asWs(message).messageType) ||
-          ["file", "voice"].includes(asMessage(message).type);
+          ["file", "voice", "image"].includes(asWs(message).messageType) ||
+          ["file", "voice", "image"].includes(asMessage(message).type);
         const trimmedContent = (message.content || "").trim();
         const isEmojiOnly =
           Boolean(trimmedContent) &&
@@ -537,13 +537,6 @@ const MessageList = ({
                             alt={att.file_name}
                             loading="lazy"
                           />
-                          <span className="attachment-image-caption">
-                            <Icon name="image" size={12} />
-                            <b>{att.file_name}</b>
-                            {formatBytes(att.file_size) && (
-                              <small>{formatBytes(att.file_size)}</small>
-                            )}
-                          </span>
                         </a>
                       ) : (
                         <a

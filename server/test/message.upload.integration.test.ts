@@ -192,7 +192,9 @@ describe('POST /api/messages/upload — integration', () => {
     assert.equal(status, 201, `Expected 201, got ${status}: ${JSON.stringify(json)}`);
     assert.equal(json.success, true);
     assert.equal(json.data.message.type, 'file');
-    assert.equal(json.data.message.content, 'photo.png');
+    // Image messages persist an empty body: the attachment preview carries
+    // the name, so the bubble text would only duplicate it.
+    assert.equal(json.data.message.content, '');
     assert.ok(json.data.message.attachments?.length >= 1, 'Expected at least one attachment');
     assert.equal(json.data.message.attachments[0].file_name, 'photo.png');
     assert.equal(json.data.message.attachments[0].file_type, 'image/png');

@@ -18,6 +18,7 @@ import type {
   OmniHealthResult,
   OmniInboundMessage,
   OmniMedia,
+  OmniOutboundMedia,
   OmniOutboundResult,
 } from '../omni/omni.types';
 
@@ -192,6 +193,43 @@ export class TelegramChannelAdapter implements ChannelAdapter {
         return { ok: false, description: error.message, errorCode: error.errorCode };
       }
       return { ok: false, description: 'Telegram delivery failed' };
+    }
+  }
+
+  /**
+   * Deliver an outbound file / voice note through the Telegram Bot API.
+   * Mirrors sendMessage's result contract; the service maps the media kind
+   * onto sendPhoto / sendVoice / sendDocument.
+   */
+  async sendMedia(
+    chatId: number,
+    media: OmniOutboundMedia,
+    options: { replyToExternalMessageId?: string | null } = {},
+  ): Promise<OmniOutboundResult> {
+    try {
+      const sent = await this.api.sendMedia(chatId, {
+        kind: media.kind,
+        buffer: media.buffer,
+        fileName: media.fileName,
+        mimeType: media.mimeType,
+        caption: media.caption || null,
+      });
+      if (!sent.ok) {
+        return {
+          ok: false,
+          description: sent.description,
+          errorCode: sent.error_code,
+        };
+      }
+      return {
+        ok: true,
+        externalMessageId: sent.result?.message_id ? String(sent.result.message_id) : null,
+      };
+    } catch (error) {
+      if (error instanceof TelegramApiError) {
+        return { ok: false, description: error.message, errorCode: error.errorCode };
+      }
+      return { ok: false, description: 'Telegram media delivery failed' };
     }
   }
 

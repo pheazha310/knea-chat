@@ -233,6 +233,61 @@ describe('TelegramChannelAdapter — sendMessage', () => {
   });
 });
 
+describe('TelegramChannelAdapter — sendMedia', () => {
+  it('delivers media through the API and returns the external message id', async () => {
+    const mediaCalls: Array<Record<string, unknown>> = [];
+    const api = makeApi({
+      sendMedia: async (_chatId: number, media: unknown) => {
+        mediaCalls.push({ media });
+        return { ok: true, result: { message_id: 77 } };
+      },
+    });
+    const adapter = new TelegramChannelAdapter(api);
+
+    const result = await adapter.sendMedia(
+      123456789,
+      { kind: 'image', buffer: Buffer.from('bytes'), fileName: 'shot.png', mimeType: 'image/png', caption: 'Hi' },
+      { replyToExternalMessageId: '111' },
+    );
+
+    assert.deepEqual(result, { ok: true, externalMessageId: '77' });
+    assert.equal(mediaCalls.length, 1);
+  });
+
+  it('maps a Telegram rejection onto ok:false with the safe description', async () => {
+    const adapter = new TelegramChannelAdapter(
+      makeApi({
+        sendMedia: async () => ({ ok: false, description: 'photo too large', error_code: 400 }),
+      }),
+    );
+    const result = await adapter.sendMedia(1, {
+      kind: 'image',
+      buffer: Buffer.from('big'),
+      fileName: 'big.png',
+      mimeType: 'image/png',
+    });
+    assert.deepEqual(result, { ok: false, description: 'photo too large', errorCode: 400 });
+  });
+
+  it('survives an API exception (never leaks the token)', async () => {
+    const adapter = new TelegramChannelAdapter(
+      makeApi({
+        sendMedia: async () => {
+          throw new Error('ECONNRESET');
+        },
+      }),
+    );
+    const result = await adapter.sendMedia(1, {
+      kind: 'file',
+      buffer: Buffer.from('x'),
+      fileName: 'a.pdf',
+      mimeType: 'application/pdf',
+    });
+    assert.equal(result.ok, false);
+    assert.ok(!JSON.stringify(result).includes('TOKEN'));
+  });
+});
+
 describe('TelegramChannelAdapter — health + webhook administration', () => {
   it('reports connected when the bot authenticates', async () => {
     const adapter = new TelegramChannelAdapter(makeApi());

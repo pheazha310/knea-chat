@@ -498,6 +498,98 @@ describe('OmniChannelService — agent reply', () => {
   });
 });
 
+describe('OmniChannelService — agent media reply', () => {
+  let h: Harness;
+  const media = (overrides: Record<string, unknown> = {}) => ({
+    kind: 'image' as const,
+    buffer: Buffer.from('png-bytes'),
+    fileName: 'shot.png',
+    mimeType: 'image/png',
+    caption: 'Look at this',
+    ...overrides,
+  });
+
+  beforeEach(async () => {
+    h = makeHarness();
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+  });
+
+  it('delivers through the adapter, persists message + attachment and broadcasts', async () => {
+    const mediaCalls: Array<Record<string, unknown>> = [];
+    h = makeHarness({
+      sendMedia: async (chatId: number, m: unknown) => {
+        mediaCalls.push({ chatId, m });
+        return { ok: true, externalMessageId: '3333' };
+      },
+    });
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+
+    const message = await h.service.sendAgentMediaReply(500, 7, media());
+
+    assert.equal(message.type, 'image');
+    assert.equal(message.content, 'Look at this');
+    assert.equal(mediaCalls.length, 1);
+    assert.equal(mediaCalls[0].chatId, 123456789);
+    assert.equal(h.attachmentCreates.length, 1);
+    assert.ok((h.attachmentCreates[0].file_url as string).startsWith('/uploads/'));
+
+    const last = h.broadcasts[h.broadcasts.length - 1];
+    const event = last.event as Record<string, unknown>;
+    assert.equal(event.type, 'receive_message');
+    assert.equal(last.options && (last.options as { excludeUserId?: number }).excludeUserId, 7);
+  });
+
+  it('rejects an empty buffer before touching the channel', async () => {
+    await assert.rejects(
+      h.service.sendAgentMediaReply(500, 7, media({ buffer: Buffer.from('') })),
+      /non-empty file/,
+    );
+    assert.equal(h.sendCalls.length, 0);
+  });
+
+  it('rejects when the channel does not support media delivery', async () => {
+    await assert.rejects(
+      h.service.sendAgentMediaReply(500, 7, media()),
+      /does not support media delivery/,
+    );
+    assert.equal(h.sendCalls.length, 0);
+  });
+
+  it('does not persist anything when the channel rejects the file', async () => {
+    h = makeHarness({
+      sendMedia: async () => ({ ok: false, description: 'photo too large', errorCode: 400 }),
+    });
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+
+    await assert.rejects(
+      h.service.sendAgentMediaReply(500, 7, media()),
+      (error: unknown) => {
+        assert.equal((error as { statusCode?: number }).statusCode, 502);
+        assert.match((error as Error).message, /photo too large/);
+        return true;
+      },
+    );
+    assert.equal(h.externalMessages.length, 1, 'only the inbound message persisted');
+    assert.equal(h.attachmentCreates.length, 0);
+  });
+
+  it('uses the file name as the message content when no caption is given', async () => {
+    h = makeHarness({
+      sendMedia: async () => ({ ok: true, externalMessageId: '4444' }),
+    });
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+
+    const message = await h.service.sendAgentMediaReply(
+      500,
+      7,
+      media({ caption: null, fileName: 'report.pdf', kind: 'file', mimeType: 'application/pdf' }),
+    );
+
+    assert.equal(message.type, 'file');
+    assert.equal(message.content, 'report.pdf');
+  });
+});
+
 describe('OmniChannelService — assignment + status', () => {
   let h: Harness;
   beforeEach(async () => {
@@ -563,5 +655,23 @@ describe('OmniChannelService — health', () => {
   it('reports an unknown channel', async () => {
     const h = makeHarness();
     await assert.rejects(h.service.getHealth('whatsapp'), /Unknown channel/);
+  });
+});
+
+describe('OmniChannelService — capabilities', () => {
+  it('advertises media only for adapters that implement sendMedia', () => {
+    // makeHarness() registers a bare adapter without sendMedia.
+    const without = makeHarness();
+    assert.deepEqual(without.service.getCapabilities(), { telegram: { media: false } });
+
+    const withMedia = makeHarness({ sendMedia: async () => ({ ok: true }) });
+    assert.deepEqual(withMedia.service.getCapabilities(), { telegram: { media: true } });
+  });
+
+  it('covers every registered channel', () => {
+    const h = makeHarness();
+    for (const channel of h.service.channels()) {
+      assert.ok(channel in h.service.getCapabilities());
+    }
   });
 });

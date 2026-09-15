@@ -577,6 +577,9 @@ interface ChannelAdapter {
   parseInbound(payload: unknown): Promise<OmniInboundMessage[]>;
   downloadMedia?(media: OmniMedia): Promise<Buffer | null>;
   sendMessage(chatId: number, text: string, options?): Promise<OmniOutboundResult>;
+  // Optional file/voice relay (Telegram: sendPhoto/sendVoice/sendDocument).
+  // Channels without it answer 400 "does not support media delivery".
+  sendMedia?(chatId: number, media: OmniOutboundMedia, options?): Promise<OmniOutboundResult>;
   getHealth(): Promise<OmniHealthResult>;
   setupWebhook?(webhookUrl: string): Promise<unknown>;
   getWebhookInfo?(): Promise<unknown>;

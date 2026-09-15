@@ -160,6 +160,8 @@ const Dashboard = () => {
     deleteMessage,
     forwardMessage,
     uploadAttachment,
+    uploadExternalAttachment,
+    channelCapabilities,
     pinMessage,
     toggleReaction,
     markNotificationRead,
@@ -578,9 +580,15 @@ const Dashboard = () => {
     setUploading(true);
     setUploadProgress(0);
     try {
-      await uploadAttachment(activeId, file, setUploadProgress);
+      // External-channel conversations (omni inbox) relay the file through
+      // the channel adapter; internal ones use the plain chat upload.
+      if (activeConversation?.channel) {
+        await uploadExternalAttachment(activeId, file, setUploadProgress);
+      } else {
+        await uploadAttachment(activeId, file, setUploadProgress);
+      }
     } catch (err: any) {
-      alert(err.message || "Upload failed");
+      showToast(err?.message || "Upload failed", { type: "error" });
     } finally {
       setUploading(false);
       setUploadProgress(null);
@@ -1146,6 +1154,11 @@ const Dashboard = () => {
                        uploading={uploading}
                        uploadProgress={uploadProgress}
                        onCreateMeeting={activeConversation ? () => setShowMeetingFromChat(true) : undefined}
+                       channelSupportsMedia={
+                         activeConversation?.channel
+                           ? channelCapabilities?.[activeConversation.channel]?.media !== false
+                           : undefined
+                       }
                      />
                     <p className="composer-hint">
                       Press <kbd>Enter</kbd> to send · <kbd>Shift</kbd>+

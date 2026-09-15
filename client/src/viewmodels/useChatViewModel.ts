@@ -78,6 +78,7 @@ export function useChatViewModel() {
     connectionMaxAttempts: chat.connectionMaxAttempts,
     onlineUsers: userState.onlineUsers,
     isLoading: chat.isLoading,
+    channelCapabilities: chat.channelCapabilities,
 
     // Commands
     setActiveConversation: chat.selectConversation,
@@ -94,6 +95,7 @@ export function useChatViewModel() {
     deleteMessage: chat.sendMessageDelete,
     forwardMessage: chat.sendMessageForward,
     uploadAttachment: chat.uploadAttachment,
+    uploadExternalAttachment: chat.uploadExternalAttachment,
     pinMessage: chat.pinMessage,
     toggleReaction: chat.toggleReaction,
     setReminder: chat.setReminder,
