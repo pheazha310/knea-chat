@@ -233,7 +233,11 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     }
   }
 
-  /** Health: token configured + bot authenticates with the API. */
+  /**
+   * Health: token configured + bot authenticates with the API. Also probes
+   * the webhook configuration (best-effort) so a dead tunnel or unregistered
+   * URL is visible in one place instead of requiring a separate admin call.
+   */
   async getHealth(): Promise<OmniHealthResult> {
     if (!this.api.isConfigured()) {
       return { connected: false };
@@ -241,10 +245,22 @@ export class TelegramChannelAdapter implements ChannelAdapter {
     try {
       const result = await this.api.getMe();
       if (result.ok && result.result) {
-        return {
-          connected: true,
-          info: { bot: { id: result.result.id, username: result.result.username } },
+        const info: Record<string, unknown> = {
+          bot: { id: result.result.id, username: result.result.username },
         };
+        try {
+          const hook = await this.api.getWebhookInfo();
+          if (hook.ok && hook.result) {
+            info.webhook = {
+              registered: Boolean(hook.result.url),
+              url: hook.result.url || null,
+              pendingUpdates: hook.result.pending_update_count ?? 0,
+            };
+          }
+        } catch {
+          // Webhook probing is best-effort — bot health alone is still valid.
+        }
+        return { connected: true, info };
       }
       return { connected: false };
     } catch (error) {

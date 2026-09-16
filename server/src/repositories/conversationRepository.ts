@@ -151,14 +151,27 @@ export class ConversationRepository {
   }
 
   async findDirectConversation(userId1: number, userId2: number): Promise<number | null> {
-    const [conv] = await this.db.query<Array<{ id: number }>>(
-      `SELECT c.id FROM conversations c
-       JOIN conversation_members cm1 ON c.id = cm1.conversation_id
-       JOIN conversation_members cm2 ON c.id = cm2.conversation_id
-       WHERE c.type = 'direct' AND cm1.user_id = ? AND cm2.user_id = ?
-       LIMIT 1`,
-      [userId1, userId2],
-    );
-    return conv ? conv.id : null;
+    // Omni-channel guard: external customer conversations (Telegram etc.) have
+    // every inbox agent joined as a member (joinInboxAgents), so a naive
+    // member-pair match can return one as a colleague "DM" — messages there
+    // must go through the channel endpoint instead. Exclude them, failing
+    // open when the external tables are not migrated yet.
+    const query = (excludeExternal: boolean) => `
+      SELECT c.id FROM conversations c
+      JOIN conversation_members cm1 ON c.id = cm1.conversation_id
+      JOIN conversation_members cm2 ON c.id = cm2.conversation_id
+      ${excludeExternal ? 'LEFT JOIN external_conversations ec ON ec.conversation_id = c.id' : ''}
+      WHERE c.type = 'direct' AND cm1.user_id = ? AND cm2.user_id = ?
+      ${excludeExternal ? 'AND ec.id IS NULL' : ''}
+      LIMIT 1`;
+    try {
+      const [conv] = await this.db.query<Array<{ id: number }>>(query(true), [userId1, userId2]);
+      return conv ? conv.id : null;
+    } catch (error) {
+      const err = error as { code?: string; message?: string };
+      if (err.code !== 'ER_NO_SUCH_TABLE' && !/doesn't exist/.test(err.message || '')) throw error;
+      const [conv] = await this.db.query<Array<{ id: number }>>(query(false), [userId1, userId2]);
+      return conv ? conv.id : null;
+    }
   }
 }

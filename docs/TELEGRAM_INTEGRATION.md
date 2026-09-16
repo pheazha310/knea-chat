@@ -133,6 +133,26 @@ webhook URL is then:
 https://abcd-123-45.ngrok-free.app/api/telegram/webhook
 ```
 
+#### Quick tunnels are ephemeral
+
+A Cloudflare **quick tunnel** (`cloudflared tunnel --url …`, hostname
+`*.trycloudflare.com`) only lives as long as its process: every restart picks a
+new random hostname and the URL previously stored in `TELEGRAM_WEBHOOK_URL`
+or registered at Telegram silently dies. After restarting a tunnel you must
+**re-register** the webhook with the new URL. (A named Cloudflare tunnel or
+ngrok with a reserved domain gives you a permanent URL instead.)
+
+#### Webhook vs polling — only one can be active
+
+Telegram enforces a single delivery mode per bot: registering a webhook stops
+`getUpdates` (409 Conflict) and vice versa. If a process is still long-polling
+the bot (e.g. an old `telegram-poll-bridge.js` instance), `setWebhook` fails or
+webhook deliveries are not pulled — check for stray bridge processes first:
+
+```bash
+ps aux | grep telegram-poll-bridge
+```
+
 ### 6. Register the webhook
 
 Register the webhook URL so Telegram starts delivering updates:
@@ -143,6 +163,12 @@ Authorization: Bearer <JWT>
 { "webhookUrl": "https://abcd-123-45.ngrok-free.app/api/telegram/webhook" }
 ```
 
+Or without a browser/JWT, straight from the bot token:
+
+```bash
+npm run server -- telegram:webhook -- https://abcd-123-45.ngrok-free.app/api/telegram/webhook
+```
+
 The body can be omitted when `TELEGRAM_WEBHOOK_URL` is set. Registration passes
 the `secret_token` to Telegram automatically, so every delivery carries
 `X-Telegram-Bot-Api-Secret-Token`.
@@ -151,9 +177,22 @@ Check the result with:
 
 ```
 GET   /api/telegram/webhook-info     (admin+)   # current configuration
-GET   /api/telegram/health           (public)   # { success, channel, connected, bot }
+GET   /api/telegram/health           (public)   # bot auth + webhook registration in one probe
 DELETE /api/telegram/webhook          (admin+)   # unregister
 ```
+
+or simply:
+
+```bash
+npm run server -- telegram:status
+```
+
+`telegram:status` verifies the bot identity, whether a webhook is registered,
+whether the registered host is actually reachable (the classic failure is a
+registered-but-dead quick-tunnel URL), and reports Telegram-side delivery
+errors and pending-update backlog. `GET /api/telegram/health` also includes a
+`info.webhook` object (`registered`, `url`, `pendingUpdates`) since the
+delivery-health update.
 
 ### 7. Send a test message
 
@@ -162,6 +201,33 @@ Open your bot in Telegram, press **Start**, then send
 view as a `Telegram` conversation (`John Smith (Telegram)`). Reply from
 KneaChat and the customer receives it in Telegram. In another browser window,
 the message appears without a page refresh (WebSocket).
+
+## No tunnel? Use the polling bridge
+
+When no public HTTPS endpoint is available (firewall, dead quick tunnel,
+campus network), the bot can be driven by **long polling** instead of a
+webhook — with zero external setup:
+
+```bash
+npm run server -- telegram:bridge
+```
+
+`server/scripts/telegram-poll-bridge.js` pulls updates with `getUpdates` and
+replays each one into the **local** webhook endpoint, so the exact production
+path (secret check → parse → persist → WebSocket) runs unchanged. Startup
+removes any registered webhook (polling forbids it), and the update offset is
+persisted to `server/tmp/telegram-bridge-offset.json` so a restart neither
+replays nor skips updates.
+
+Rules of thumb:
+
+- **Webhook + tunnel** is production-identical and needs no extra local
+  process beyond the tunnel itself; quick-tunnel URLs churn on every restart.
+- **The bridge** needs nothing but the backend, survives tunnel loss, and is
+  therefore the most robust choice on a laptop — but it is one more process to
+  keep alive (a Telegram bot supports only one poller; see the 409 note above).
+- Switching from bridge back to webhook: stop the bridge, then run
+  `npm run server -- telegram:webhook -- <url>` (or the `setup-webhook` API).
 
 ## API endpoints
 
@@ -175,7 +241,7 @@ the message appears without a page refresh (WebSocket).
 | POST | `/api/telegram/setup-webhook` | admin+ | `{ webhookUrl? }` — falls back to `TELEGRAM_WEBHOOK_URL`. |
 | GET | `/api/telegram/webhook-info` | admin+ | Current webhook configuration. |
 | DELETE | `/api/telegram/webhook` | admin+ | Unregister the webhook. |
-| GET | `/api/omni/health/:channel` | public | Channel-agnostic health probe (e.g. `/api/omni/health/telegram`). |
+| GET | `/api/omni/health/:channel` | public | Channel-agnostic health probe (e.g. `/api/omni/health/telegram`). For Telegram this now also includes `info.webhook` — `{ registered, url, pendingUpdates }` — so a dead tunnel or unregistered webhook is visible in one place. |
 | GET | `/api/omni/capabilities` | public | Per-channel feature map — `{ channels: { telegram: { media: true }, website: { media: false } } }`. The composer hides its attach/voice controls for channels with `media: false`. |
 | POST | `/api/omni/conversations/:id/messages` | any agent | Channel-agnostic reply (same engine as `/api/telegram/messages`). |
 | POST | `/api/omni/conversations/:id/media` | any agent | Channel-agnostic file / voice reply — multipart `file` + optional `caption`, `replyToMessageId`. Delivered through the adapter's `sendMedia`; persisted only on provider success. |
@@ -219,9 +285,22 @@ The client keeps `telegram_assignment_changed` as a legacy alias.
 | `TELEGRAM_BOT_TOKEN` | *(empty)* | Bot token from BotFather. The server starts without it; the bot simply reports "not configured". |
 | `TELEGRAM_API_URL` | `https://api.telegram.org` | Bot API base. The service appends `/bot<token>/` unless the base already ends in `/bot`. |
 | `TELEGRAM_WEBHOOK_SECRET` | *(empty)* | Secret verified on every webhook delivery. **Always set in production.** |
-| `TELEGRAM_WEBHOOK_URL` | *(empty)* | Public HTTPS webhook URL; default for `POST /api/telegram/setup-webhook`. |
+| `TELEGRAM_WEBHOOK_URL` | *(empty)* | Public HTTPS webhook URL; default for `POST /api/telegram/setup-webhook` and `npm run telegram:webhook`. |
 | `OMNI_INBOX_AGENT_IDS` | *(empty = all internal users)* | Comma-separated KneaChat user ids that see the omni inbox. |
 | `TELEGRAM_INBOX_AGENT_IDS` | *(empty)* | Legacy alias for `OMNI_INBOX_AGENT_IDS`. |
+
+## Operational scripts
+
+Convenience wrappers live in `server/scripts/` and are wired as npm scripts in
+`server/package.json` (run via `npm run server -- <script>` from the repo root,
+or `npm run <script>` inside `server/`):
+
+| Script | Purpose |
+| --- | --- |
+| `telegram:status` | One-glance health: bot identity, webhook registration, host reachability, Telegram-side delivery errors and pending-update backlog. |
+| `telegram:webhook -- <url>` | Register the webhook (falls back to `TELEGRAM_WEBHOOK_URL`), then ping the host to catch a dead tunnel immediately. |
+| `telegram:tunnel` | Start a Cloudflare **quick tunnel** to `localhost:8080` — note that the hostname changes on every restart; re-register the webhook afterwards. |
+| `telegram:bridge` | Run the long-polling bridge (no tunnel needed). Deletes the webhook on startup; stop it before switching back to webhook mode. |
 
 ## Security
 
@@ -284,7 +363,18 @@ tunnel required):
 
 Everything carries a unique per-run marker and is cleaned up afterwards; the
 synthetic customer ("E2E BotCustomer") is kept as a fixture so later runs
-reuse its conversation. `--keep` disables cleanup.
+reuse its conversation.
+
+⚠️ **Do not reply to the synthetic fixture from the UI.** Its Telegram chat id
+(`700000001`) does not exist on Telegram's servers, so every agent reply
+fails with `502 Bad Gateway` ("chat not found") — that is the correct
+deliver-before-persist behavior, and the conversation gets flagged with a
+delivery warning in the Omni Inbox. Test real outbound delivery against a
+genuine chat (your own Telegram account) or with `E2E_REAL_DELIVERY=1` once
+the bot has a real conversation. Remove the fixture FK-safely (notifications
+→ messages → external_messages → conversation_members →
+external_conversations → external_contacts → conversations → shadow user)
+if it clutters the inbox. `--keep` disables cleanup.
 
 The one path the script cannot exercise safely by default is a real outbound
 delivery (it would message a human's Telegram chat). Run it once the bot has

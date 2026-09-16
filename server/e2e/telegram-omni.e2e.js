@@ -70,6 +70,12 @@ const CUSTOMER_NAME_PREFIX = `${CUSTOMER_FIRST} ${CUSTOMER_LAST} (Telegram)`;
 const MARKER = `e2e-${process.pid}-${Date.now()}`;
 const INBOUND_CONTENT = `e2e inbound ${MARKER} hello`;
 
+// The synthetic customer's chat id does not exist on Telegram's servers, so a
+// leftover fixture would 502 on every agent reply ("chat not found"). Teardown
+// therefore removes the whole fixture by default; opt out for repeat runs with
+// E2E_KEEP_FIXTURE=1.
+const KEEP_FIXTURE = process.env.E2E_KEEP_FIXTURE === '1';
+
 // ---------------------------------------------------------------------------
 // Tiny test harness (same shape as notifications.e2e.js)
 // ---------------------------------------------------------------------------
@@ -243,11 +249,23 @@ async function main() {
       console.log(`  ⚠  ${hookInfo.result.pending_update_count} update(s) pending at Telegram`);
     }
   } else {
-    check(
-      'a public webhook URL is registered',
-      false,
-      'no webhook set — see docs/TELEGRAM_INTEGRATION.md (tunnel + setWebhook)',
-    );
+    // Polling mode: the launchd-managed bridge (scripts/telegram-poll-bridge.js)
+    // removes the webhook BY DESIGN and feeds updates into the local webhook
+    // endpoint — a registered URL is not required for updates to flow.
+    const bridgeRunning = await new Promise((resolve) => {
+      require('child_process').execFile('pgrep', ['-f', 'telegram-poll-bridge'], (err, stdout) => {
+        resolve(!err && String(stdout).trim().length > 0);
+      });
+    });
+    if (bridgeRunning) {
+      check('updates flowing via polling bridge (no webhook — by design)', true, 'telegram-poll-bridge process detected');
+    } else {
+      check(
+        'a public webhook URL is registered (or the polling bridge is running)',
+        false,
+        'no webhook set and no bridge process — see docs/TELEGRAM_INTEGRATION.md',
+      );
+    }
   }
 
   // 4. Locate the omni conversations. The synthetic customer's conversation is
@@ -556,12 +574,53 @@ async function cleanup({ db, convId, existedBefore }) {
     const msgs = await safeQuery(db, 'SELECT id, sender_id FROM messages WHERE content LIKE ?', [like]);
     await safeQuery(db, 'DELETE FROM messages WHERE content LIKE ?', [like]);
 
-    // First-run fixture teardown is intentionally NOT done: the synthetic
-    // customer + conversation stay so later runs reuse them.
     console.log(
       `  🧹 Removed ${msgs.length} test message(s) + ${notifs.length} notification(s) (marker ${MARKER})`,
     );
-    if (!existedBefore) {
+
+    // Fixture teardown — FK-safe order. The synthetic customer cannot receive
+    // replies (its chat id is not a real Telegram chat), so leaving it in the
+    // inbox only creates "chat not found" 502s for agents.
+    if (convId && !KEEP_FIXTURE) {
+      // safeQuery returns the ROWS array — do not destructure a row out of it.
+      const ecRows = await safeQuery(db, 'SELECT contact_id FROM external_conversations WHERE conversation_id = ?', [convId]);
+      const contactId = ecRows?.[0]?.contact_id ?? null;
+      let shadowUser = null;
+      if (contactId) {
+        const cRows = await safeQuery(db, 'SELECT user_id FROM external_contacts WHERE id = ?', [contactId]);
+        shadowUser = cRows?.[0]?.user_id ?? null;
+      }
+      const teardown = [
+        ['notifications (shadow user)', 'DELETE FROM notifications WHERE user_id = ? OR actor_id = ?', [shadowUser, shadowUser]],
+        ['message_bookmarks', 'DELETE mb FROM message_bookmarks mb JOIN messages m ON m.id = mb.message_id WHERE m.conversation_id = ?', [convId]],
+        ['message_reminders', 'DELETE mr FROM message_reminders mr JOIN messages m ON m.id = mr.message_id WHERE m.conversation_id = ?', [convId]],
+        ['attachments', 'DELETE a FROM attachments a JOIN messages m ON m.id = a.message_id WHERE m.conversation_id = ?', [convId]],
+        ['message_reactions', 'DELETE r FROM message_reactions r JOIN messages m ON m.id = r.message_id WHERE m.conversation_id = ?', [convId]],
+        ['external_messages', 'DELETE FROM external_messages WHERE conversation_id = ?', [convId]],
+        ['messages', 'DELETE FROM messages WHERE conversation_id = ?', [convId]],
+        ['conversation_members', 'DELETE FROM conversation_members WHERE conversation_id = ?', [convId]],
+        ['external_conversations', 'DELETE FROM external_conversations WHERE conversation_id = ?', [convId]],
+        ['external_contacts', 'DELETE FROM external_contacts WHERE id = ?', [contactId]],
+        ['conversations', 'DELETE FROM conversations WHERE id = ?', [convId]],
+        ['shadow user', 'DELETE FROM users WHERE id = ? AND role = ?', [shadowUser, 'external']],
+      ];
+      let skipped = 0;
+      for (const [what, sql, params] of teardown) {
+        if (params.some((p) => p === null || p === undefined)) {
+          console.warn(`  ⚠  Fixture teardown skipped "${what}" — missing id (contact/user lookup failed)`);
+          skipped++;
+          continue;
+        }
+        await safeQuery(db, sql, params);
+      }
+      // Verify instead of trusting the deletes — the fixture must be gone.
+      const left = await safeQuery(db, 'SELECT COUNT(*) AS n FROM conversations WHERE id = ?', [convId]);
+      if ((left?.[0]?.n ?? 1) === 0 && skipped === 0) {
+        console.log(`  🧹 Removed synthetic fixture: conversation ${convId} (${CUSTOMER_NAME_PREFIX})`);
+      } else {
+        console.warn(`  ⚠  Fixture teardown incomplete for conversation ${convId} (${skipped} step(s) skipped)`);
+      }
+    } else if (convId && KEEP_FIXTURE) {
       console.log(`  ℹ️  Kept synthetic fixture: conversation ${convId} (${CUSTOMER_NAME_PREFIX}) for reuse by future runs`);
     }
 

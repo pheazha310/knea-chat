@@ -87,7 +87,7 @@ async function main() {
     try { const r = await fetch(`http://127.0.0.1:${CDP_PORT}/json/list`); const list = await r.json(); target = list.find(t => t.type === 'page'); if (target) break; } catch {} await sleep(250);
   }
   check('CDP target found', !!target);
-  if (!target) { cleanup(); process.exit(1); }
+  if (!target) { await cleanup(); process.exit(1); }
 
   page = await CDP.connect(target.webSocketDebuggerUrl);
   await page.send('Page.enable');
@@ -129,12 +129,20 @@ async function main() {
   })()`), 10000);
   check('Dashboard loaded after login', !!dashReady);
 
-  // Navigate to #general
+  // Navigate to #general — new UI: sidebar "Channels" nav item opens a grid of
+  // .channel-card buttons; the channel name lives in .channel-card-name.
   section('Navigate to #general');
   await sleep(1000);
   await page.eval(`(() => {
-    const items = document.querySelectorAll('.sidebar li, .sidebar button, .sidebar a, [class*=channel]');
-    const gen = [...items].find(el => el.textContent.includes('general'));
+    const nav = [...document.querySelectorAll('button, a, li, [role=button]')]
+      .find(el => (el.textContent || '').trim().startsWith('Channels'));
+    if (nav) nav.click();
+    return !!nav;
+  })()`);
+  await waitFor(() => page.eval(`document.querySelectorAll('.channel-card').length > 0`), 10000);
+  await page.eval(`(() => {
+    const cards = [...document.querySelectorAll('.channel-card')];
+    const gen = cards.find(c => (c.querySelector('.channel-card-name')?.textContent || '').trim() === 'general');
     if (gen) gen.click();
     return !!gen;
   })()`);
@@ -149,13 +157,20 @@ async function main() {
   // Upload file
   section('File upload via paperclip');
 
-  // Set up network interception to capture the upload response
+  // Set up network interception to capture the upload response.
+  // NOTE: a cross-origin multipart POST triggers a CORS preflight (OPTIONS →
+  // 204) on the same URL; only the real POST carries the meaningful status.
   const uploadCapture = new Promise((resolve) => {
     let resolved = false;
+    const requestMethods = new Map(); // requestId → method
     const handler = (data) => {
       try {
         const msg = JSON.parse(data.toString());
+        if (msg.method === 'Network.requestWillBeSent') {
+          requestMethods.set(msg.params.requestId, msg.params.request.method);
+        }
         if (msg.method === 'Network.responseReceived' && msg.params?.response?.url?.includes('/messages/upload')) {
+          if (requestMethods.get(msg.params.requestId) === 'OPTIONS') return; // skip preflight
           if (!resolved) { resolved = true; page.ws.removeListener('message', handler); resolve({ status: msg.params.response.status, url: msg.params.response.url }); }
         }
       } catch {}
@@ -188,37 +203,41 @@ async function main() {
     check('Upload returned 201 Created', result.status === 201, `got ${result.status}`);
   }
 
-  // Verify the file appears in the chat
-  await sleep(2000);
-  const fileVisible = await page.eval(`(() => {
-    const all = document.querySelectorAll('[class*=attachment], [class*=Attachment], img[src*=uploads], a[href*=uploads], [class*=file], audio');
-    return all.length;
-  })()`);
-  check('File attachment visible in chat', fileVisible > 0, `found ${fileVisible} element(s)`);
-
-  // Also check for the filename text
-  const filenameVisible = await page.eval(`(() => {
-    return document.body.textContent.includes('chat-upload-test') || document.body.textContent.includes('upload-test');
-  })()`);
-  check('Upload filename appears in chat', !!filenameVisible);
+  // Verify the file appears in the chat: the new message arrives over the
+  // WebSocket, so wait for an attachment element carrying this run's filename.
+  const baseName = path.basename(tmpFile); // chat-upload-test-<ts>.png
+  const stem = baseName.replace(/\.png$/, '');
+  const filenameVisible = await waitFor(() => page.eval(`(() => {
+    if (document.body.textContent.includes('${stem}')) return 'text';
+    const imgs = [...document.querySelectorAll('.attachment-image img')];
+    return imgs.some((img) => (img.alt || '').includes('${stem}')) ? 'img' : null;
+  })()`), 15000);
+  check('Upload filename appears in chat', !!filenameVisible, `looked for ${baseName}`);
 
   // Cleanup
   section('Cleanup');
   fs.unlinkSync(tmpFile);
-  cleanup();
+  await cleanup();
   console.log(`\n${'='.repeat(60)}`);
   console.log(`  Total: ${passed + failed}  |  ✅ ${passed}  |  ❌ ${failed}`);
   console.log(`${'='.repeat(60)}\n`);
   process.exit(failed > 0 ? 1 : 0);
 }
 
-function cleanup() {
-  if (chrome) chrome.kill('SIGTERM');
-  if (chromeDir) fs.rmSync(chromeDir, { recursive: true, force: true });
+async function cleanup() {
+  if (chrome) { try { chrome.kill('SIGTERM'); } catch {} }
+  if (chromeDir) {
+    // Chrome keeps writing its profile dir while shutting down; removing it
+    // too early races into ENOTEMPTY. Retry briefly before giving up.
+    for (let i = 0; i < 10; i++) {
+      try { fs.rmSync(chromeDir, { recursive: true, force: true }); return; } catch {}
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  }
 }
 
-main().catch((err) => {
+main().catch(async (err) => {
   console.error('\n❌ Fatal:', err.message || err);
-  cleanup();
+  await cleanup();
   process.exit(1);
 });

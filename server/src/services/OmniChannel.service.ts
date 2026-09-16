@@ -535,7 +535,7 @@ export class OmniChannelService {
     const messageId = await this.messageRepository.create({
       conversation_id: conversationId,
       sender_id: agentId,
-      content: media.kind === 'image' ? '' : displayName,
+      content: displayName,
       type: media.kind === 'voice' ? 'voice' : media.kind === 'image' ? 'image' : 'file',
       reply_to: replyToMessageId || null,
     });

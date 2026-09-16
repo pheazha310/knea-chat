@@ -302,6 +302,29 @@ describe('TelegramChannelAdapter — health + webhook administration', () => {
     assert.equal(health.connected, false);
   });
 
+  it('includes webhook registration status in health info', async () => {
+    const adapter = new TelegramChannelAdapter(makeApi({
+      getWebhookInfo: async () => ({
+        ok: true,
+        result: { url: 'https://example.com/api/telegram/webhook', pending_update_count: 3 },
+      }),
+    }));
+    const health = await adapter.getHealth();
+    const webhook = health.info?.webhook as { registered: boolean; url: string; pendingUpdates: number };
+    assert.equal(webhook.registered, true);
+    assert.equal(webhook.url, 'https://example.com/api/telegram/webhook');
+    assert.equal(webhook.pendingUpdates, 3);
+  });
+
+  it('stays connected when the webhook probe fails', async () => {
+    const adapter = new TelegramChannelAdapter(makeApi({
+      getWebhookInfo: async () => { throw new Error('probe exploded'); },
+    }));
+    const health = await adapter.getHealth();
+    assert.equal(health.connected, true);
+    assert.equal(health.info?.webhook, undefined);
+  });
+
   it('delegates webhook administration to the API client', async () => {
     const api = makeApi();
     const adapter = new TelegramChannelAdapter(api);
