@@ -29,7 +29,7 @@ import NotificationMessageModal from "../../../features/notifications/ui/Notific
 import CallModal from "../../../features/calls/ui/CallModal";
 import IncomingCallModal from "../../../features/calls/ui/IncomingCallModal";
 import CreateMeetingModal from "../../../features/meetings/ui/CreateMeetingModal";
-import Avatar from "../../../entities/user/ui/Avatar";
+import Avatar from "../../../shared/ui/Avatar";
 import Icon from "../../../shared/ui/Icon";
 import ConnectionIndicator from "../../../shared/ui/ConnectionIndicator";
 import {
@@ -38,7 +38,7 @@ import {
   useCallStore,
   useCompanyStore,
   useAnnouncementStore,
-} from "../../../entities/store";
+} from "../../../app/stores";
 import { useTheme } from "../../../app/providers/ThemeProvider";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { wsService } from "../../../shared/lib/websocket";
@@ -238,6 +238,7 @@ const Dashboard = () => {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   const currentUserId = user?.id ?? null;
+  const currentUserIdSafe = currentUserId ?? 0;
   const role = user?.role || "employee";
   const canManage =
     role === "super_admin" || role === "admin" || role === "manager";
@@ -941,7 +942,7 @@ const Dashboard = () => {
             >
               <ConversationList
                 channels={channels}
-                teams={teams}
+              teams={teams}
                 people={people}
                 selectedKey={selectedKey}
                 unreadMap={unreadMap}
@@ -1243,13 +1244,13 @@ const Dashboard = () => {
           ) : view === "meetings" ? (
             <MeetingsView
               meetings={meetings}
-              currentUserId={currentUserId}
+              currentUserId={currentUserIdSafe}
               canSchedule={canManage}
               onCreate={createMeeting}
               onUpdate={updateMeeting}
               onCancel={cancelMeeting}
               onStartCall={startCall}
-              teams={teams}
+              teams={teams.map((t) => ({ ...t, department_id: t.department_id ?? undefined }))}
               departments={departments}
               users={users}
             />
@@ -1628,7 +1629,7 @@ const Dashboard = () => {
       {showMeetingFromChat && activeConversation && (
         <CreateMeetingModal
           users={people}
-          currentUserId={currentUserId}
+          currentUserId={currentUserIdSafe}
           selectedDate={new Date().toISOString().split('T')[0]}
           onClose={() => setShowMeetingFromChat(false)}
           onSubmit={async (data) => {

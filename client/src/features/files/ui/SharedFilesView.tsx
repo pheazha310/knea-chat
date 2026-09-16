@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSharedFileStore } from '../../../entities/file/model/sharedFileStore';
 import { resolveSharedFileUrl } from '../../../entities';
 import Icon, { type IconName } from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import Modal from '../../../shared/ui/Modal';
 import FilePreview from './FilePreview';

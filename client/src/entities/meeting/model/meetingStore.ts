@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { MeetingModel, UpdateMeetingInput, type Meeting, type CreateMeetingInput, type MeetingNote, type MeetingReminder, type MeetingAttendee, type MeetingAttachment } from "./Meeting";
-import { getErrorMessage } from "../../store/utils";
+import { getErrorMessage } from '../../../app/stores/utils';
 
 const normalizeMeeting = (meeting: any): Meeting => ({
   ...meeting,

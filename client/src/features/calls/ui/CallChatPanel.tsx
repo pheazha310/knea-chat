@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import { useChatStore } from '../../../entities/conversation/model/chatStore';
 import { useAuthStore } from '../../../entities/auth/model/authStore';
-import { useUserStore } from '../../../entities/store';
-import type { CallSession } from '../../../features/calls/model/callStore';
+import { useUserStore } from '../../../app/stores';
+import type { CallSession } from '../../../shared/stores/callStore';
 import type { ChatMessage } from '../../../entities';
 
 interface CallChatPanelProps {

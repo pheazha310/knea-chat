@@ -139,7 +139,7 @@ describe('AttendanceView (employee calendar)', () => {
         status: 'approved',
         approved_by: null,
       },
-    ];
+    ] as any;
     mockStore.mockReturnValue(store);
 
     render(<AttendanceView />);

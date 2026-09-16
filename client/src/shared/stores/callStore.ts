@@ -9,11 +9,11 @@
 // directly (matching the app's simulated-call design). The signaling events
 // make calls real between users: B now sees A's ring and can accept/decline.
 import { create } from 'zustand';
-import { wsService } from '../../../shared/lib/websocket';
-import type { WsEventMap } from '../../../shared/lib/websocket';
-import { WebRTCManager } from '../../../shared/lib/webrtc';
-import type { RtcParticipant } from '../../../shared/lib/webrtc';
-import { useAuthStore } from '../../../entities/auth/model/authStore';
+import { wsService } from '../lib/websocket';
+import type { WsEventMap } from '../lib/websocket';
+import { WebRTCManager } from '../lib/webrtc';
+import type { RtcParticipant } from '../lib/webrtc';
+import { useAuthStore } from '../../entities/auth/model/authStore';
 
 export interface CallParticipant {
   id: number;

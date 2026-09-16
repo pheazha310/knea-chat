@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import type { ChatMessage, Conversation, User } from '../../../entities';
 import type { IconName } from '../../../shared/ui/Icon';

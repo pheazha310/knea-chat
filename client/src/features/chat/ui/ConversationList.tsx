@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import type { Channel, Team, User } from '../../../entities';
 

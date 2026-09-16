@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import Modal from '../../../shared/ui/Modal';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import { SearchModel } from '../../../entities';
 import type { MessageSearchResult, User } from '../../../entities';
 

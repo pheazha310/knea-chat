@@ -21,7 +21,7 @@ import {
   useCompanyStore,
   useAnnouncementStore,
   useMeetingStore,
-} from '../../../entities/store';
+} from '../../../app/stores';
 
 export function useChatViewModel() {
   const chat = useChatStore();

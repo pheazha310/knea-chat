@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import Modal from '../../../shared/ui/Modal';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import type { User } from '../../../entities';
 
 interface CreateGroupModalProps {

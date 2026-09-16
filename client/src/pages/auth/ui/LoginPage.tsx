@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Icon from '../../../shared/ui/Icon';
-import { useAuthStore } from '../../../entities/store';
+import { useAuthStore } from '../../../app/stores';
 import { useTheme } from '../../../app/providers/ThemeProvider';
 import { useToast } from '../../../app/providers/ToastProvider';
 import { SystemSettingModel } from '../../../entities';

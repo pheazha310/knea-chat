@@ -36,9 +36,9 @@ const getInitialTheme = (): Theme => {
   return 'light';
 };
 
-// Apply the saved/system theme synchronously at module load, BEFORE React
-// renders, so dark-mode users never see a light flash on reload (FOUC).
-applyTheme(getInitialTheme());
+export const initTheme = () => {
+  applyTheme(getInitialTheme());
+};
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
   const [theme, setTheme] = useState<Theme>(getInitialTheme);

@@ -11,7 +11,7 @@
 // every other participant. For each unordered pair, the participant with the
 // LOWER user id creates the offer; the other answers — deterministic, so a
 // pair never ends up with two connections.
-import type { CallType } from '../../entities/store';
+import type { CallType } from '../stores/callStore';
 
 export interface RtcParticipant {
   userId: number;

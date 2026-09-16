@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import Icon from '../../../shared/ui/Icon';
-import { useCallStore } from '../../../features/calls/model/callStore';
-import type { CallSession } from '../../../features/calls/model/callStore';
+import { useCallStore } from '../../../shared/stores/callStore';
+import type { CallSession } from '../../../shared/stores/callStore';
 
 /** How long the incoming ring plays before the call is treated as missed. */
 const RING_TIMEOUT_MS = 30000;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import { roleLabel } from '../../../shared/lib/utils/roles';
 import type { User } from '../../../entities';

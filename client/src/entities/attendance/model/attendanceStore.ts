@@ -19,7 +19,7 @@ import {
   type Holiday,
   type OvertimeRequest,
 } from './Attendance';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 interface AttendanceState {
   // employee self view

@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useAuthStore } from '../../../entities/store';
+import { useAuthStore } from '../../../app/stores';
 import { CompanyModel, SystemSettingModel, UserModel, type SystemSettings } from '../../../entities';
 import { PlatformMetricModel, SubscriptionModel } from '../../../entities';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import { roleLabel } from '../../../shared/lib/utils/roles';
 import { SkeletonTable } from '../../../shared/ui/Skeleton';

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useAuthStore } from '../../../entities/store';
+import { useAuthStore } from '../../../app/stores';
 import {
   AuditLogModel,
   ChannelModel,
@@ -10,7 +10,7 @@ import {
   TeamModel,
   UserModel,
 } from '../../../entities';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import Icon from '../../../shared/ui/Icon';
 import type { IconName } from '../../../shared/ui/Icon';

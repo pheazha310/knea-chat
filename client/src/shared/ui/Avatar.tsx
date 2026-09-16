@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { resolveFileUrl } from '../../../entities';
-import { avatarClass, initialsOf } from '../../../shared/lib/utils/avatar';
+import { resolveFileUrl } from '../../entities';
+import { avatarClass, initialsOf } from '../lib/utils/avatar';
 
 /** Minimal person shape the avatar needs to render (photo / initials / dot). */
 export interface AvatarPerson {

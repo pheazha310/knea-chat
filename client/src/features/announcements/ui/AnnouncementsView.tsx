@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Icon from '../../../shared/ui/Icon';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ReactionBar from '../../../shared/ui/ReactionBar';
 import type {
   Announcement,

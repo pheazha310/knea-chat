@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Avatar from "../../../entities/user/ui/Avatar";
+import Avatar from "../../../shared/ui/Avatar";
 import Icon, { type IconName } from "../../../shared/ui/Icon";
 import { resolveFileUrl } from "../../../entities";
 import VoiceMessage from "./VoiceMessage";

@@ -12,8 +12,8 @@ import { useChatStore } from '../../conversation/model/chatStore';
 import { useUserStore } from '../../user/model/userStore';
 import { useNotificationStore } from '../../notification/model/notificationStore';
 import { useCompanyStore } from '../../company/model/companyStore';
-import { useCallStore } from '../../../features/calls/model/callStore';
-import { getErrorMessage } from '../../store/utils';
+import { useCallStore } from '../../../shared/stores/callStore';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 export interface AuthResult {
   success: boolean;

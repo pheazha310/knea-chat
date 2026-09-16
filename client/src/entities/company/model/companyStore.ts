@@ -13,7 +13,7 @@ import type { Department } from './Department';
 import type { SystemSettings } from '../../system-setting/model/SystemSetting';
 import type { Team } from '../../team/model/Team';
 import type { User } from '../../user/model/User';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 interface CompanyState {
   company: Company | null;

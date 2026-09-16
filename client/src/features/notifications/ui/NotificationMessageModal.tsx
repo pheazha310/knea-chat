@@ -8,7 +8,7 @@
 // plus an "Open in conversation" button that jumps into the chat.
 import React, { useEffect, useState } from 'react';
 import Modal from '../../../shared/ui/Modal';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import type { IconName } from '../../../shared/ui/Icon';
 import NotificationReactionAction from '../../../features/notifications/ui/NotificationReactionAction';

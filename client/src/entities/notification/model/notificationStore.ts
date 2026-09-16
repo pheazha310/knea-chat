@@ -9,7 +9,7 @@ import { NotificationModel } from './Notification';
 import type { Notification } from './Notification';
 import type { Reaction } from '../../message/model/Message';
 import { conversationIdOf } from '../../../shared/lib/utils/notifications';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 /** Read the conversationId embedded in a notification's JSON `data` field. */
 const parseConversationId = (n: Notification): number | null => conversationIdOf(n);

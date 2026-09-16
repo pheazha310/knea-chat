@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useChatStore } from '../../../entities/conversation/model/chatStore';
 import { MessageModel } from '../../../entities';
 import Icon from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 
 const relativeTime = (value?: string) => {
   if (!value) return '';

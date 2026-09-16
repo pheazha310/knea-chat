@@ -2,7 +2,7 @@
 // time (create team / create channel). Shows every user with a checkbox and
 // filters as you type. Selected ids are reported back via onChange.
 import React, { useMemo, useState } from 'react';
-import Avatar from '../../entities/user/ui/Avatar';
+import Avatar from '../../shared/ui/Avatar';
 import type { User } from '../../entities/user/model/User';
 
 interface MemberPickerProps {

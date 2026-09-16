@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../../shared/ui/Icon';
 import type { IconName } from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import type { AppView } from '../../../widgets/sidebar/ui/Sidebar';
 import { API_BASE_URL } from '../../../shared/lib/api';
 import { SearchModel } from '../../../entities';

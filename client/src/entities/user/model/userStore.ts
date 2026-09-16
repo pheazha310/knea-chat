@@ -6,7 +6,7 @@
 import { create } from 'zustand';
 import { UserModel } from './User';
 import type { PresenceStatus, User } from './User';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 interface UserState {
   users: User[];

@@ -7,17 +7,17 @@
 //   WebSocket Server → WebSocket Client → Zustand Stores → React Components → UI
 import { wsService } from '../../shared/lib/websocket';
 import type { PresenceStatus } from '../../entities';
-import { useAuthStore } from '../auth/model/authStore';
-import { useChatStore } from '../conversation/model/chatStore';
-import { useCompanyStore } from '../company/model/companyStore';
-import { useUserStore } from '../user/model/userStore';
-import { useNotificationStore } from '../notification/model/notificationStore';
-import { useAnnouncementStore } from '../announcement/model/announcementStore';
-import { useTaskStore } from '../task/model/taskStore';
-import { useCallStore } from '../../features/calls/model/callStore';
-import { useMeetingStore } from '../meeting/model/meetingStore';
-import { useSharedFileStore } from '../file/model/sharedFileStore';
-import { useAttendanceStore } from '../attendance/model/attendanceStore';
+import { useAuthStore } from '../../entities/auth/model/authStore';
+import { useChatStore } from '../../entities/conversation/model/chatStore';
+import { useCompanyStore } from '../../entities/company/model/companyStore';
+import { useUserStore } from '../../entities/user/model/userStore';
+import { useNotificationStore } from '../../entities/notification/model/notificationStore';
+import { useAnnouncementStore } from '../../entities/announcement/model/announcementStore';
+import { useTaskStore } from '../../entities/task/model/taskStore';
+import { useCallStore } from '../../shared/stores/callStore';
+import { useMeetingStore } from '../../entities/meeting/model/meetingStore';
+import { useSharedFileStore } from '../../entities/file/model/sharedFileStore';
+import { useAttendanceStore } from '../../entities/attendance/model/attendanceStore';
 import { toNumber } from './utils';
 
 export function registerWsListeners(): () => void {

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuthStore } from '../../../entities/store';
-import Avatar from '../../../entities/user/ui/Avatar';
+import { useAuthStore } from '../../../app/stores';
+import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import { AuthModel, UserModel } from '../../../entities';
 import type { LoginSession, PresenceStatus, User } from '../../../entities';

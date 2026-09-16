@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import Icon from "../../../shared/ui/Icon";
-import { useCallStore } from "../../../features/calls/model/callStore";
-import type { CallSession } from "../../../features/calls/model/callStore";
+import { useCallStore } from "../../../shared/stores/callStore";
+import type { CallSession } from "../../../shared/stores/callStore";
 import CallChatPanel from "./CallChatPanel";
 
 /** How long an unanswered outgoing call rings before giving up. */
@@ -49,7 +49,7 @@ const CallModal = ({ call }: CallModalProps) => {
     .map((p) => ({
       userId: p.userId,
       name: p.name,
-      stream: rtc.getRemoteStream(p.userId),
+      stream: rtc ? rtc.getRemoteStream(p.userId) : null,
     }))
     .filter(
       (r): r is { userId: number; name: string; stream: MediaStream } =>

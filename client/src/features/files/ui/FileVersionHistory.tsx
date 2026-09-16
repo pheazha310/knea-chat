@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSharedFileStore } from '../../../entities/file/model/sharedFileStore';
 import { resolveSharedFileUrl } from '../../../entities';
 import Icon from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 
 const formatSize = (bytes?: number | null) => {
   if (!bytes) return '';

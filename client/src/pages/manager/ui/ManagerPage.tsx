@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, Navigate } from 'react-router-dom';
-import { useAuthStore } from '../../../entities/store';
+import { useAuthStore } from '../../../app/stores';
 import { ChannelModel, DepartmentModel, TeamModel, UserModel } from '../../../entities';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import Icon from '../../../shared/ui/Icon';

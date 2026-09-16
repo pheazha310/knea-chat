@@ -3,7 +3,7 @@
 // from the task store (which talks to the /tasks REST endpoints).
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Icon from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import Modal from '../../../shared/ui/Modal';
 import ReactionBar from '../../../shared/ui/ReactionBar';

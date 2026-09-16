@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import Avatar from "../../../entities/user/ui/Avatar";
+import Avatar from "../../../shared/ui/Avatar";
 import Icon from "../../../shared/ui/Icon";
 import { EmojiPicker } from "./ChatEnhancements";
 import { useToast } from "../../../app/providers/ToastProvider";

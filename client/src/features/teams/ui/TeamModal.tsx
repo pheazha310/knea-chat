@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import Modal from '../../../shared/ui/Modal';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import ConfirmButton from '../../../shared/ui/ConfirmButton';
 import Icon from '../../../shared/ui/Icon';
 import { ChannelModel, TeamModel } from '../../../entities';

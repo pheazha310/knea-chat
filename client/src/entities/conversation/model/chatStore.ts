@@ -22,7 +22,7 @@ import type { ConnectionStatus } from "../../../shared/lib/websocket";
 import { wsService } from "../../../shared/lib/websocket";
 import { useAuthStore } from "../../auth/model/authStore";
 import { useNotificationStore } from "../../notification/model/notificationStore";
-import { getErrorMessage, toNumber } from "../../store/utils";
+import { getErrorMessage, toNumber } from '../../../app/stores/utils';
 
 interface ChatState {
   channels: Channel[];
@@ -366,7 +366,7 @@ export const useChatStore = create<ChatState>()((set, get) => ({
         // map() returns the same object reference for untouched messages, so a
         // reference mismatch means at least one row changed.
         if (!changed) changed = updated.some((m, i) => m !== list[i]);
-        messages[key] = updated;
+        messages[Number(key)] = updated;
       }
       return { conversations, messages: changed ? messages : state.messages };
     }),
@@ -809,9 +809,8 @@ export const useChatStore = create<ChatState>()((set, get) => ({
       const raw = res.data?.data as
         | { reminderId?: number; id?: number; remind_at: string }
         | undefined;
-      const data = raw
-        ? { id: raw.reminderId ?? raw.id, remind_at: raw.remind_at }
-        : null;
+      const id = raw?.reminderId ?? raw?.id;
+      const data = id != null ? { id, remind_at: raw!.remind_at } : null;
       set((state) => ({
         reminders: { ...state.reminders, [messageId]: data },
       }));

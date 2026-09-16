@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import type { Meeting, User } from "../../../entities";
 import Icon from "../../../shared/ui/Icon";
-import Avatar from "../../../entities/user/ui/Avatar";
+import Avatar from "../../../shared/ui/Avatar";
 import Modal from "../../../shared/ui/Modal";
 import CreateMeetingModal from "./CreateMeetingModal";
 import MeetingNoteModal from "./MeetingNoteModal";

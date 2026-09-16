@@ -5,7 +5,7 @@ import { TaskModel } from './Task';
 import type { Task, TaskComment, TaskAttachment, CreateTaskInput, TaskListParams } from './Task';
 import type { Reaction } from '../../message/model/Message';
 import { useAuthStore } from '../../auth/model/authStore';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 /** Task reactions with an in-flight toggle request (guards double-clicks). */
 const reactionInFlight = new Set<string>();

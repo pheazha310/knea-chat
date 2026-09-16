@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { AnnouncementModel, type Announcement, type AnnouncementReader, type CreateAnnouncementData } from './Announcement';
 import type { Reaction } from '../../message/model/Message';
 import { useAuthStore } from '../../auth/model/authStore';
-import { getErrorMessage } from '../../store/utils';
+import { getErrorMessage } from '../../../app/stores/utils';
 
 /** Announcement reactions with an in-flight toggle request (guards double-clicks). */
 const reactionInFlight = new Set<string>();

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import Icon from '../../../shared/ui/Icon';
 import type { IconName } from '../../../shared/ui/Icon';
-import Avatar from '../../../entities/user/ui/Avatar';
+import Avatar from '../../../shared/ui/Avatar';
 import Modal from '../../../shared/ui/Modal';
 import type { User } from '../../../entities';
 
