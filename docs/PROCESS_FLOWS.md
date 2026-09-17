@@ -2694,6 +2694,194 @@ SERVER INSTANCE A                    REDIS                          SERVER INSTA
 
 ---
 
+## 31. Express HTTP Request Pipeline
+
+### 31.1 Incoming REST Request Lifecycle
+
+```
+CLIENT                              SERVER (Express app.ts)
+  |                                    |
+  |-- HTTP Request ------------------->|
+  |   (GET/POST/PATCH/DELETE)          |
+  |                                    |
+  |                         [Middleware Layer]
+  |                             |-- CORS validation
+  |                             |     (allowed origins + credentials)
+  |                             |-- Body parsing (JSON 10mb / URL-encoded)
+  |                             |-- Request logging
+  |                             |     (timestamp + method + path)
+  |                                    |
+  |                         [Static Files]
+  |                             |-- /uploads/* → express.static
+  |                             |     (resolveUploadDir)
+  |                                    |
+  |                         [Route Matching]
+  |                             |-- Match against mounted routers
+  |                             |     (e.g., /api/messages, /api/users)
+  |                                    |
+  |                         [Authentication]
+  |                             |-- For protected routes:
+  |                             |     auth.authenticate middleware
+  |                             |     |-- Extract Bearer token
+  |                             |     |-- Verify JWT signature
+  |                             |     |-- Check expiry
+  |                             |     |-- Attach user to req.user
+  |                             |     |     { id, email, role, companyId }
+  |                             |     |-- Check maintenance mode
+  |                             |     |     (blocks non-super_admin)
+  |                             |     |-- Call next()
+  |                             |
+  |                         [Route Handler]
+  |                             |-- Controller method
+  |                             |     (e.g., messageController.list)
+  |                             |     |-- Validate input
+  |                             |     |-- Delegate to Service
+  |                             |     |     [MessageService.getMessages]
+  |                             |     |     |-- Business logic
+  |                             |     |     |-- Repository queries
+  |                             |     |-- Return JSON response
+  |                                    |
+  |<-- 200 OK / 201 Created / 4xx / 5xx |
+  |                                    |
+```
+
+### 31.2 Public Route Pipeline (No Auth)
+
+```
+REQUEST: POST /api/auth/register
+  |
+  |-- CORS middleware
+  |-- Body parser
+  |-- Request logger
+  |
+  |-- Route: /api/auth → auth.routes.ts
+  |     |-- No auth middleware
+  |     |-- Controller: authController.register
+  |     |-- Service: AuthService.register
+  |     |-- Response: 201 Created { user, token }
+```
+
+### 31.3 Protected Route Pipeline (JWT Required)
+
+```
+REQUEST: GET /api/messages?conversationId=5
+  |
+  |-- CORS middleware
+  |-- Body parser
+  |-- Request logger
+  |
+  |-- Route: /api/messages → message.routes.ts
+  |     |-- auth.authenticate middleware
+  |     |     |-- Extract: Authorization: Bearer <token>
+  |     |     |-- Verify JWT
+  |     |     |-- Attach req.user
+  |     |     |-- next()
+  |     |
+  |     |-- Controller: messageController.list
+  |     |     |-- Validate conversationId param
+  |     |     |-- Service: MessageService.getMessages(conversationId, req.user.id)
+  |     |     |     |-- Check user is conversation member
+  |     |     |     |-- Query messages (paginated)
+  |     |     |     |-- Return { messages, pagination }
+  |     |     |-- Response: 200 OK
+```
+
+### 31.4 Error Handling Pipeline
+
+```
+REQUEST: Any unmatched or failing request
+  |
+  |-- CORS, body parser, logging...
+  |-- Route not found?
+  |     YES → 404 handler
+  |     |-- Response: 404 { message: 'Endpoint not found', path }
+  |
+  |-- Route handler throws error?
+  |     YES → errorHandler (global, last middleware)
+  |     |-- Sanitize DB errors (isDatabaseError, getSafeErrorMessage)
+  |     |-- Map to HTTP status code
+  |     |-- Response: 4xx/5xx { success: false, message, ... }
+```
+
+### 31.5 Mounted Route Map (app.ts)
+
+| Prefix | Router | Auth | Purpose |
+|--------|--------|------|---------|
+| `/api/auth` | auth.routes.ts | Public | Register, login, refresh, password reset |
+| `/api/health` | inline | Public | Health check |
+| `/api/omni` | omni.routes.ts | Mixed | Shared inbox actions |
+| `/api/website` | website.routes.ts | Mixed | Website widget webhook + admin |
+| `/api/telegram` | telegram.routes.ts | Mixed | Telegram webhook + admin |
+| `/api/users` | user.routes.ts | Protected | User CRUD, avatar, sessions |
+| `/api/teams` | team.routes.ts | Protected | Team CRUD, members |
+| `/api/channels` | channel.routes.ts | Protected | Channel CRUD, members |
+| `/api/conversations` | conversation.routes.ts | Protected | Direct/group conversations |
+| `/api/messages` | message.routes.ts | Protected | Message CRUD, reactions, upload |
+| `/api/messages` | reminder.routes.ts | Protected | Message reminders |
+| `/api/messages` | bookmark.routes.ts | Protected | Message bookmarks |
+| `/api/bookmarks` | bookmark.routes.ts | Protected | Bookmark list |
+| `/api/shared-files` | sharedFile.routes.ts | Protected | File sharing, versions, permissions |
+| `/api/search` | search.routes.ts | Protected | Global + scoped search |
+| `/api/notifications` | notification.routes.ts | Protected | Notification list + actions |
+| `/api/notification-preferences` | notificationPreference.routes.ts | Protected | Notification settings |
+| `/api/tasks` | task.routes.ts | Protected | Task CRUD, comments, attachments |
+| `/api/companies` | company.routes.ts | Protected | Company CRUD |
+| `/api/departments` | department.routes.ts | Protected | Department CRUD |
+| `/api/announcements` | announcement.routes.ts | Protected | Announcement CRUD, reads, reactions |
+| `/api/meetings` | meeting.routes.ts | Protected | Meeting CRUD, attendees, notes |
+| `/api/attendance` | attendance.routes.ts | Protected | Clock in/out, breaks, dashboard |
+| `/api/overtime` | overtime.routes.ts | Protected | Overtime requests |
+| `/api/work-schedules` | workSchedule.routes.ts | Protected | Work schedule CRUD |
+| `/api/leave-requests` | leaveRequest.routes.ts | Protected | Leave request CRUD |
+| `/api/holidays` | holiday.routes.ts | Protected | Holiday CRUD |
+| `/api/audit-logs` | auditLog.routes.ts | Protected | Audit trail (admin+) |
+| `/api/company-settings` | companySetting.routes.ts | Protected | Company settings + permissions |
+| `/api/subscriptions` | subscription.routes.ts | Protected | Plan management (admin+) |
+| `/api/admin/metrics` | platformMetric.routes.ts | Protected | Platform metrics (super_admin) |
+| `/api/settings` | systemSetting.routes.ts | Mixed | Public GET for maintenance; admin PATCH |
+
+### 31.6 Request Flow Summary
+
+```
+Incoming HTTP Request
+    │
+    ▼
+[1] CORS Middleware
+    │   └─ Validate origin, set headers
+    ▼
+[2] Body Parsers
+    │   └─ JSON (10mb) + URL-encoded
+    ▼
+[3] Request Logger
+    │   └─ console.log(method + path)
+    ▼
+[4] Static Files (/uploads)
+    │   └─ express.static(resolveUploadDir)
+    ▼
+[5] Route Matching
+    │   └─ Find matching mounted router
+    ▼
+[6] Auth Middleware (if protected)
+    │   └─ Verify JWT, attach req.user
+    ▼
+[7] Route Handler
+    │   └─ Controller → Service → Repository → DB
+    ▼
+[8] Response
+    └─ JSON (success) OR Error Handler (failure)
+```
+
+### 31.7 Auth Middleware Variants
+
+| Middleware | Location | Purpose |
+|------------|----------|---------|
+| `authenticate` | `auth.middleware.ts` | Verify JWT, attach user to req |
+| `authorize(allowedRoles)` | `auth.middleware.ts` | Exact role match |
+| `authorizeAtLeast(minRole)` | `auth.middleware.ts` | Role hierarchy check |
+| `authorizeCapability(permissionKey)` | `auth.middleware.ts` | Discretionary permission check |
+
+---
+
 ## Appendix: Feature Dependencies
 
 ```

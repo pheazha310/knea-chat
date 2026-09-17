@@ -7,29 +7,73 @@
 
 ---
 
+## Contents
+
+- [1. High-Level Architecture](#1-high-level-architecture)
+- [2. Monorepo Structure](#2-monorepo-structure)
+- [3. Backend Architecture](#3-backend-architecture)
+- [4. Authentication & Authorization](#4-authentication--authorization)
+- [5. Database Architecture](#5-database-architecture)
+- [6. WebSocket Real-Time Pipeline](#6-websocket-real-time-pipeline)
+- [7. Omni-Channel Architecture](#7-omni-channel-architecture)
+- [8. Client-Side Architecture](#8-client-side-architecture)
+- [9. Key Workflows](#9-key-workflows)
+- [10. Background Schedulers](#10-background-schedulers)
+- [11. Testing Strategy](#11-testing-strategy)
+- [12. Key Architectural Patterns](#12-key-architectural-patterns)
+- [13. Environment Configuration](#13-environment-configuration)
+- [14. Running the Project](#14-running-the-project)
+- [15. Summary](#15-summary)
+
+---
+
+## At a Glance
+
+| Aspect | Details |
+|--------|---------|
+| **Project** | KneaChat — Real-time workplace communication platform |
+| **Stack** | React 19 (client) + Express + WebSocket (server) + MySQL + Redis |
+| **Node Version** | 24 |
+| **Architecture** | Full-stack TypeScript, layered backend, MVVM + Zustand client |
+| **Real-time** | WebSocket with reconnection, heartbeat, event queuing |
+| **Omni-Channel** | Telegram + website widget via adapter pattern |
+| **Auth** | JWT + RBAC + discretionary permissions |
+| **Testing** | Jest + RTL (client) + E2E scripts (server) |
+| **Generated** | 2026-09-14 |
+
+---
+
 ## 1. High-Level Architecture
 
 KneaChat is a full-stack workplace communication platform with real-time chat, voice/video call signaling, omni-channel inbox (Telegram + website widget), attendance tracking, meetings, tasks, announcements, and file sharing.
 
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        CLIENT (React)                        │
-│  React Router + Zustand Stores + WebSocket Client            │
-└───────────────────────┬──────────────────────────────────────┘
-                        │ REST (Axios) + WebSocket
-┌───────────────────────▼──────────────────────────────────────┐
-│                    SERVER (Express + ws)                      │
-│  Express Routes → Controllers → Services → Repositories      │
-│  WebSocket Server → Handlers → Services                      │
-│  Omni-Channel Engine → Channel Adapters                      │
-└───────────────────────┬──────────────────────────────────────┘
-                        │
-           ┌────────────┼────────────┐
-           ▼            ▼            ▼
-      ┌────────┐  ┌─────────┐  ┌─────────┐
-      │ MySQL  │  │  Redis  │  │Telegram │
-      │ (DB)   │  │ (Cache) │  │  Bot    │
-      └────────┘  └─────────┘  └─────────┘
+```mermaid
+flowchart TD
+    subgraph Client["CLIENT (React 19)"]
+        A["React Router + Zustand Stores + WebSocket Client"]
+    end
+
+    subgraph Server["SERVER (Express + WebSocket)"]
+        B["Express Routes"]
+        C["Controllers"]
+        D["Services"]
+        E["Repositories"]
+        F["WebSocket Server"]
+        G["Omni-Channel Engine"]
+        H["Channel Adapters"]
+        B --> C --> D --> E
+        F --> D
+        G --> H
+    end
+
+    subgraph DataStores["DATA STORES"]
+        I["MySQL (DB)"]
+        J["Redis (Cache / Pub-Sub)"]
+        K["Telegram Bot"]
+    end
+
+    A -- "REST (Axios) + WebSocket" --> Server
+    Server --> DataStores
 ```
 
 ---
@@ -44,7 +88,7 @@ chat_websocket/
 ├── README.md
 ├── docs/                           # Documentation
 │
-├── client/                         # React 19 Frontend
+├── client/                         # React Frontend
 │   ├── package.json
 │   ├── tsconfig.json
 │   ├── public/
@@ -52,36 +96,51 @@ chat_websocket/
 │       ├── index.tsx               # React entry
 │       ├── App.tsx                 # Router + auth guards
 │       ├── App.css
-│       ├── services/
-│       │   ├── api.ts              # Axios client (auth interceptor)
-│       │   └── websocket.ts        # WebSocket singleton (reconnection, heartbeat)
-│       ├── models/                 # MVVM Model layer (types + REST DAOs)
-│       │   ├── index.ts
-│       │   ├── Auth.ts, User.ts, Message.ts, Conversation.ts, ...
-│       ├── viewmodels/
-│       │   └── useChatViewModel.ts # ViewModel (Zustand-backed)
-│       ├── store/                  # Zustand state management
-│       │   ├── authStore.ts
-│       │   ├── chatStore.ts
-│       │   ├── wsListeners.ts      # WS → Zustand bridge
-│       │   ├── userStore.ts
-│       │   ├── notificationStore.ts
-│       │   ├── companyStore.ts
-│       │   ├── callStore.ts
-│       │   ├── meetingStore.ts
-│       │   ├── announcementStore.ts
-│       │   ├── taskStore.ts
-│       │   ├── attendanceStore.ts
-│       │   ├── sharedFileStore.ts
-│       │   └── utils.ts
-│       ├── components/
-│       │   ├── chat/               # MessageList, MessageComposer, etc.
-│       │   ├── common/             # Avatar, Toast, ReactionBar, etc.
-│       │   ├── modals/             # CallModal, FilePreview, etc.
-│       │   ├── views/              # Dashboard, MessagesView, OmniInboxView, etc.
-│       │   └── ...
-│       ├── contexts/               # ThemeContext, ToastContext
-│       └── utils/                  # time, reactions, emoji, etc.
+│       ├── app/                    # Application shell
+│       │   ├── App.tsx             # Root component + route guards
+│       │   ├── routes.ts           # Route definitions + role guards
+│       │   ├── providers/          # ThemeProvider, ToastProvider
+│       │   └── stores/             # Zustand stores barrel + wsListeners bridge
+│       ├── entities/               # Domain modules (types + Zustand stores per feature)
+│       │   ├── auth/               # Auth types + authStore
+│       │   ├── conversation/       # Conversation types + chatStore (messages, typing, etc.)
+│       │   ├── user/               # User types + userStore
+│       │   ├── notification/       # Notification types + notificationStore
+│       │   ├── company/            # Company/team/department types + companyStore
+│       │   ├── announcement/       # Announcement types + announcementStore
+│       │   ├── task/               # Task types + taskStore
+│       │   ├── meeting/            # Meeting types + meetingStore
+│       │   ├── attendance/         # Attendance types + attendanceStore
+│       │   ├── file/               # Shared file types + sharedFileStore
+│       │   └── ...                 # omni, search, system-setting, subscription, etc.
+│       ├── features/               # Feature UI components (organized by domain)
+│       │   ├── chat/               # MessageList, MessageComposer, ConversationList, ThreadPanel
+│       │   ├── channels/           # ChannelsView, CreateChannelModal
+│       │   ├── teams/              # TeamsView, CreateTeamModal, TeamModal
+│       │   ├── announcements/      # AnnouncementsView
+│       │   ├── notifications/      # NotifsView, NotificationMessageModal, reply/reaction actions
+│       │   ├── settings/           # SettingsView
+│       │   ├── files/              # SharedFilesView, FilePreview, FileShareModal, FileVersionHistory
+│       │   ├── attendance/         # AttendanceView, ManagerAttendanceView, ClockControls, etc.
+│       │   ├── meetings/           # MeetingsView, CreateMeetingModal, MeetingNoteModal
+│       │   ├── tasks/              # TasksView, TaskDetailModal
+│       │   ├── bookmarks/          # BookmarksView
+│       │   ├── search/             # SearchModal, SearchView
+│       │   ├── omni-inbox/         # OmniInboxView
+│       │   └── calls/              # CallModal, IncomingCallModal, CallChatPanel
+│       ├── pages/                  # Page-level layouts (role-based)
+│       │   ├── auth/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
+│       │   ├── dashboard/          # DashboardPage (layout shell + sidebar navigation)
+│       │   ├── admin/              # AdminPage
+│       │   ├── super-admin/        # SuperAdminPage
+│       │   ├── manager/            # ManagerPage
+│       │   └── profile/            # ProfilePage
+│       ├── shared/                 # Cross-cutting UI and utilities
+│       │   ├── ui/                 # Avatar, Icon, Modal, Skeleton, EmptyState, ReactionBar, etc.
+│       │   ├── lib/                # api.ts (Axios client), websocket.ts (WebSocket singleton), webrtc.ts
+│       │   └── stores/             # callStore (cross-feature call state)
+│       └── widgets/                # Reusable composite widgets
+│           └── sidebar/            # Sidebar navigation component
 │
 └── server/                         # Express + WebSocket Backend
     ├── package.json
@@ -177,18 +236,13 @@ chat_websocket/
 
 ### 3.1 Layered Architecture
 
-```
-Client (React + Zustand)
-    ↓ REST/WS
-Express Routes
-    ↓
-Controllers (thin HTTP handlers)
-    ↓
-Services (business logic)
-    ↓
-Repositories (SQL data access)
-    ↓
-MySQL (single shared pool)
+```mermaid
+flowchart TD
+    A["Client (React + Zustand)"] -->|"REST / WebSocket"| B["Express Routes"]
+    B --> C["Controllers<br/>(thin HTTP handlers)"]
+    C --> D["Services<br/>(business logic)"]
+    D --> E["Repositories<br/>(SQL data access)"]
+    E --> F["MySQL<br/>(single shared pool)"]
 ```
 
 **Layers:**
@@ -436,19 +490,17 @@ Company admins can toggle capabilities for the manager role via `role_permission
 ```
 
 **Event routing:**
-```
-Client → WebSocket → handleMessage() → switch(event.type)
-  ├── send_message → MessageHandler
-  ├── forward_message → MessageHandler
-  ├── message_edited → MessageHandler
-  ├── message_deleted → MessageHandler
-  ├── message_pinned/unpinned → MessageHandler
-  ├── typing_start/stop → TypingHandler
-  ├── join/leave_channel → MessageHandler
-  ├── call_start/accept/decline/end → CallHandler
-  ├── webrtc_offer/answer/ice → CallHandler
-  ├── user_status → PresenceHandler
-  └── ping → pong response
+```mermaid
+flowchart LR
+    A["Client"] -->|"WebSocket event"| B["handleMessage()"]
+    B --> C{"event.type"}
+    C -->|"send_message<br/>forward_message<br/>message_edited<br/>message_deleted<br/>message_pinned/unpinned"| D["MessageHandler"]
+    C -->|"typing_start/stop"| E["TypingHandler"]
+    C -->|"join/leave_channel"| D
+    C -->|"call_start/accept/decline/end"| F["CallHandler"]
+    C -->|"webrtc_offer/answer/ice"| F
+    C -->|"user_status"| G["PresenceHandler"]
+    C -->|"ping"| H["pong response"]
 ```
 
 ### 6.2 Connection Registry
@@ -507,7 +559,7 @@ broadcastToAll(event)
 
 ### 6.6 Client WebSocket Service
 
-**File:** `client/src/services/websocket.ts`
+**File:** `client/src/shared/lib/websocket.ts`
 
 **Class:** `WebSocketService` (singleton)
 
@@ -534,7 +586,15 @@ Features:
 
 ### 6.7 WebSocket → Zustand Bridge
 
-**File:** `client/src/store/wsListeners.ts`
+**File:** `client/src/app/stores/wsListeners.ts`
+
+```mermaid
+flowchart LR
+    A["WebSocket Server"] --> B["WebSocket Client"]
+    B --> C["Zustand Stores"]
+    C --> D["React Components"]
+    D --> E["UI"]
+```
 
 Registers listeners once from `App.tsx`. Dispatches events to Zustand stores:
 
@@ -604,27 +664,16 @@ class ChannelRegistry {
 **File:** `server/src/services/OmniChannel.service.ts`
 
 **Inbound flow:**
-```
-1. Webhook payload arrives at /api/<channel>/webhook
-2. Controller validates secret token
-3. OmniChannelService.processInbound(channel, payload)
-4. Adapter.parseInbound(payload) → [OmniInboundMessage]
-5. For each message:
-   a. findOrCreateContact(channel, message)
-      - Check external_contacts by channel + external_id
-      - If new: create shadow user + external_contact row
-   b. findOrCreateConversation(channel, contact)
-      - Check external_conversations by contact
-      - If new: create internal conversation + join agents
-   c. createInboundMessage(channel, adapter, conversationId, contact, message)
-      - Duplicate check (unique channel + external_message_id)
-      - Download media via adapter.downloadMedia
-      - Persist to messages + attachments tables
-      - Create external_message ledger row
-      - Create notifications for inbox agents
-   d. broadcastInboundMessage(channel, conversationId, message)
-      - Send receive_message event to conversation members
-      - Push notification events to agents
+```mermaid
+flowchart TD
+    A["Webhook payload<br/>/api/&lt;channel&gt;/webhook"] --> B["Controller<br/>validates secret token"]
+    B --> C["OmniChannelService<br/>.processInbound()"]
+    C --> D["Adapter<br/>.parseInbound()"]
+    D --> E{"For each message"}
+    E --> F["findOrCreateContact()<br/>check external_contacts"]
+    F --> G["findOrCreateConversation()<br/>check external_conversations"]
+    G --> H["createInboundMessage()<br/>persist + download media"]
+    H --> I["broadcastInboundMessage()<br/>send to agents"]
 ```
 
 **Outbound flow (agent reply):**
@@ -696,37 +745,50 @@ class ChannelRegistry {
 
 ## 8. Client-Side Architecture
 
-### 8.1 MVVM Pattern with Zustand
+### 8.1 Feature-based Organization
 
+The client is organized by **feature domain** rather than by architectural layer. Each feature owns its types, state management, and UI in a single cohesive unit.
+
+```mermaid
+flowchart TD
+    A["entities/<feature>/model/<br/>(TypeScript interfaces + Zustand store)"] --> B["features/<feature>/model/<br/>(ViewModel: useChatViewModel)"]
+    B --> C["features/<feature>/ui/<br/>(React components)"]
+    C --> D["pages/<role>/ui/<br/>(Page layouts)"]
+    D --> E["app/App.tsx<br/>(Router + auth guards)"]
 ```
-Models (types + REST DAOs)
-    ↓
-Stores (Zustand state)
-    ↓
-ViewModels (composed store slices)
-    ↓
-Views (React components)
-```
 
-### 8.2 Stores (Zustand)
+**Top-level layout:**
 
-| Store | State |
-|-------|-------|
-| `authStore` | User, token, loading, error |
-| `chatStore` | Channels, conversations, messages, typing, bookmarks, reminders |
-| `userStore` | Users list, online users, presence status |
-| `notificationStore` | Notifications list, unread count |
-| `companyStore` | Teams, departments, company settings |
-| `callStore` | Active call, WebRTC signaling |
-| `meetingStore` | Meetings, notes, reminders, attendees |
-| `announcementStore` | Announcements, reactions, read tracking |
-| `taskStore` | Tasks, reactions |
-| `attendanceStore` | Attendance records, breaks, dashboard |
-| `sharedFileStore` | Shared files, versions, permissions |
+| Directory | Responsibility |
+|-----------|----------------|
+| `client/src/app/` | Application shell: `App.tsx` (router + guards), `routes.ts` (route config), `providers/` (Theme, Toast), `stores/` (Zustand barrel + `wsListeners.ts`) |
+| `client/src/entities/` | Domain modules: each feature folder contains `model/` with TypeScript interfaces and a Zustand store (e.g. `authStore.ts`, `chatStore.ts`, `attendanceStore.ts`) |
+| `client/src/features/` | Feature UI: each feature folder contains `ui/` with React components and optionally `model/` with a ViewModel hook (e.g. `useChatViewModel.ts`) |
+| `client/src/pages/` | Page layouts: role-based top-level pages (`auth/`, `dashboard/`, `admin/`, `super-admin/`, `manager/`, `profile/`) |
+| `client/src/shared/` | Cross-cutting concerns: `ui/` (Avatar, Icon, Modal, Skeleton, etc.), `lib/` (`api.ts`, `websocket.ts`, `webrtc.ts`), `stores/` (`callStore.ts`) |
+| `client/src/widgets/` | Reusable composite widgets (e.g. `sidebar/`) |
+
+### 8.2 Entity Stores (Zustand)
+
+Each entity module in `client/src/entities/<feature>/model/` exports a domain type and a Zustand store:
+
+| Store | Location | State |
+|-------|----------|-------|
+| `useAuthStore` | `entities/auth/model/authStore.ts` | User, token, loading, error |
+| `useChatStore` | `entities/conversation/model/chatStore.ts` | Conversations, messages, typing, bookmarks, reminders, connection status |
+| `useUserStore` | `entities/user/model/userStore.ts` | Users list, online users, presence status |
+| `useNotificationStore` | `entities/notification/model/notificationStore.ts` | Notifications list, unread count |
+| `useCompanyStore` | `entities/company/model/companyStore.ts` | Teams, departments, company settings |
+| `useCallStore` | `shared/stores/callStore.ts` | Active call, WebRTC signaling |
+| `useMeetingStore` | `entities/meeting/model/meetingStore.ts` | Meetings, notes, reminders, attendees |
+| `useAnnouncementStore` | `entities/announcement/model/announcementStore.ts` | Announcements, reactions, read tracking |
+| `useTaskStore` | `entities/task/model/taskStore.ts` | Tasks, reactions |
+| `useAttendanceStore` | `entities/attendance/model/attendanceStore.ts` | Attendance records, breaks, dashboard |
+| `useSharedFileStore` | `entities/file/model/sharedFileStore.ts` | Shared files, versions, permissions |
 
 ### 8.3 WebSocket Client
 
-**File:** `client/src/services/websocket.ts`
+**File:** `client/src/shared/lib/websocket.ts`
 
 ```
 WebSocketService (singleton)
@@ -746,6 +808,40 @@ WebSocketService (singleton)
 │   └── Event listener management
 └── emit(event, data)
     └── Dispatch to all registered handlers
+```
+
+### 8.4 WebSocket → Zustand Bridge
+
+**File:** `client/src/app/stores/wsListeners.ts`
+
+```mermaid
+flowchart LR
+    A["WebSocket Server"] --> B["WebSocket Client<br/>(shared/lib/websocket.ts)"]
+    B --> C["Zustand Stores<br/>(entities/*/model/*Store.ts)"]
+    C --> D["React Components"]
+    D --> E["UI"]
+```
+
+Subscribes once from `App.tsx`. Dispatches events to Zustand stores:
+
+```
+WebSocket Server → WebSocket Client → Zustand Stores → React Components → UI
+
+Events dispatched:
+- receive_message → chatStore
+- message_sent_ack → chatStore
+- message_updated/deleted → chatStore
+- typing_start/stop → chatStore
+- user_online/offline → userStore
+- incoming_call → callStore
+- notification → notificationStore
+- announcement_created/updated/deleted → announcementStore
+- task_reacted/unreacted → taskStore
+- shared_file_created/updated/deleted → sharedFileStore
+- meeting_created/updated/cancelled → meetingStore
+- attendance:clocked_in/out → attendanceStore
+- omni_assignment_changed → chatStore (refresh conversations)
+- workspace_changed → chatStore/companyStore (refresh teams/channels)
 ```
 
 ---
@@ -776,20 +872,14 @@ WebSocketService (singleton)
 
 ### 9.2 Sending a Message
 
-```
-1. Client: wsService.send('send_message', { conversationId, content })
-2. Server WebSocket → MessageHandler.handleSendMessage()
-3. MessageService.createMessage()
-   - Validate user is conversation member
-   - Insert into messages table
-   - Create notification for @mentions
-4. MessageHandler broadcasts:
-   - message_sent_ack to sender
-   - receive_message to all conversation members (via broadcastToConversation)
-5. Client wsListeners:
-   - message_sent_ack → chatStore.addMessage()
-   - receive_message → chatStore.addMessage()
-6. UI updates with new message
+```mermaid
+flowchart LR
+    A["Client<br/>wsService.send()"] --> B["Server<br/>MessageHandler"]
+    B --> C["MessageService<br/>.createMessage()"]
+    C --> D["Persist to DB<br/>+ create notifications"]
+    D --> E["Broadcast to<br/>conversation members"]
+    E --> F["Client wsListeners<br/>→ chatStore"]
+    F --> G["UI updates"]
 ```
 
 ### 9.3 Receiving a Message (Real-time)
@@ -818,22 +908,14 @@ WebSocketService (singleton)
 
 ### 9.5 Voice/Video Call
 
-```
-1. Caller: wsService.send('call_start', { conversationId, type: 'voice'|'video' })
-2. Server: CallHandler.handleCallStart()
-   - Validate caller is conversation member
-   - Track active call
-   - Send 'incoming_call' to all other conversation members
-3. Callee UI shows incoming call modal
-4. Callee accepts: wsService.send('call_accept', { callId })
-5. Server: CallHandler.handleCallAccept()
-   - Broadcast 'call_accepted' to all participants
-6. WebRTC signaling:
-   - Caller sends 'webrtc_offer' → relayed to callee
-   - Callee sends 'webrtc_answer' → relayed to caller
-   - ICE candidates relayed both ways
-7. Media flows peer-to-peer (not through server)
-8. Call ends: 'call_end' event, server clears active call
+```mermaid
+flowchart LR
+    A["Caller<br/>call_start"] --> B["Server<br/>CallHandler"]
+    B --> C["Callee UI<br/>incoming_call"]
+    C -->|"call_accept"| D["Server<br/>broadcast call_accepted"]
+    D --> E["WebRTC Signaling<br/>offer/answer/ICE"]
+    E --> F["Peer-to-Peer<br/>media flow"]
+    F -->|"call_end"| G["Server<br/>clear active call"]
 ```
 
 ### 9.6 Omni-Channel Inbound (Telegram)
@@ -854,36 +936,27 @@ WebSocketService (singleton)
 
 ### 9.7 Agent Reply (Omni-Channel)
 
-```
-1. Agent sends reply in Omni Inbox
-2. Client: POST /api/omni/send with conversationId + text
-3. OmniController → OmniChannelService.sendAgentReply()
-4. Find external conversation + contact
-5. Resolve chatId (Telegram user ID)
-6. TelegramAdapter.sendMessage(chatId, text, { replyToExternalMessageId })
-7. On success:
-   - Persist outbound message to DB
-   - Create external_message ledger row
-   - Broadcast to inbox members
-   - Create notifications
-8. Customer receives message in Telegram
+```mermaid
+flowchart LR
+    A["Agent sends reply<br/>in Omni Inbox"] --> B["POST /api/omni/send"]
+    B --> C["OmniChannelService<br/>.sendAgentReply()"]
+    C --> D["Adapter<br/>.sendMessage()"]
+    D --> E["Persist outbound<br/>+ create ledger"]
+    E --> F["Broadcast to<br/>inbox members"]
+    F --> G["Customer receives<br/>in Telegram"]
 ```
 
 ### 9.8 Attendance Clock-In/Out
 
-```
-1. Employee clicks "Clock In"
-2. Client: POST /api/attendance/clock-in
-3. AttendanceService.clockIn()
-   - Create attendance record
-   - Check work schedule
-   - Create notification
-   - Publish event via attendanceEventPublisher
-4. attendanceEventPublisher publishes to Redis
-5. startAttendanceEventRelay() (subscribed to Redis) receives event
-6. Broadcasts 'attendance:clocked_in' to user's WebSocket
-7. Client wsListeners → attendanceStore.handleAttendanceEvent()
-8. UI updates to show "Clocked In" status
+```mermaid
+flowchart LR
+    A["Employee<br/>clocks in"] --> B["POST /api/attendance/clock-in"]
+    B --> C["AttendanceService<br/>.clockIn()"]
+    C --> D["Publish event<br/>to Redis"]
+    D --> E["Redis relay<br/>receives event"]
+    E --> F["Broadcast<br/>attendance:clocked_in"]
+    F --> G["Client wsListeners"]
+    G --> H["UI updates<br/>'Clocked In'"]
 ```
 
 ---
@@ -1043,7 +1116,23 @@ npm run dev
 
 ## 15. Summary
 
-KneaChat is a **real-time workplace communication platform** with the following key characteristics:
+KneaChat is a **real-time workplace communication platform** built with a clean, layered architecture and designed for extensibility.
+
+```mermaid
+flowchart TD
+    A["KneaChat Platform"] --> B["Full-stack TypeScript"]
+    A --> C["Layered Architecture"]
+    A --> D["Dependency Injection"]
+    A --> E["Real-time WebSocket"]
+    A --> F["Omni-Channel Inbox"]
+    A --> G["RBAC + Permissions"]
+    A --> H["Background Schedulers"]
+    A --> I["Redis Pub/Sub"]
+    A --> J["Zustand State"]
+    A --> K["Comprehensive Testing"]
+```
+
+**Key characteristics:**
 
 - **Full-stack TypeScript** — Type safety across client and server
 - **Layered architecture** — Routes → Controllers → Services → Repositories

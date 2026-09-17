@@ -9,7 +9,7 @@ Workplace communication and collaboration platform built with a React + TypeScri
 | Development environment  | **NVM** — Node.js version management (`.nvmrc` pins Node 24)               |
 | Frontend                 | **MVVM** — React + TypeScript + Tailwind CSS                              |
 | Backend                  | **MVC** — Node.js + Express                                               |
-| State management         | **Zustand** stores in `client/src/store/`                                  |
+| State management         | **Zustand** stores in `client/src/entities/<feature>/model/` and `client/src/app/stores/`                                  |
 | Database                 | **MySQL** (via `mysql2` connection pool)                                   |
 | Real-time                | **Native WebSocket** (`ws` package — no Socket.IO)                         |
 
@@ -17,28 +17,70 @@ Workplace communication and collaboration platform built with a React + TypeScri
 
 ```text
 kneachat/
-├── client/                         # React + TypeScript + Tailwind — MVVM architecture
+├── client/                         # React + TypeScript + Tailwind — feature-based architecture
 │   └── src/
-│       ├── models/                  # Domain entities and API payload types
-│       ├── viewmodels/              # ViewModel layer: selector hooks binding views to stores
-│       ├── views/                   # View layer: page-level screens (Login, Dashboard, …)
-│       ├── components/              # Reusable UI, grouped by feature (chat, modals, layout, …)
-│       ├── store/                   # Zustand stores (auth, chat, user, notification, company) + WS wiring
-│       ├── contexts/                # UI-wide contexts (theme, toast)
-│       ├── services/                # HTTP client + WebSocket client (data-access infrastructure)
-│       └── utils/                   # Shared client helpers
+│       ├── app/                    # Application shell (router, providers, stores barrel)
+│       │   ├── App.tsx             # Root component + route guards
+│       │   ├── routes.ts           # Route definitions + role guards
+│       │   ├── providers/          # ThemeProvider, ToastProvider
+│       │   └── stores/             # Zustand stores barrel + wsListeners bridge
+│       ├── entities/               # Domain modules (types + Zustand stores per feature)
+│       │   ├── auth/               # Auth types + authStore
+│       │   ├── conversation/       # Conversation types + chatStore (messages, typing, etc.)
+│       │   ├── user/               # User types + userStore
+│       │   ├── notification/       # Notification types + notificationStore
+│       │   ├── company/            # Company/team/department types + companyStore
+│       │   ├── announcement/       # Announcement types + announcementStore
+│       │   ├── task/               # Task types + taskStore
+│       │   ├── meeting/            # Meeting types + meetingStore
+│       │   ├── attendance/         # Attendance types + attendanceStore
+│       │   ├── file/               # Shared file types + sharedFileStore
+│       │   └── ...                 # omni, search, system-setting, etc.
+│       ├── features/               # Feature UI components (organized by domain)
+│       │   ├── chat/               # MessageList, MessageComposer, ConversationList, ThreadPanel
+│       │   ├── channels/           # ChannelsView, CreateChannelModal
+│       │   ├── teams/              # TeamsView, CreateTeamModal, TeamModal
+│       │   ├── announcements/      # AnnouncementsView
+│       │   ├── notifications/      # NotifsView, NotificationMessageModal, reply/reaction actions
+│       │   ├── settings/           # SettingsView
+│       │   ├── files/              # SharedFilesView, FilePreview, FileShareModal, FileVersionHistory
+│       │   ├── attendance/         # AttendanceView, ManagerAttendanceView, ClockControls, etc.
+│       │   ├── meetings/           # MeetingsView, CreateMeetingModal, MeetingNoteModal
+│       │   ├── tasks/              # TasksView, TaskDetailModal
+│       │   ├── bookmarks/          # BookmarksView
+│       │   ├── search/             # SearchModal, SearchView
+│       │   ├── omni-inbox/         # OmniInboxView
+│       │   └── calls/              # CallModal, IncomingCallModal, CallChatPanel
+│       ├── pages/                  # Page-level layouts (role-based)
+│       │   ├── auth/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
+│       │   ├── dashboard/          # DashboardPage (layout shell + sidebar navigation)
+│       │   ├── admin/              # AdminPage
+│       │   ├── super-admin/        # SuperAdminPage
+│       │   ├── manager/            # ManagerPage
+│       │   └── profile/            # ProfilePage
+│       ├── shared/                 # Cross-cutting UI and utilities
+│       │   ├── ui/                 # Avatar, Icon, Modal, Skeleton, EmptyState, ReactionBar, etc.
+│       │   ├── lib/                # api.ts (Axios client), websocket.ts (WebSocket singleton), webrtc.ts
+│       │   └── stores/             # callStore (cross-feature call state)
+│       └── widgets/                # Reusable composite widgets
+│           └── sidebar/            # Sidebar navigation component
 ├── server/                          # Node.js + Express — MVC architecture
 │   ├── src/
-│   │   ├── controllers/             # Controllers: HTTP request handlers
-│   │   ├── routes/                  # URL → controller wiring + auth middleware
-│   │   ├── services/                # Business logic
-│   │   ├── repositories/            # MySQL data access
-│   │   ├── middleware/              # Authentication and error handling
-│   │   ├── database/                # MySQL connection pool
-│   │   ├── websocket/               # Real-time event handlers
-│   │   ├── types/                   # Server domain and Express types
-│   │   └── utils/                   # Shared server helpers
-│   ├── database/migrations/         # MySQL schema migrations
+│   │   ├── server.ts               # HTTP + WS server bootstrap
+│   │   ├── app.ts                  # Express app (middleware, routes)
+│   │   ├── container.ts            # Composition root (DI wiring)
+│   │   ├── database/               # MySQL connection pool
+│   │   ├── cache/                  # Redis client with memory fallback
+│   │   ├── middleware/             # Authentication and error handling
+│   │   ├── types/                  # Server domain and Express types
+│   │   ├── utils/                  # Shared server helpers
+│   │   ├── repositories/           # MySQL data access (35+ repositories)
+│   │   ├── services/               # Business logic (27 services)
+│   │   ├── controllers/            # HTTP request handlers (26 controllers)
+│   │   ├── routes/                 # Express route definitions (25 route files)
+│   │   ├── websocket/              # Real-time event handlers
+│   │   └── integrations/           # Omni-channel adapters (Telegram, website)
+│   ├── database/migrations/        # MySQL schema migrations
 │   ├── test/                        # Node test-runner unit/integration tests
 │   ├── e2e/                         # End-to-end scripts
 │   └── scripts/                     # Database, demo, and local-service scripts
@@ -49,23 +91,37 @@ kneachat/
 
 KneaChat is split into two layers with explicit architectural patterns:
 
-### Frontend — MVVM (Model–View–ViewModel)
+### Frontend — Feature-based MVVM
 
-| Layer        | Location           | Responsibility                                          |
-| ------------ | ------------------ | ------------------------------------------------------- |
-| **Model**    | `client/src/models`   | Domain entities and API payload types |
-| **View**     | `client/src/views`, `client/src/components` | Rendering only — screens and presentational components bind to a ViewModel and never call the API directly |
-| **ViewModel** | `client/src/viewmodels`, `client/src/store`, `client/src/contexts` | View state + commands — `useChatViewModel` selects from Zustand stores; `ThemeContext` / `ToastContext` handle UI-wide concerns |
+The client is organized by **feature domain** rather than by architectural layer. Each feature owns its types, state, and UI in a single cohesive unit.
 
-Data flows **View → ViewModel/store → services → REST/WebSocket**. Shared application state lives in Zustand stores (`client/src/store/`); WebSocket events update them directly via `store/wsListeners.ts`, so the UI re-renders automatically. `Dashboard` (the view) just renders what the ViewModel selects.
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| **Model** | `client/src/entities/<feature>/model/` | TypeScript interfaces + Zustand store per domain (e.g. `authStore.ts`, `chatStore.ts`) |
+| **ViewModel** | `client/src/features/<feature>/model/` | Feature-level ViewModels (e.g. `useChatViewModel.ts`) that compose entity stores |
+| **View** | `client/src/pages/`, `client/src/features/<feature>/ui/`, `client/src/shared/ui/` | Page layouts, feature screens, and presentational components |
+| **Infrastructure** | `client/src/shared/lib/` | `api.ts` (Axios client), `websocket.ts` (WebSocket singleton), `webrtc.ts` |
+| **Application shell** | `client/src/app/` | Router, route guards, providers (Theme, Toast), stores barrel |
+
+**Data flow:**
+
+```
+View (pages/features/shared)
+  → ViewModel (features/*/model)
+    → Entity Store (entities/*/model)
+      → Infrastructure (shared/lib/api.ts, shared/lib/websocket.ts)
+        → REST / WebSocket
+```
+
+Shared application state lives in Zustand stores under `client/src/entities/<feature>/model/`. WebSocket events update those stores directly via `app/stores/wsListeners.ts`, so the UI re-renders automatically. `DashboardPage` is the main layout shell; individual feature views are composed inside it.
 
 ### Backend — MVC (Model–View–Controller)
 
-| Layer          | Location                     | Responsibility                                  |
-| -------------- | ---------------------------- | ----------------------------------------------- |
-| **Controller** | `server/src/controllers`     | HTTP request handlers — parse the request, call a service, build the response |
-| **View**       | `server/src/routes` + JSON   | Thin URL → controller wiring plus auth middleware; the JSON payloads are the view |
-| **Service**    | `server/src/services`     | Business rules and cross-entity orchestration |
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| **Controller** | `server/src/controllers` | HTTP request handlers — parse the request, call a service, build the response |
+| **View** | `server/src/routes` + JSON | Thin URL → controller wiring plus auth middleware; the JSON payloads are the view |
+| **Service** | `server/src/services` | Business rules and cross-entity orchestration |
 | **Repository** | `server/src/repositories` | MySQL queries and persistence |
 
 Request flow: **Route → Controller → Service → Repository → MySQL**. Route files only map endpoints to controller methods; all handler logic lives in `src/controllers/`.
