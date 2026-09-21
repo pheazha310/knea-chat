@@ -435,9 +435,14 @@ export class OmniChannelService {
 
     const resolved = await this.resolveExternalConversation(conversationId, agentId, replyToMessageId);
 
-    // Deliver through the channel first — only persist on success.
+    // Deliver through the channel first — only persist on success. Email
+    // replies additionally receive RFC 5322 threading headers derived from
+    // the customer's last email so mail clients group the thread correctly;
+    // other channels ignore the field (and it is omitted entirely).
+    const threading = await this.resolveEmailThreading(resolved);
     const sent = await resolved.adapter.sendMessage(resolved.chatId, trimmed, {
       replyToExternalMessageId: resolved.replyToExternalMessageId,
+      ...(threading ? { threading } : {}),
     });
     if (!sent.ok) {
       await this.reportDeliveryFailure(resolved, sent.description ?? 'Channel delivery failed', sent.errorCode);
@@ -615,6 +620,35 @@ export class OmniChannelService {
   }
 
   /**
+   * Email threading (RFC 5322) for the reply path: derive subject +
+   * Message-ID chain from the customer's most recent inbound email stored in
+   * the external ledger. Returns null for every other channel (or when the
+   * conversation has no inbound email yet, e.g. an agent-initiated thread).
+   */
+  private async resolveEmailThreading(resolved: {
+    channel: string;
+    conversationId: number;
+  }): Promise<{ subject?: string | null; inReplyTo?: string | null; references?: string[] | null } | null> {
+    if (resolved.channel !== 'email') return null;
+    const latest = await this.externalRepository.findLatestInboundMessage(
+      resolved.conversationId,
+      resolved.channel,
+    );
+    if (!latest) return null;
+    const metadata = (latest.metadata as { email?: { subject?: string; messageId?: string; references?: string | string[] } } | null) || {};
+    const emailMeta = metadata.email || {};
+    return {
+      subject: emailMeta.subject || null,
+      inReplyTo: emailMeta.messageId || null,
+      references: Array.isArray(emailMeta.references)
+        ? emailMeta.references
+        : emailMeta.references
+          ? String(emailMeta.references).split(/\s+/).filter(Boolean)
+          : null,
+    };
+  }
+
+  /**
    * Shared outbound resolution: verify the conversation is external, the
    * agent a member, resolve the provider chat id + adapter, and map an
    * internal reply-to id onto the provider's message id.
@@ -627,7 +661,7 @@ export class OmniChannelService {
     conversationId: number;
     channel: string;
     adapter: ChannelAdapter;
-    chatId: number;
+     chatId: string | number;
     replyToExternalMessageId: string | null;
     deliveryFailCount: number;
   }> {
@@ -647,8 +681,11 @@ export class OmniChannelService {
     }
 
     const adapter = this.requireAdapter(external.channel);
-    const chatId = Number(external.external_contact_id);
-    if (!Number.isFinite(chatId) || chatId <= 0) {
+    const rawChatId = String(external.external_contact_id);
+    const chatId: string | number = external.channel === 'email'
+      ? rawChatId
+      : Number(rawChatId);
+    if (external.channel !== 'email' && (!Number.isFinite(chatId as number) || (chatId as number) <= 0)) {
       throw new Error(`Invalid chat id for channel ${external.channel}`);
     }
 

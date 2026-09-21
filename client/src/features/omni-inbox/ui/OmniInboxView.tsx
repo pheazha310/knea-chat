@@ -18,6 +18,8 @@ const channelIcon = (channel: string): IconName => {
   switch (channel.toLowerCase()) {
     case 'telegram':
       return 'message';
+    case 'email':
+      return 'at';
     case 'website':
       return 'external';
     default:

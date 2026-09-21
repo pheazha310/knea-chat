@@ -35,6 +35,18 @@ export interface OmniInboundMessage {
   metadata?: unknown;
 }
 
+/**
+ * Outbound reply threading hints (email only — other channels ignore them).
+ * `subject` is the original conversation subject (the adapter adds the `Re:`
+ * prefix); `inReplyTo`/`references` are the customer's Message-ID chain so
+ * the reply threads correctly in the customer's mail client.
+ */
+export interface OmniOutboundThreading {
+  subject?: string | null;
+  inReplyTo?: string | null;
+  references?: string[] | null;
+}
+
 /** Binary media an agent sends outbound through a channel adapter. */
 export interface OmniOutboundMedia {
   kind: 'image' | 'voice' | 'file';
@@ -75,9 +87,9 @@ export interface ChannelAdapter {
 
   /** Send an outbound text message to the contact's chat. */
   sendMessage(
-    chatId: number,
+    chatId: string | number,
     text: string,
-    options?: { replyToExternalMessageId?: string | null },
+    options?: { replyToExternalMessageId?: string | null; threading?: OmniOutboundThreading | null },
   ): Promise<OmniOutboundResult>;
 
   /**
@@ -86,7 +98,7 @@ export interface ChannelAdapter {
    * the engine answers 400 "does not support media delivery" when absent).
    */
   sendMedia?(
-    chatId: number,
+    chatId: string | number,
     media: OmniOutboundMedia,
     options?: { replyToExternalMessageId?: string | null },
   ): Promise<OmniOutboundResult>;

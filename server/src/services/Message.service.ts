@@ -213,6 +213,17 @@ export class MessageService {
       forwarded_from: sourceMessageId,
     });
 
+    const sourceAttachments = await this.messageRepository.findAttachments(sourceMessageId);
+    for (const att of sourceAttachments) {
+      await this.messageRepository.createAttachment({
+        message_id: createdId,
+        file_name: att.file_name,
+        file_url: att.file_url,
+        file_type: att.file_type,
+        file_size: att.file_size,
+      });
+    }
+
     const message = (await this.messageRepository.findByIdWithSender(createdId)) as OutgoingMessage;
     message.reactions = [];
     message.attachments = await this.messageRepository.findAttachments(createdId);

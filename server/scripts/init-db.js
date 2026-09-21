@@ -1068,16 +1068,48 @@ async function applyMigrations(admin) {
         username VARCHAR(255) NULL,
         first_name VARCHAR(100) NULL,
         last_name VARCHAR(100) NULL,
+        email_address VARCHAR(255) NULL
+          COMMENT 'Normalized email address (only populated when channel = email)',
         metadata JSON NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         UNIQUE KEY uq_external_contact_channel_id (channel, external_contact_id),
+        UNIQUE KEY uq_external_contact_email (email_address),
         INDEX idx_external_contacts_channel (channel),
         INDEX idx_external_contacts_user (user_id),
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
     console.log('🎫 Created external_contacts table (migration 027).');
+  }
+
+  // Migration 029: email omni-channel — adds `email_address` to
+  // external_contacts so agents can look up a contact by email without
+  // parsing external_contact_id, unique per address so one customer identity
+  // maps to exactly one contact row. Idempotent: only alters when the table
+  // exists without the column (the CREATE TABLE above already has it on
+  // fresh installs).
+  const [emailAddressCols] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.columns
+     WHERE table_schema = ? AND table_name = 'external_contacts'
+       AND column_name = 'email_address'`,
+    [DB_NAME],
+  );
+  if (emailAddressCols[0].count === 0) {
+    const [externalContactExists] = await admin.query(
+      `SELECT COUNT(*) AS count FROM information_schema.tables
+       WHERE table_schema = ? AND table_name = 'external_contacts'`,
+      [DB_NAME],
+    );
+    if (externalContactExists[0].count > 0) {
+      await admin.query(
+        `USE \`${DB_NAME}\`; ALTER TABLE external_contacts
+         ADD COLUMN email_address VARCHAR(255) NULL
+           COMMENT 'Normalized email address (only populated when channel = email)',
+         ADD UNIQUE KEY uq_external_contact_email (email_address);`,
+      );
+      console.log('📧 Added email_address to external_contacts (migration 029).');
+    }
   }
 
   const [externalConvTables] = await admin.query(

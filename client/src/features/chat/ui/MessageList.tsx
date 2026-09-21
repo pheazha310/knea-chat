@@ -43,6 +43,9 @@ const isEdited = (m: ChatMessage) => {
 const isPinned = (m: ChatMessage) =>
   !!asMessage(m).is_pinned || !!asWs(m).isPinned;
 
+const forwardedOf = (m: ChatMessage) =>
+  asMessage(m).forwarded_from ?? asWs(m).forwardedFrom ?? null;
+
 const attachmentsOf = (m: ChatMessage) =>
   asMessage(m).attachments ?? asWs(m).attachments ?? [];
 
@@ -455,6 +458,11 @@ const MessageList = ({
                     {reminders[message.id] && (
                       <span className="reminder-badge" title="Reminder set">
                         <Icon name="clock" size={11} /> Reminder
+                      </span>
+                    )}
+                    {forwardedOf(message) && (
+                      <span className="forwarded-badge" title="Forwarded message">
+                        <Icon name="send" size={11} /> Forwarded
                       </span>
                     )}
                     <time title={fullTime(createdAtOf(message))}>

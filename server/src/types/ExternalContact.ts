@@ -5,7 +5,7 @@
  */
 
 /** Channels supported by the omni-channel layer (extensible per adapter). */
-export type OmniChannel = 'telegram';
+export type OmniChannel = 'telegram' | 'email' | 'website';
 
 export interface ExternalContactRow {
   id: number;

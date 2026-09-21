@@ -20,6 +20,7 @@ import type {
   OmniMedia,
   OmniOutboundMedia,
   OmniOutboundResult,
+  OmniOutboundThreading,
 } from '../omni/omni.types';
 
 /** Media attachment extracted from a Telegram message (text + media supported). */
@@ -164,11 +165,12 @@ export class TelegramChannelAdapter implements ChannelAdapter {
 
   /** Send an outbound text message through the Telegram Bot API. */
   async sendMessage(
-    chatId: number,
+    chatId: string | number,
     text: string,
-    options: { replyToExternalMessageId?: string | null } = {},
+    options: { replyToExternalMessageId?: string | null; threading?: OmniOutboundThreading | null } = {},
   ): Promise<OmniOutboundResult> {
     try {
+      const numericChatId = Number(chatId);
       const sendOptions: { reply_to_message_id?: number } = {};
       if (options.replyToExternalMessageId) {
         const replyId = Number(options.replyToExternalMessageId);
@@ -176,7 +178,7 @@ export class TelegramChannelAdapter implements ChannelAdapter {
           sendOptions.reply_to_message_id = replyId;
         }
       }
-      const sent = await this.api.sendMessage(chatId, text, sendOptions);
+      const sent = await this.api.sendMessage(numericChatId, text, sendOptions);
       if (!sent.ok) {
         return {
           ok: false,
@@ -202,12 +204,13 @@ export class TelegramChannelAdapter implements ChannelAdapter {
    * onto sendPhoto / sendVoice / sendDocument.
    */
   async sendMedia(
-    chatId: number,
+    chatId: string | number,
     media: OmniOutboundMedia,
-    options: { replyToExternalMessageId?: string | null } = {},
+    options: { replyToExternalMessageId?: string | null; threading?: OmniOutboundThreading | null } = {},
   ): Promise<OmniOutboundResult> {
     try {
-      const sent = await this.api.sendMedia(chatId, {
+      const numericChatId = Number(chatId);
+      const sent = await this.api.sendMedia(numericChatId, {
         kind: media.kind,
         buffer: media.buffer,
         fileName: media.fileName,

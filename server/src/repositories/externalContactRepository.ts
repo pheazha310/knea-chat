@@ -55,6 +55,14 @@ export class ExternalContactRepository {
     return rows[0] || null;
   }
 
+  async findByEmailAddress(emailAddress: string): Promise<ExternalContactRow | null> {
+    const rows = await this.db.query<ExternalContactRow[]>(
+      'SELECT * FROM external_contacts WHERE channel = ? AND email_address = ? LIMIT 1',
+      ['email', emailAddress.toLowerCase()],
+    );
+    return rows[0] || null;
+  }
+
   async findByUserId(userId: number): Promise<ExternalContactRow | null> {
     const rows = await this.db.query<ExternalContactRow[]>(
       'SELECT * FROM external_contacts WHERE user_id = ? LIMIT 1',
@@ -67,8 +75,8 @@ export class ExternalContactRepository {
     const { user_id, channel, external_contact_id, username, first_name, last_name, metadata } = data;
     const result = await this.db.query<ResultSetHeader>(
       `INSERT INTO external_contacts
-         (user_id, channel, external_contact_id, username, first_name, last_name, metadata)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+         (user_id, channel, external_contact_id, username, first_name, last_name, metadata, email_address)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         user_id,
         channel,
@@ -77,6 +85,7 @@ export class ExternalContactRepository {
         first_name || null,
         last_name || null,
         metadata === undefined || metadata === null ? null : JSON.stringify(metadata),
+        channel === 'email' ? String(external_contact_id).toLowerCase() : null,
       ],
     );
     return result.insertId;
@@ -219,6 +228,24 @@ export class ExternalContactRepository {
     const rows = await this.db.query<ExternalMessageRow[]>(
       'SELECT * FROM external_messages WHERE channel = ? AND external_message_id = ? LIMIT 1',
       [channel, String(externalMessageId)],
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Most recent inbound message of a conversation's channel — used by the
+   * reply path to derive email threading headers (subject / Message-ID
+   * chain) from the customer's last email.
+   */
+  async findLatestInboundMessage(
+    conversationId: number,
+    channel: string,
+  ): Promise<ExternalMessageRow | null> {
+    const rows = await this.db.query<ExternalMessageRow[]>(
+      `SELECT * FROM external_messages
+       WHERE conversation_id = ? AND channel = ? AND direction = 'inbound'
+       ORDER BY id DESC LIMIT 1`,
+      [conversationId, channel],
     );
     return rows[0] || null;
   }

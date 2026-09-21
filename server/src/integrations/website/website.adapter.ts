@@ -19,6 +19,7 @@ import type {
   OmniInboundMessage,
   OmniMedia,
   OmniOutboundResult,
+  OmniOutboundThreading,
 } from '../omni/omni.types';
 
 const CHANNEL = 'website';
@@ -74,9 +75,9 @@ export class WebsiteChannelAdapter implements ChannelAdapter {
 
   /** Send an outbound text message back through the website widget. */
   async sendMessage(
-    _chatId: number,
+    _chatId: string | number,
     text: string,
-    _options: { replyToExternalMessageId?: string | null } = {},
+    _options: { replyToExternalMessageId?: string | null; threading?: OmniOutboundThreading | null } = {},
   ): Promise<OmniOutboundResult> {
     // Outbound delivery is stub until a website messaging API is integrated.
     // The server still persists the agent reply so the inbox sees it.

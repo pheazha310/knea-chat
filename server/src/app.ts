@@ -36,6 +36,7 @@ import { createCompanySettingRouter } from './routes/companySetting.routes';
 import { createSubscriptionRouter } from './routes/subscription.routes';
 import { createPlatformMetricRouter } from './routes/platformMetric.routes';
 import { createTelegramRouter } from './integrations/telegram/telegram.routes';
+import { createEmailRouter } from './integrations/email/email.routes';
 import { createWebsiteRouter } from './integrations/website/website.routes';
 import { createOmniRouter } from './integrations/omni/omni.routes';
 
@@ -60,7 +61,10 @@ app.use(
     methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
     // X-Telegram-Bot-Api-Secret-Token is sent by Telegram's webhook deliveries
     // and by local browser tooling while testing the webhook endpoint.
-    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token',
+      'X-Email-Webhook-Secret', 'X-Email-Provider',
+      'X-Twilio-Email-Event-Webhook-Signature', 'X-Twilio-Email-Event-Webhook-Timestamp',
+      'X-Mailgun-Signature', 'X-Mailgun-Timestamp', 'X-Mailgun-Token'],
   }),
 );
 
@@ -107,6 +111,11 @@ app.use('/api/website', createWebsiteRouter(container.websiteController, contain
 // reveals no secrets); the reply and webhook-administration routes apply their
 // own auth inside the router.
 app.use('/api/telegram', createTelegramRouter(container.telegramController, container.auth));
+
+// ============ EMAIL (Omni-Channel) ==========
+// The webhook + health routes are public (email provider calls the webhook);
+// the reply and webhook-administration routes apply their own auth inside the router.
+app.use('/api/email', createEmailRouter(container.emailController, container.auth));
 
 // ============ PROTECTED ROUTES (Authentication Required) ============
 // All routes below require authentication

@@ -106,9 +106,12 @@ import { TaskController } from './controllers/task.controller';
 import telegramApi from './integrations/telegram/telegram.service';
 import { TelegramChannelAdapter } from './integrations/telegram/telegram.adapter';
 import { WebsiteChannelAdapter } from './integrations/website/website.adapter';
+import { EmailChannelAdapter } from './integrations/email/email.adapter';
+import { EmailService } from './integrations/email/email.service';
 import { ChannelRegistry } from './integrations/omni/channelRegistry';
 import { TelegramController } from './integrations/telegram/telegram.controller';
 import { WebsiteController } from './integrations/website/website.controller';
+import { EmailController } from './integrations/email/email.controller';
 import { OmniController } from './integrations/omni/omni.controller';
 
 // Middleware
@@ -361,6 +364,9 @@ const taskController = new TaskController(taskService);
 const channelRegistry = new ChannelRegistry();
 channelRegistry.register(new TelegramChannelAdapter(telegramApi));
 channelRegistry.register(new WebsiteChannelAdapter());
+const emailService = new EmailService();
+const emailAdapter = new EmailChannelAdapter(emailService);
+channelRegistry.register(emailAdapter);
 
 const omniService = new OmniChannelService(
   channelRegistry,
@@ -374,6 +380,7 @@ const omniService = new OmniChannelService(
 );
 const telegramController = new TelegramController(omniService);
 const websiteController = new WebsiteController(omniService);
+const emailController = new EmailController(omniService, emailAdapter);
 const omniController = new OmniController(omniService);
 
 // ---------------------------------------------------------------------------
@@ -450,6 +457,7 @@ export const container = {
   taskService,
   omniService,
   channelRegistry,
+  emailService,
   // websocket
   broadcastToConversation,
   messageHandler,
@@ -486,6 +494,7 @@ export const container = {
   taskController,
   telegramController,
   websiteController,
+  emailController,
   omniController,
   attendanceEventPublisher,
   // middleware
