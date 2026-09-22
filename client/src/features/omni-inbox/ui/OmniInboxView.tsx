@@ -47,7 +47,8 @@ const OmniInboxView = ({
   const previewOf = (conv: Conversation) => {
     const list = messages[conv.id];
     if (list && list.length > 0) return list[list.length - 1].content;
-    return conv.last_message_content || 'No messages yet';
+    const last = conv.last_message_content;
+    return last !== undefined && last !== null && last !== '' ? last : 'No messages yet';
   };
 
   return (

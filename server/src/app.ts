@@ -78,7 +78,7 @@ app.use(
   express.json({
     limit: '10mb',
     verify: (req, _res, buf, encoding) => {
-      if ((req as RawBodyRequest).path === '/api/email/webhook') {
+      if ((req as RawBodyRequest).originalUrl === '/api/email/webhook') {
         (req as RawBodyRequest).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
       }
     },

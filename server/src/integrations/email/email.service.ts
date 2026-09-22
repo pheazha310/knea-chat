@@ -11,6 +11,7 @@
  */
 import nodemailer, { type Transporter, type SentMessageInfo, type SendMailOptions } from 'nodemailer';
 import crypto from 'crypto';
+import dns from 'dns';
 import { Resend } from 'resend';
 
 import type {
@@ -122,6 +123,31 @@ export function htmlToText(html: string): string {
     .replace(/&amp;/g, '&')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+/** Extract plain recipient addresses from the polymorphic `to` field. */
+function extractRecipientAddresses(to: EmailAddress | EmailAddress[] | string): string[] {
+  if (Array.isArray(to)) {
+    return to.map((a) => a.address);
+  }
+  if (typeof to === 'string') {
+    return [to];
+  }
+  return [to.address];
+}
+
+/**
+ * Best-effort MX lookup. Returns `true` when the domain has MX records or
+ * when DNS is unreachable/times out — we never block delivery on DNS.
+ */
+function domainHasMxRecords(domain: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => resolve(true), 3000);
+    dns.resolveMx(domain, (err) => {
+      clearTimeout(timer);
+      resolve(!err);
+    });
+  });
 }
 
 /**
@@ -309,6 +335,18 @@ export class EmailService {
         : typeof options.to === 'string'
           ? options.to
           : `${options.to.name ? `${options.to.name} <${options.to.address}>` : options.to.address}`;
+
+      if (process.env.NODE_ENV !== 'production') {
+        const recipientAddresses = extractRecipientAddresses(options.to);
+        for (const address of recipientAddresses) {
+          const domain = address.split('@')[1];
+          if (!domain) continue;
+          const hasMx = await domainHasMxRecords(domain);
+          if (!hasMx) {
+            console.warn(`[email] Recipient domain "${domain}" has no MX records — delivery may fail`);
+          }
+        }
+      }
 
       const mailOptions: SendMailOptions = {
         from,

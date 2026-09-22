@@ -57,6 +57,8 @@ const WEBHOOK_SECRET = process.env.EMAIL_WEBHOOK_SECRET || '';
 
 // The synthetic customer the webhook posts as. A FIXED address so the first
 // run creates the contact/conversation and later runs reuse it.
+// For REAL SMTP delivery tests (E2E_REAL_DELIVERY=1), replace with a real
+// inbox you control so the agent reply actually lands somewhere.
 const CUSTOMER_EMAIL = process.env.E2E_EMAIL_CUSTOMER || 'e2e-mail-customer@external.test';
 const CUSTOMER_NAME_PREFIX = 'E2E MailCustomer';
 const INBOX_ADDRESS = process.env.E2E_INBOX_ADDRESS || 'support@kneachat.local';

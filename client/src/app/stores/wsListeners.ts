@@ -36,10 +36,11 @@ export function registerWsListeners(): () => void {
     wsService.on('receive_message', (payload) => {
       const convId = toNumber(payload.message.conversationId);
       if (convId === null) return;
-      useChatStore.getState().addMessage(convId, payload.message);
-      // Auto-mark the conversation the user is actively viewing as read, so
-      // its unread badge doesn't light up while the chat pane is on screen.
       const chat = useChatStore.getState();
+      chat.addMessage(convId, payload.message);
+      if (!chat.conversations.some((c) => c.id === convId)) {
+        void chat.refreshConversations();
+      }
       if (chat.viewingChat && convId === chat.activeId) {
         void useNotificationStore.getState().markConversationRead(convId);
       }
