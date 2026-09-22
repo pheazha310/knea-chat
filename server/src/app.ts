@@ -22,6 +22,7 @@ import { createReminderRouter } from './routes/reminder.routes';
 import { createBookmarkMessageRouter, createBookmarkListRouter } from './routes/bookmark.routes';
 import { createSharedFileRouter } from './routes/sharedFile.routes';
 import { errorHandler } from './middleware/error.middleware';
+import type { RawBodyRequest } from './integrations/email/email.types';
 import { resolveUploadDir } from './utils/uploads';
 import { createMeetingRouter } from './routes/meeting.routes';
 import { createAttendanceRouter } from './routes/attendance.routes';
@@ -64,12 +65,25 @@ app.use(
     allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Bot-Api-Secret-Token',
       'X-Email-Webhook-Secret', 'X-Email-Provider',
       'X-Twilio-Email-Event-Webhook-Signature', 'X-Twilio-Email-Event-Webhook-Timestamp',
-      'X-Mailgun-Signature', 'X-Mailgun-Timestamp', 'X-Mailgun-Token'],
+      'X-Mailgun-Signature', 'X-Mailgun-Timestamp', 'X-Mailgun-Token',
+      'svix-id', 'svix-timestamp', 'svix-signature'],
   }),
 );
 
 // Body parsing
-app.use(express.json({ limit: '10mb' }));
+// The verify callback captures the exact raw bytes for the email webhook —
+// Svix (Resend) signatures are computed over the raw body, which JSON
+// re-serialization cannot reproduce.
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, _res, buf, encoding) => {
+      if ((req as RawBodyRequest).path === '/api/email/webhook') {
+        (req as RawBodyRequest).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
+      }
+    },
+  }),
+);
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
 
 // Request logging middleware (optional - simple version)

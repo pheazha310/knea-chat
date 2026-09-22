@@ -1128,7 +1128,7 @@ async function applyMigrations(admin) {
         assigned_agent_id BIGINT UNSIGNED NULL,
         created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        UNIQUE KEY uq_external_conversation_contact (contact_id, channel),
+        INDEX idx_external_conversations_contact (contact_id, channel),
         INDEX idx_external_conversations_conversation (conversation_id),
         INDEX idx_external_conversations_channel (channel),
         INDEX idx_external_conversations_agent (assigned_agent_id),
@@ -1138,6 +1138,25 @@ async function applyMigrations(admin) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
     console.log('🎫 Created external_conversations table (migration 027).');
+  }
+
+  // Migration 030: email per-thread conversations — a contact can now hold
+  // several conversations (one per RFC 5322 email thread) instead of exactly
+  // one, so the (contact_id, channel) UNIQUE key becomes a plain index.
+  // Idempotent: only touches tables still carrying the old unique key.
+  const [threadUniqueKeys] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.statistics
+     WHERE table_schema = ? AND table_name = 'external_conversations'
+       AND index_name = 'uq_external_conversation_contact' AND non_unique = 0`,
+    [DB_NAME],
+  );
+  if (threadUniqueKeys[0].count > 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; ALTER TABLE external_conversations
+       DROP INDEX uq_external_conversation_contact,
+       ADD INDEX idx_external_conversations_contact (contact_id, channel);`,
+    );
+    console.log('🧵 Allowed multiple conversations per contact (migration 030).');
   }
 
   const [externalMsgTables] = await admin.query(

@@ -30,9 +30,25 @@ export interface OmniInboundMessage {
   externalMessageId: string;
   /** Text content (or caption / file name for media messages). */
   content: string;
+  /**
+   * All files carried by one inbound provider message. `media` remains the
+   * primary file for backwards compatibility with single-file channels.
+   */
+  attachments?: OmniMedia[] | null;
   media?: OmniMedia | null;
   externalTimestamp?: Date | string | null;
   metadata?: unknown;
+}
+
+/**
+ * Inbound thread hints (email only): the RFC 5322 headers that tie a new
+ * inbound email to an existing conversation. The engine matches them against
+ * the external message ledger; a null/empty set falls back to the channel's
+ * default conversation grouping (one conversation per contact).
+ */
+export interface OmniThreadHints {
+  /** Message-IDs referenced by the inbound email: In-Reply-To + References. */
+  inReplyToMessageIds: string[];
 }
 
 /**
@@ -82,6 +98,14 @@ export interface ChannelAdapter {
   /** Parse a raw webhook payload into normalized inbound messages ([] = ignore). */
   parseInbound(payload: unknown): Promise<OmniInboundMessage[]>;
 
+  /**
+   * Optional thread hints for an already-parsed inbound message: provider
+   * headers that tie it to an existing conversation (email In-Reply-To /
+   * References). Channels without threading omit it — the engine then keeps
+   * its default conversation grouping.
+   */
+  getThreadHints?(message: OmniInboundMessage): Promise<OmniThreadHints | null>;
+
   /** Download media bytes for an OmniMedia.fileRef, or null when unavailable. */
   downloadMedia?(media: OmniMedia): Promise<Buffer | null>;
 
@@ -100,7 +124,7 @@ export interface ChannelAdapter {
   sendMedia?(
     chatId: string | number,
     media: OmniOutboundMedia,
-    options?: { replyToExternalMessageId?: string | null },
+    options?: { replyToExternalMessageId?: string | null; threading?: OmniOutboundThreading | null },
   ): Promise<OmniOutboundResult>;
 
   /** Channel health: configured + reachable? */

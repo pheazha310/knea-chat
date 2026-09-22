@@ -24,51 +24,49 @@ This document provides a prioritized, step-by-step refactoring plan with code ex
 
 ### 1.1 Break Down `Dashboard.tsx` God Component
 
-**Problem:** `Dashboard.tsx` is 1300+ lines, manages 20+ state variables, and handles 40+ event handlers. It imports 5 stores directly AND uses `useChatViewModel`, creating a confusing mix of patterns.
+**Problem:** `pages/dashboard/ui/DashboardPage.tsx` is 1300+ lines, manages 20+ state variables, and handles 40+ event handlers. It imports 5 stores directly AND uses `useChatViewModel`, creating a confusing mix of patterns.
 
 **Solution:** Extract each sidebar panel into its own component with a dedicated ViewModel.
 
-**Current Structure:**
-```
-client/src/views/Dashboard.tsx (1300+ lines)
+**Current Structure:```
+client/src/pages/dashboard/ui/DashboardPage.tsx (1300+ lines)
 ├── useState for conversations, channels, teams, members, etc.
 ├── useEffect for data fetching
 ├── Handlers for every action
 └── Renders 10+ sidebar panels inline
 ```
 
-**Target Structure:**
-```
-client/src/views/Dashboard.tsx (150 lines)
+**Target Structure:```
+client/src/pages/dashboard/ui/DashboardPage.tsx (150 lines)
 └── Layout shell + routing between panels
 
-client/src/viewmodels/
-├── useChatViewModel.ts (existing)
-├── useAttendanceViewModel.ts (new)
-├── useMeetingViewModel.ts (new)
-├── useTaskViewModel.ts (new)
-├── useAnnouncementViewModel.ts (new)
-├── useNotificationViewModel.ts (new)
-└── useOmniInboxViewModel.ts (new)
+client/src/features/
+├── chat/model/useChatViewModel.ts (existing)
+├── attendance/model/useAttendanceViewModel.ts (new)
+├── meetings/model/useMeetingViewModel.ts (new)
+├── tasks/model/useTaskViewModel.ts (new)
+├── announcements/model/useAnnouncementViewModel.ts (new)
+├── notifications/model/useNotificationViewModel.ts (new)
+└── omni-inbox/model/useOmniInboxViewModel.ts (new)
 
-client/src/components/views/
-├── MessagesView.tsx (existing, reduce to 200 lines)
-├── AttendanceView.tsx (extract from Dashboard)
-├── MeetingsView.tsx (extract from Dashboard)
-├── TasksView.tsx (extract from Dashboard)
-├── AnnouncementsView.tsx (extract from Dashboard)
-├── NotificationsView.tsx (extract from Dashboard)
-├── OmniInboxView.tsx (existing, reduce to 250 lines)
-└── ProfileView.tsx (extract from Dashboard)
+client/src/features/
+├── chat/ui/MessageList.tsx (existing, reduce to 200 lines)
+├── attendance/ui/AttendanceView.tsx (extract from Dashboard)
+├── meetings/ui/MeetingsView.tsx (extract from Dashboard)
+├── tasks/ui/TasksView.tsx (extract from Dashboard)
+├── announcements/ui/AnnouncementsView.tsx (extract from Dashboard)
+├── notifications/ui/NotificationsView.tsx (extract from Dashboard)
+├── omni-inbox/ui/OmniInboxView.tsx (existing, reduce to 250 lines)
+└── profile/ui/ProfileView.tsx (extract from Dashboard)
 ```
 
 **Example: Extract Attendance ViewModel**
 
 ```typescript
-// client/src/viewmodels/useAttendanceViewModel.ts
+// client/src/features/attendance/model/useAttendanceViewModel.ts
 import { useCallback, useEffect } from 'react';
-import { useAttendanceStore } from '../store/attendanceStore';
-import { useAuthStore } from '../store/authStore';
+import { useAttendanceStore } from '../../entities/attendance/model/attendanceStore';
+import { useAuthStore } from '../../entities/auth/model/authStore';
 
 export function useAttendanceViewModel() {
   const { user } = useAuthStore();
@@ -125,21 +123,21 @@ export function useAttendanceViewModel() {
 }
 ```
 
-**Example: Simplified Dashboard.tsx**
+**Example: Simplified DashboardPage.tsx**
 
 ```typescript
-// client/src/views/Dashboard.tsx (BEFORE: 1300 lines, AFTER: 150 lines)
+// client/src/pages/dashboard/ui/DashboardPage.tsx (BEFORE: 1300 lines, AFTER: 150 lines)
 import { useState } from 'react';
-import { Sidebar } from '../components/layout/Sidebar';
-import { MessagesView } from '../components/views/MessagesView';
-import { AttendanceView } from '../components/views/AttendanceView';
-import { MeetingsView } from '../components/views/MeetingsView';
-import { TasksView } from '../components/views/TasksView';
-import { AnnouncementsView } from '../components/views/AnnouncementsView';
-import { NotificationsView } from '../components/views/NotificationsView';
-import { OmniInboxView } from '../components/views/OmniInboxView';
-import { ProfileView } from '../components/views/ProfileView';
-import { CallModal } from '../components/modals/CallModal';
+import { Sidebar } from '../../widgets/sidebar/ui/Sidebar';
+import { MessagesView } from '../../features/chat/ui/MessageList';
+import { AttendanceView } from '../../features/attendance/ui/AttendanceView';
+import { MeetingsView } from '../../features/meetings/ui/MeetingsView';
+import { TasksView } from '../../features/tasks/ui/TasksView';
+import { AnnouncementsView } from '../../features/announcements/ui/AnnouncementsView';
+import { NotificationsView } from '../../features/notifications/ui/NotificationsView';
+import { OmniInboxView } from '../../features/omni-inbox/ui/OmniInboxView';
+import { ProfileView } from '../../features/settings/ui/SettingsView';
+import { CallModal } from '../../features/calls/ui/CallModal';
 
 type ViewType = 'messages' | 'attendance' | 'meetings' | 'tasks' | 
                 'announcements' | 'notifications' | 'omni-inbox' | 'profile';
@@ -237,7 +235,7 @@ export default api;
 **Step 3: Unify Message Types**
 
 ```typescript
-// BEFORE: client/src/models/Message.ts
+// BEFORE: client/src/entities/message/model/Message.ts
 export interface MessageRow {
   id: number;
   conversation_id: number;
@@ -270,7 +268,7 @@ export interface Message {
 **Step 4: Remove Dual-Type Casts**
 
 ```typescript
-// BEFORE: client/src/store/chatStore.ts
+// BEFORE: client/src/entities/conversation/model/chatStore.ts
 const senderId = (m as Message).sender_id ?? (m as { senderId?: number }).senderId;
 
 // AFTER:
@@ -355,35 +353,40 @@ const getSecret = (): string => config.JWT_SECRET;
 
 #### 2.1.1 Split `chatStore.ts` (865 lines)
 
-**Problem:** One store manages conversations, messages, typing, presence, bookmarks, reminders, and connection status.
+**Problem:** One store manages conversations, messages, typing, presence, bookmarks, reminders, and connection status. Located at `client/src/entities/conversation/model/chatStore.ts`.
 
 **Solution:** Split by domain.
 
 ```
-client/src/store/
-├── chatStore.ts (REMOVE)
-├── conversationStore.ts (NEW)
-│   └── conversations list, active conversation, members
-├── messageStore.ts (NEW)
-│   └── message cache, send/edit/delete/forward/pin/react
-├── typingStore.ts (NEW)
-│   └── typing users per conversation
-├── presenceStore.ts (NEW)
-│   └── online users, user status
-├── bookmarkStore.ts (NEW)
-│   └── bookmarked message IDs
-├── reminderStore.ts (NEW)
-│   └── message reminders
-└── connectionStore.ts (NEW)
-    └── WebSocket connection status
+client/src/entities/
+├── conversation/model/
+│   ├── chatStore.ts (REMOVE)
+│   ├── conversationStore.ts (NEW)
+│   │   └── conversations list, active conversation, members
+│   ├── messageStore.ts (NEW)
+│   │   └── message cache, send/edit/delete/forward/pin/react
+│   ├── typingStore.ts (NEW)
+│   │   └── typing users per conversation
+│   └── presenceStore.ts (NEW)
+│       └── online users, user status
+├── bookmark/model/
+│   └── bookmarkStore.ts (NEW)
+│       └── bookmarked message IDs
+├── reminder/model/
+│   └── reminderStore.ts (NEW)
+│       └── message reminders
+└── shared/
+    └── stores/
+        └── connectionStore.ts (NEW)
+            └── WebSocket connection status
 ```
 
 **Example: `messageStore.ts`**
 
 ```typescript
-// client/src/store/messageStore.ts
+// client/src/entities/conversation/model/messageStore.ts
 import { create } from 'zustand';
-import type { Message } from '../models';
+import type { Message } from '../../entities/message/model/Message';
 
 interface MessageState {
   messages: Map<number, Message[]>; // conversationId → messages
@@ -452,12 +455,12 @@ export const useMessageStore = create<MessageState>((set, get) => ({
 
 #### 2.1.2 Split `wsListeners.ts` (577 lines)
 
-**Problem:** One file subscribes to 40+ WebSocket events and dispatches to 10+ stores.
+**Problem:** One file subscribes to 40+ WebSocket events and dispatches to 10+ stores. Located at `client/src/app/stores/wsListeners.ts`.
 
 **Solution:** Split by domain.
 
 ```
-client/src/store/
+client/src/app/stores/
 ├── wsListeners.ts (REMOVE - split into:)
 ├── chatWsListeners.ts
 │   ├── receive_message
@@ -495,13 +498,13 @@ client/src/store/
 **Example: `chatWsListeners.ts`**
 
 ```typescript
-// client/src/store/chatWsListeners.ts
-import { wsService } from '../services/websocket';
-import { useMessageStore } from './messageStore';
-import { useTypingStore } from './typingStore';
-import { useBookmarkStore } from './bookmarkStore';
-import { useNotificationStore } from './notificationStore';
-import { toNumber } from './utils';
+// client/src/app/stores/chatWsListeners.ts
+import { wsService } from '../../shared/lib/websocket';
+import { useMessageStore } from '../../entities/conversation/model/messageStore';
+import { useTypingStore } from '../../entities/conversation/model/typingStore';
+import { useBookmarkStore } from '../../entities/bookmark/model/bookmarkStore';
+import { useNotificationStore } from '../../entities/notification/model/notificationStore';
+import { toNumber } from '../utils';
 
 export function registerChatWsListeners(): () => void {
   const unsubs: Array<() => void> = [];
@@ -580,16 +583,16 @@ export function registerChatWsListeners(): () => void {
 }
 ```
 
-**Then update `App.tsx`:**
+**Then update `client/src/app/App.tsx`:**
 
 ```typescript
-// client/src/App.tsx
-import { registerChatWsListeners } from './store/chatWsListeners';
-import { registerPresenceWsListeners } from './store/presenceWsListeners';
-import { registerCallWsListeners } from './store/callWsListeners';
-import { registerMeetingWsListeners } from './store/meetingWsListeners';
-import { registerNotificationWsListeners } from './store/notificationWsListeners';
-import { registerAttendanceWsListeners } from './store/attendanceWsListeners';
+// client/src/app/App.tsx
+import { registerChatWsListeners } from './stores/chatWsListeners';
+import { registerPresenceWsListeners } from './stores/presenceWsListeners';
+import { registerCallWsListeners } from './stores/callWsListeners';
+import { registerMeetingWsListeners } from './stores/meetingWsListeners';
+import { registerNotificationWsListeners } from './stores/notificationWsListeners';
+import { registerAttendanceWsListeners } from './stores/attendanceWsListeners';
 
 export default function App() {
   // ...
@@ -627,7 +630,7 @@ server/src/
 ├── container.meetings.ts (meetings, notes, reminders, attendees)
 ├── container.tasks.ts (tasks, comments, attachments, reactions)
 ├── container.announcements.ts (announcements, reactions, reads)
-├── container.omni.ts (omni-channel, telegram, website)
+├── container.omni.ts (omni-channel, telegram, website, email)
 ├── container.admin.ts (users, companies, departments, audit, settings)
 ├── container.files.ts (shared files, versions, permissions)
 └── container.notifications.ts (notifications, preferences)
@@ -836,8 +839,8 @@ export type Container = typeof container;
 ### 2.2 Standardize Controller Error Handling
 
 **Problem:** Controllers use inconsistent error handling:
-- `AttendanceController` uses `next(error)`
-- `AuthController` catches and returns JSON directly
+- `server/src/controllers/attendance.controller.ts` uses `next(error)`
+- `server/src/controllers/auth.controller.ts` catches and returns JSON directly
 - Some return `{ success, message, data }`, others return raw data
 
 **Solution:** Create a base controller with a `handle` wrapper.

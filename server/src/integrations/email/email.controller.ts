@@ -13,7 +13,7 @@
 import type { Request, Response } from 'express';
 import type { OmniChannelService } from '../../services/OmniChannel.service';
 import type { EmailChannelAdapter } from './email.adapter';
-import type { EmailWebhookHeaders } from './email.types';
+import type { EmailWebhookHeaders, RawBodyRequest } from './email.types';
 
 const CHANNEL = 'email';
 
@@ -38,11 +38,19 @@ export class EmailController {
    * 3. Delegate to the omni-channel engine.
    * 4. Acknowledge quickly — never let a webhook crash the server.
    */
-  webhook = async (req: Request, res: Response): Promise<void> => {
+  webhook = async (req: RawBodyRequest, res: Response): Promise<void> => {
     try {
       const expectedSecret = process.env.EMAIL_WEBHOOK_SECRET || '';
       const receivedSecret = String(req.headers[WEBHOOK_SECRET_HEADER] || '');
-      const provider = String(req.headers[WEBHOOK_PROVIDER_HEADER] || '').toLowerCase();
+      let provider = String(req.headers[WEBHOOK_PROVIDER_HEADER] || '').toLowerCase();
+
+      // Real Mailgun routes post signature/timestamp/token as body fields (the
+      // route forwards them form- or JSON-encoded) and send no identifying
+      // header — detect Mailgun from that payload shape.
+      const hookBody = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
+      if (!provider && hookBody['signature'] && hookBody['token'] && hookBody['timestamp'] !== undefined) {
+        provider = 'mailgun';
+      }
 
       if (expectedSecret) {
         const headers: EmailWebhookHeaders = {
@@ -50,10 +58,17 @@ export class EmailController {
           signature: String(req.headers['x-email-signature'] || ''),
           'x-twilio-email-event-webhook-signature': String(req.headers['x-twilio-email-event-webhook-signature'] || ''),
           'x-twilio-email-event-webhook-timestamp': String(req.headers['x-twilio-email-event-webhook-timestamp'] || ''),
-          'x-mailgun-signature': String(req.headers['x-mailgun-signature'] || ''),
-          'x-mailgun-timestamp': String(req.headers['x-mailgun-timestamp'] || ''),
-          'x-mailgun-token': String(req.headers['x-mailgun-token'] || ''),
+          'x-mailgun-signature':
+            String(req.headers['x-mailgun-signature'] || '') || String(hookBody['signature'] || ''),
+          'x-mailgun-timestamp':
+            String(req.headers['x-mailgun-timestamp'] || '') || String(hookBody['timestamp'] ?? ''),
+          'x-mailgun-token':
+            String(req.headers['x-mailgun-token'] || '') || String(hookBody['token'] || ''),
           'x-postmark-webhook-signature': String(req.headers['x-postmark-webhook-signature'] || ''),
+          'svix-id': String(req.headers['svix-id'] || ''),
+          'svix-timestamp': String(req.headers['svix-timestamp'] || ''),
+          'svix-signature': String(req.headers['svix-signature'] || ''),
+          'svix-raw-body': String(req.rawBody ?? ''),
         };
 
         const isValid = await this.adapter.verifyWebhookSignature(req.body, headers);

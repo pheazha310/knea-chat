@@ -1,8 +1,14 @@
 /**
  * Email-specific types for the omni-channel email adapter.
  */
+import type { Request } from 'express';
 
-export type EmailProvider = 'smtp' | 'sendgrid' | 'mailgun' | 'ses';
+/** Express request augmented with the exact raw request body (see app.ts). */
+export interface RawBodyRequest extends Request {
+  rawBody?: string;
+}
+
+export type EmailProvider = 'smtp' | 'sendgrid' | 'mailgun' | 'ses' | 'resend';
 
 export interface EmailAddress {
   name?: string | null;
@@ -59,6 +65,8 @@ export interface EmailWebhookPayload {
     content_type: string;
     size?: number;
     url?: string;
+    /** Resend Receiving API attachment id (att_…) — addresses the bytes later. */
+    resend_id?: string;
   }>;
   messageId?: string;
   inReplyTo?: string | null;
@@ -77,6 +85,12 @@ export interface EmailWebhookHeaders {
   'x-mailgun-timestamp'?: string;
   'x-mailgun-token'?: string;
   'x-postmark-webhook-signature'?: string;
+  /** Resend (Svix) webhook signature headers. */
+  'svix-id'?: string;
+  'svix-timestamp'?: string;
+  'svix-signature'?: string;
+  /** Exact raw request body — required to verify Svix signatures. */
+  'svix-raw-body'?: string;
 }
 
 export interface EmailHealthInfo {

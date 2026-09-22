@@ -1,0 +1,108 @@
+name: Backend CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'server/**'
+      - '.github/workflows/backend-ci.yml'
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: server
+
+jobs:
+  email-e2e:
+    name: Build, unit tests, email E2E
+    runs-on: ubuntu-latest
+    # Hard bound: a test that blocks on an unavailable service must fail the
+    # job, not burn the default 6-hour runner limit.
+    timeout-minutes: 15
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: kneachat
+          MYSQL_DATABASE: kneachat
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pkneachat"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: root
+      DB_PASSWORD: kneachat
+      DB_NAME: kneachat
+      JWT_SECRET: ci-secret-not-for-production
+      # The webhook checks use HMAC over the request body; any secret works.
+      EMAIL_WEBHOOK_SECRET: ${{ secrets.EMAIL_WEBHOOK_SECRET != '' && secrets.EMAIL_WEBHOOK_SECRET || 'ci-webhook-secret' }}
+      EMAIL_SMTP_HOST: ''
+      EMAIL_SMTP_USER: ''
+      EMAIL_SMTP_PASS: ''
+      # Keep the Receiving API pointed away from the real Resend API; the
+      # mock e2e sets its own base URL anyway.
+      EMAIL_RESEND_API_KEY: ''
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Unit tests
+        run: node --test dist/test/*.test.js
+
+      - name: Init database + seed demo users
+        run: |
+          npm run db:init
+          npm run db:seed
+
+      - name: Start backend
+        run: |
+          node dist/src/server.js > /tmp/server.log 2>&1 &
+          echo $! > /tmp/server.pid
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health > /dev/null; then
+              echo "backend is up (attempt $i)"
+              break
+            fi
+            if [ "$i" = 30 ]; then
+              echo "backend did not become healthy in time"
+              tail -50 /tmp/server.log
+              exit 1
+            fi
+            sleep 1
+          done
+
+      - name: Email E2E — Resend inbound (mock Resend API)
+        run: npm run test:e2e:resend-mock
+
+      - name: Email E2E — full omni-channel inbox
+        run: npm run test:e2e:email
+
+      - name: Stop backend
+        if: always()
+        run: |
+          if [ -f /tmp/server.pid ]; then kill $(cat /tmp/server.pid) 2>/dev/null || true; fi
+          tail -50 /tmp/server.log 2>/dev/null || true

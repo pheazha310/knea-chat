@@ -52,12 +52,12 @@ kneachat/
 │       │   ├── omni-inbox/         # OmniInboxView
 │       │   └── calls/              # CallModal, IncomingCallModal, CallChatPanel
 │       ├── pages/                  # Page-level layouts (role-based)
-│       │   ├── auth/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
-│       │   ├── dashboard/          # DashboardPage (layout shell + sidebar navigation)
-│       │   ├── admin/              # AdminPage
-│       │   ├── super-admin/        # SuperAdminPage
-│       │   ├── manager/            # ManagerPage
-│       │   └── profile/            # ProfilePage
+│       │   ├── auth/ui/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
+│       │   ├── dashboard/ui/          # DashboardPage (layout shell + sidebar navigation)
+│       │   ├── admin/ui/              # AdminPage
+│       │   ├── super-admin/ui/        # SuperAdminPage
+│       │   ├── manager/ui/            # ManagerPage
+│       │   └── profile/ui/            # ProfilePage
 │       ├── shared/                 # Cross-cutting UI and utilities
 │       │   ├── ui/                 # Avatar, Icon, Modal, Skeleton, EmptyState, ReactionBar, etc.
 │       │   ├── lib/                # api.ts (Axios client), websocket.ts (WebSocket singleton), webrtc.ts
@@ -74,12 +74,13 @@ kneachat/
 │   │   ├── middleware/             # Authentication and error handling
 │   │   ├── types/                  # Server domain and Express types
 │   │   ├── utils/                  # Shared server helpers
-│   │   ├── repositories/           # MySQL data access (35+ repositories)
-│   │   ├── services/               # Business logic (27 services)
-│   │   ├── controllers/            # HTTP request handlers (26 controllers)
-│   │   ├── routes/                 # Express route definitions (25 route files)
+│   │   ├── repositories/           # MySQL data access (35 repositories)
+│   │   ├── services/               # Business logic (29 services)
+│   │   ├── controllers/            # HTTP request handlers (27 controllers)
+│   │   ├── routes/                 # Express route definitions (28 route files)
 │   │   ├── websocket/              # Real-time event handlers
-│   │   └── integrations/           # Omni-channel adapters (Telegram, website)
+│   │   ├── factories/              # Factory helpers
+│   │   └── integrations/           # Omni-channel adapters (Telegram, website, email)
 │   ├── database/migrations/        # MySQL schema migrations
 │   ├── test/                        # Node test-runner unit/integration tests
 │   ├── e2e/                         # End-to-end scripts
@@ -230,6 +231,18 @@ composer routes replies through `POST /api/telegram/messages`). See
 webhook registration, ngrok local testing, and the API reference. Requires
 migration `024_telegram_omni_channel.sql` and the `TELEGRAM_*` environment
 variables.
+
+## Email omni-channel inbox
+
+KneaChat can also act as a support inbox for Email: customer messages arrive via
+webhook, appear in the Messages view, and agents reply from KneaChat (the
+composer routes replies through `POST /api/email/messages`). Requires
+migration `029_email_omni_channel.sql` and the `EMAIL_*` environment
+variables. See
+[`docs/EMAIL_INTEGRATION.md`](docs/EMAIL_INTEGRATION.md) for provider setup
+(Mailgun, SendGrid, SES, Postmark, or generic HMAC), env configuration, local
+testing with ngrok, and the API reference. Verified by
+`npm run test:e2e:email`.
 
 ## Project hygiene
 

@@ -5,6 +5,8 @@
 > **Node Version:** 24  
 > **Generated:** 2026-09-14
 
+> **Backend Detail:** See `BACKEND_WORKFLOW.md` for in-depth backend request lifecycles, WebSocket event routing, omni-channel processing, and layer-by-layer data flow.
+
 ---
 
 ## Contents
@@ -16,6 +18,9 @@
 - [5. Database Architecture](#5-database-architecture)
 - [6. WebSocket Real-Time Pipeline](#6-websocket-real-time-pipeline)
 - [7. Omni-Channel Architecture](#7-omni-channel-architecture)
+- [7.5 Telegram Integration](#75-telegram-integration)
+- [7.6 Website Integration](#76-website-integration)
+- [7.7 Email Integration](#77-email-integration)
 - [8. Client-Side Architecture](#8-client-side-architecture)
 - [9. Key Workflows](#9-key-workflows)
 - [10. Background Schedulers](#10-background-schedulers)
@@ -36,16 +41,20 @@
 | **Node Version** | 24 |
 | **Architecture** | Full-stack TypeScript, layered backend, MVVM + Zustand client |
 | **Real-time** | WebSocket with reconnection, heartbeat, event queuing |
-| **Omni-Channel** | Telegram + website widget via adapter pattern |
+| **Omni-Channel** | Telegram + website + email via adapter pattern |
 | **Auth** | JWT + RBAC + discretionary permissions |
 | **Testing** | Jest + RTL (client) + E2E scripts (server) |
 | **Generated** | 2026-09-14 |
+| **Controllers** | 27 |
+| **Services** | 29 |
+| **Repositories** | 35 |
+| **Routes** | 28 |
 
 ---
 
 ## 1. High-Level Architecture
 
-KneaChat is a full-stack workplace communication platform with real-time chat, voice/video call signaling, omni-channel inbox (Telegram + website widget), attendance tracking, meetings, tasks, announcements, and file sharing.
+KneaChat is a full-stack workplace communication platform with real-time chat, voice/video call signaling, omni-channel inbox (Telegram + website + email), attendance tracking, meetings, tasks, announcements, and file sharing.
 
 ```mermaid
 flowchart TD
@@ -100,7 +109,8 @@ chat_websocket/
 │       │   ├── App.tsx             # Root component + route guards
 │       │   ├── routes.ts           # Route definitions + role guards
 │       │   ├── providers/          # ThemeProvider, ToastProvider
-│       │   └── stores/             # Zustand stores barrel + wsListeners bridge
+│       │   ├── stores/             # Zustand stores barrel + wsListeners bridge
+│       │   └── styles/             # CSS files (animations, layout, chat, etc.)
 │       ├── entities/               # Domain modules (types + Zustand stores per feature)
 │       │   ├── auth/               # Auth types + authStore
 │       │   ├── conversation/       # Conversation types + chatStore (messages, typing, etc.)
@@ -130,11 +140,17 @@ chat_websocket/
 │       │   └── calls/              # CallModal, IncomingCallModal, CallChatPanel
 │       ├── pages/                  # Page-level layouts (role-based)
 │       │   ├── auth/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
+│       │   │   └── ui/
 │       │   ├── dashboard/          # DashboardPage (layout shell + sidebar navigation)
+│       │   │   └── ui/
 │       │   ├── admin/              # AdminPage
+│       │   │   └── ui/
 │       │   ├── super-admin/        # SuperAdminPage
+│       │   │   └── ui/
 │       │   ├── manager/            # ManagerPage
+│       │   │   └── ui/
 │       │   └── profile/            # ProfilePage
+│       │       └── ui/
 │       ├── shared/                 # Cross-cutting UI and utilities
 │       │   ├── ui/                 # Avatar, Icon, Modal, Skeleton, EmptyState, ReactionBar, etc.
 │       │   ├── lib/                # api.ts (Axios client), websocket.ts (WebSocket singleton), webrtc.ts
@@ -152,6 +168,7 @@ chat_websocket/
     │   ├── permissions.e2e.js
     │   ├── attendance.e2e.js
     │   ├── telegram-omni.e2e.js
+    │   ├── email-omni.e2e.js
     │   ├── avatar-upload.e2e.js
     │   ├── sessions.e2e.js
     │   ├── shared-files.e2e.js
@@ -165,6 +182,7 @@ chat_websocket/
         ├── server.ts               # HTTP + WS server bootstrap
         ├── app.ts                  # Express app (middleware, routes)
         ├── container.ts            # Composition root (DI wiring)
+        ├── factories/              # Factory helpers (currently empty)
         ├── database/
         │   └── connection.ts       # MySQL pool + query helpers
         ├── cache/
@@ -172,7 +190,7 @@ chat_websocket/
         ├── middleware/
         │   ├── auth.middleware.ts  # JWT auth + role/capability checks
         │   └── error.middleware.ts # Global error handler
-        ├── types/                  # Domain type definitions
+        ├── types/                  # Domain type definitions (24 type files)
         │   ├── index.ts
         │   ├── Auth.ts, User.ts, Message.ts, Conversation.ts, ...
         │   └── express.d.ts        # Augments Express Request with user
@@ -182,29 +200,32 @@ chat_websocket/
         │   ├── auth.utils.ts       # JWT + bcrypt helpers
         │   ├── errors.utils.ts     # DB error sanitization
         │   ├── mentions.utils.ts   # @-mention extraction
+        │   ├── uploads.ts          # Upload directory resolution
         │   └── plans.ts            # Subscription plan definitions
         ├── repositories/           # Data-access layer (SQL only)
         │   ├── userRepository.ts
         │   ├── messageRepository.ts
         │   ├── conversationRepository.ts
-        │   └── ... (35+ repositories)
+        │   └── ... (35 repositories)
         ├── services/               # Business logic layer
         │   ├── Auth.service.ts
         │   ├── Message.service.ts
         │   ├── OmniChannel.service.ts
-        │   └── ... (27 services)
+        │   └── ... (29 services)
         ├── controllers/            # MVC controller layer
         │   ├── auth.controller.ts
         │   ├── message.controller.ts
         │   ├── conversation.controller.ts
-        │   └── ... (26 controllers)
+        │   └── ... (27 controllers)
         ├── routes/                 # Express route definitions
         │   ├── auth.routes.ts
         │   ├── message.routes.ts
-        │   └── ... (25 route files)
+        │   └── ... (28 route files)
         ├── websocket/              # WebSocket server
+        │   ├── index.ts
         │   ├── websocket.server.ts # ChatWebSocketServer class
         │   ├── message.handler.ts
+        │   ├── message.utils.ts
         │   ├── typing.handler.ts
         │   ├── presence.handler.ts
         │   ├── call.handler.ts
@@ -213,6 +234,12 @@ chat_websocket/
         │   ├── attendance.events.ts
         │   └── workspace.events.ts
         └── integrations/           # Omni-channel adapters
+            ├── email/
+            │   ├── email.service.ts
+            │   ├── email.adapter.ts
+            │   ├── email.controller.ts
+            │   ├── email.routes.ts
+            │   └── email.types.ts
             ├── telegram/
             │   ├── telegram.service.ts
             │   ├── telegram.adapter.ts
@@ -222,7 +249,8 @@ chat_websocket/
             ├── website/
             │   ├── website.adapter.ts
             │   ├── website.controller.ts
-            │   └── website.routes.ts
+            │   ├── website.routes.ts
+            │   └── website.types.ts
             └── omni/
                 ├── omni.types.ts
                 ├── channelRegistry.ts
@@ -273,17 +301,17 @@ Every service, repository, controller, and WebSocket handler is instantiated her
 export const container = {
   // db
   db,
-  // repositories (35+)
+  // repositories (35)
   userRepository,
   messageRepository,
   conversationRepository,
   // ... all repositories
-  // services (27)
+  // services (29)
   authService,
   messageService,
   omniService,
   // ... all services
-  // controllers (26+)
+  // controllers (27)
   authController,
   messageController,
   // ... all controllers
@@ -329,9 +357,10 @@ export const container = {
 5. Public routes:
    - /api/auth (register, login, refresh, forgot/reset password)
    - /api/health
-   - /api/omni (shared inbox actions)
-   - /api/website (omni-channel website widget)
-   - /api/telegram (omni-channel Telegram)
+    - /api/omni (shared inbox actions)
+    - /api/website (omni-channel website widget)
+    - /api/telegram (omni-channel Telegram)
+    - /api/email (omni-channel Email)
 6. Protected routes (require authentication):
    - /api/users, /api/teams, /api/channels, /api/conversations
    - /api/messages, /api/notifications, /api/tasks
@@ -734,12 +763,28 @@ flowchart TD
 - `server/src/integrations/website/website.adapter.ts` — ChannelAdapter implementation
 - `server/src/integrations/website/website.controller.ts` — HTTP handlers
 - `server/src/integrations/website/website.routes.ts` — Route definitions
+- `server/src/integrations/website/website.types.ts` — TypeScript interfaces
 
 **Routes:**
 - `POST /api/website/webhook` — Public webhook
 - `GET /api/website/health` — Public health check
 - `POST /api/website/messages` — Authenticated agent reply
 - `POST /api/website/assign` — Authenticated assignment
+
+### 7.7 Email Integration
+
+**Files:**
+- `server/src/integrations/email/email.service.ts` — Email provider client
+- `server/src/integrations/email/email.adapter.ts` — ChannelAdapter implementation
+- `server/src/integrations/email/email.controller.ts` — HTTP handlers
+- `server/src/integrations/email/email.routes.ts` — Route definitions
+- `server/src/integrations/email/email.types.ts` — TypeScript interfaces
+
+**Routes:**
+- `POST /api/email/webhook` — Public webhook (validates provider signature)
+- `GET /api/email/health` — Public health check
+- `POST /api/email/messages` — Authenticated agent reply
+- `POST /api/email/assign` — Authenticated assignment
 
 ---
 
@@ -764,7 +809,7 @@ flowchart TD
 | `client/src/app/` | Application shell: `App.tsx` (router + guards), `routes.ts` (route config), `providers/` (Theme, Toast), `stores/` (Zustand barrel + `wsListeners.ts`) |
 | `client/src/entities/` | Domain modules: each feature folder contains `model/` with TypeScript interfaces and a Zustand store (e.g. `authStore.ts`, `chatStore.ts`, `attendanceStore.ts`) |
 | `client/src/features/` | Feature UI: each feature folder contains `ui/` with React components and optionally `model/` with a ViewModel hook (e.g. `useChatViewModel.ts`) |
-| `client/src/pages/` | Page layouts: role-based top-level pages (`auth/`, `dashboard/`, `admin/`, `super-admin/`, `manager/`, `profile/`) |
+| `client/src/pages/` | Page layouts: role-based top-level pages, each with a `ui/` subdirectory containing the page component (`auth/ui/LoginPage`, `dashboard/ui/DashboardPage`, `admin/ui/AdminPage`, `super-admin/ui/SuperAdminPage`, `manager/ui/ManagerPage`, `profile/ui/ProfilePage`) |
 | `client/src/shared/` | Cross-cutting concerns: `ui/` (Avatar, Icon, Modal, Skeleton, etc.), `lib/` (`api.ts`, `websocket.ts`, `webrtc.ts`), `stores/` (`callStore.ts`) |
 | `client/src/widgets/` | Reusable composite widgets (e.g. `sidebar/`) |
 
@@ -995,6 +1040,7 @@ Four `setInterval` schedulers run every 30 seconds:
 - `permissions.e2e.js` — Role matrix verification
 - `attendance.e2e.js` — Clock in/out, breaks, dashboard
 - `telegram-omni.e2e.js` — Telegram omni-channel flow
+- `email-omni.e2e.js` — Email omni-channel flow
 - `avatar-upload.e2e.js` — Avatar upload + live broadcast
 - `sessions.e2e.js` — Session management
 - `shared-files.e2e.js` — File upload, versions, permissions
@@ -1064,6 +1110,8 @@ Four `setInterval` schedulers run every 30 seconds:
 | `NODE_ENV` | Environment (development/production) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `TELEGRAM_WEBHOOK_SECRET` | Telegram webhook validation secret |
+| `EMAIL_WEBHOOK_SECRET` | Email webhook validation secret |
+| `EMAIL_PROVIDER` | Email provider identifier |
 | `UPLOAD_DIR` | File upload directory |
 | `REDIS_URL` | Redis connection (optional, falls back to memory) |
 | `OMNI_INBOX_AGENT_IDS` | Restrict omni inbox to specific users (comma-separated) |
@@ -1079,6 +1127,7 @@ Four `setInterval` schedulers run every 30 seconds:
 - MySQL 8.0+
 - Redis (optional, for pub/sub)
 - Telegram bot token (optional, for omni-channel)
+- Email provider credentials (optional, for omni-channel)
 
 ### 14.2 Setup
 
@@ -1138,7 +1187,7 @@ flowchart TD
 - **Layered architecture** — Routes → Controllers → Services → Repositories
 - **Dependency injection** — Single composition root (`container.ts`)
 - **Real-time WebSocket** — Presence, messaging, typing, calls
-- **Omni-channel inbox** — Telegram + website widget via adapter pattern
+- **Omni-channel inbox** — Telegram + website + email via adapter pattern
 - **RBAC + discretionary permissions** — Role hierarchy + per-company capability overrides
 - **Background schedulers** — Reminders, meetings, tasks, announcements
 - **Redis pub/sub** — Cross-instance event fan-out

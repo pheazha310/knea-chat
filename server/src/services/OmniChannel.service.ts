@@ -46,6 +46,17 @@ const snippetOf = (text: string): string =>
 const channelLabel = (channel: string): string =>
   channel.charAt(0).toUpperCase() + channel.slice(1);
 
+/**
+ * Subject of an inbound email (from the adapter metadata), used as the
+ * conversation name for new threads. Returns null for other channels or when
+ * the subject is missing — callers then fall back to the contact name.
+ */
+const extractEmailSubject = (message?: OmniInboundMessage): string | null => {
+  const emailMeta = ((message?.metadata as { email?: { subject?: unknown } } | null) || {})?.email;
+  const subject = typeof emailMeta?.subject === 'string' ? emailMeta.subject.trim() : '';
+  return subject ? subject.slice(0, 120) : null;
+};
+
 /** Contact display name used as the internal conversation name. */
 const contactName = (contact: {
   first_name?: string | null;
@@ -117,7 +128,7 @@ export class OmniChannelService {
     message: OmniInboundMessage,
   ): Promise<OutgoingMessage | null> {
     const contact = await this.findOrCreateContact(channel, message);
-    const externalConversation = await this.findOrCreateConversation(channel, contact);
+    const externalConversation = await this.findOrCreateConversation(channel, contact, message, adapter);
     const persisted = await this.createInboundMessage(
       channel,
       adapter,
@@ -187,15 +198,71 @@ export class OmniChannelService {
 
   /**
    * Find the contact's conversation for a channel; create it on first contact.
-   * One conversation per contact+channel is reused for every subsequent
-   * message. Internal users are joined so the conversation shows up in the
-   * Omni Inbox. A closed conversation is reopened on new inbound activity.
+   *
+   * Email threads the conversation by RFC 5322 headers: when the adapter
+   * supplies thread hints (In-Reply-To / References), the referenced Message-
+   * IDs are matched against the external ledger and the message joins that
+   * thread's conversation. An unknown chain starts a NEW conversation (named
+   * after the email subject) so two unrelated threads from the same customer
+   * stay separate. Channels without threading (or emails without headers —
+   * e.g. a brand-new thread) fall back to the contact's most recent
+   * conversation, which is reused for every subsequent message.
+   *
+   * Internal users are joined so the conversation shows up in the Omni Inbox.
+   * A closed conversation is reopened on new inbound activity.
    */
   async findOrCreateConversation(
     channel: string,
     contact: ExternalContactRow,
+    message?: OmniInboundMessage,
+    adapter?: ChannelAdapter,
   ): Promise<ExternalConversationRow> {
-    const existing = await this.externalRepository.findConversationByContact(channel, contact.id);
+    // --- Thread resolution (email) — only when the message references other
+    // --- messages. Anything else falls through to per-contact grouping.
+    let referencedUnknownThread = false;
+    if (message && adapter?.getThreadHints) {
+      try {
+        const hints = await adapter.getThreadHints(message);
+        if (hints && hints.inReplyToMessageIds.length > 0) {
+          const threaded = await this.externalRepository.findConversationByThreadMessageIds(
+            channel,
+            hints.inReplyToMessageIds,
+          );
+          if (threaded) {
+            if (threaded.status === 'closed') {
+              await this.externalRepository.updateConversationStatus(threaded.conversation_id, 'open');
+              await this.externalRepository.clearDeliveryFailureOnReopen(threaded.conversation_id);
+              return {
+                ...threaded,
+                status: 'open',
+                delivery_fail_count: 0,
+                last_delivery_error: null,
+                last_delivery_failure_at: null,
+              };
+            }
+            return threaded;
+          }
+          // Referenced Message-IDs exist but no conversation holds them — the
+          // customer started a brand-new thread (or the parent predates this
+          // system). Create a fresh conversation for it instead of gluing the
+          // reply onto an unrelated thread of the same contact.
+          referencedUnknownThread = true;
+        }
+      } catch (error) {
+        // Thread hints are best-effort: a broken adapter must not block the
+        // message; per-contact grouping remains the safety net.
+        console.warn(
+          `[omni:${channel}] Thread resolution failed — falling back to per-contact grouping:`,
+          (error as Error).message,
+        );
+      }
+    }
+
+    // Header-less messages reuse the contact's most recent conversation; a
+    // message that referenced an unknown thread skips this and starts its own.
+    const existing = referencedUnknownThread
+      ? null
+      : await this.externalRepository.findConversationByContact(channel, contact.id);
     if (existing) {
       if (existing.status === 'closed') {
         await this.externalRepository.updateConversationStatus(existing.conversation_id, 'open');
@@ -207,7 +274,13 @@ export class OmniChannelService {
       return existing;
     }
 
-    const name = `${contactName(contact)} (${channelLabel(channel)})`;
+    // A thread-starting email names its conversation after the subject so
+    // agents can tell apart the customer's open threads at a glance; the
+    // generic per-contact name stays the fallback for header-less channels.
+    const threadSubject = extractEmailSubject(message);
+    const name = threadSubject
+      ? `${threadSubject}`
+      : `${contactName(contact)} (${channelLabel(channel)})`;
     const conversationId = await this.conversationRepository.create({
       type: 'direct',
       created_by: contact.user_id,
@@ -287,7 +360,20 @@ export class OmniChannelService {
     }
 
     const content = message.content || '';
-    const stored = message.media ? await this.downloadAndStoreMedia(channel, adapter, message.media) : null;
+    // Email may carry several files in one delivery. Keep `media` as the
+    // legacy primary attachment for channels that only expose one, but store
+    // every item supplied by a multi-attachment adapter.
+    const mediaItems = message.attachments?.length
+      ? message.attachments
+      : message.media
+        ? [message.media]
+        : [];
+    const storedAttachments = await Promise.all(
+      mediaItems.map(async (media) => ({
+        media,
+        stored: await this.downloadAndStoreMedia(channel, adapter, media),
+      })),
+    );
 
     let messageId: number;
     try {
@@ -295,7 +381,7 @@ export class OmniChannelService {
         conversation_id: conversationId,
         sender_id: contact.user_id,
         content,
-        type: message.media?.kind ?? 'text',
+        type: mediaItems[0]?.kind ?? 'text',
         reply_to: null,
       });
     } catch (error) {
@@ -306,12 +392,13 @@ export class OmniChannelService {
       throw error;
     }
 
-    if (stored) {
+    for (const { media, stored } of storedAttachments) {
+      if (!stored) continue;
       await this.messageRepository.createAttachment({
         message_id: messageId,
         file_name: stored.fileName,
         file_url: stored.fileUrl,
-        file_type: message.media?.mimeType ?? null,
+        file_type: media.mimeType,
         file_size: stored.fileSize,
       });
     }
@@ -338,7 +425,7 @@ export class OmniChannelService {
 
     const persisted = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
     persisted.reactions = [];
-    persisted.attachments = stored
+    persisted.attachments = storedAttachments.some(({ stored }) => !!stored)
       ? await this.messageRepository.findAttachments(messageId)
       : [];
 
@@ -356,10 +443,20 @@ export class OmniChannelService {
   /** Merge channel metadata + media reference into the external ledger row. */
   private inboundMetadata(message: OmniInboundMessage): unknown {
     const base = (message.metadata as Record<string, unknown> | null) || {};
-    if (!message.media) return base;
+    const mediaItems = message.attachments?.length
+      ? message.attachments
+      : message.media
+        ? [message.media]
+        : [];
+    if (mediaItems.length === 0) return base;
     return {
       ...base,
-      media: { kind: message.media.kind, file_ref: message.media.fileRef },
+      media: { kind: mediaItems[0].kind, file_ref: mediaItems[0].fileRef },
+      attachments: mediaItems.map((media) => ({
+        kind: media.kind,
+        file_name: media.fileName,
+        file_ref: media.fileRef,
+      })),
     };
   }
 
@@ -518,8 +615,10 @@ export class OmniChannelService {
       throw badRequest(`Channel ${resolved.channel} does not support media delivery`);
     }
 
+    const threading = await this.resolveEmailThreading(resolved);
     const sent = await adapter.sendMedia(resolved.chatId, media, {
       replyToExternalMessageId: resolved.replyToExternalMessageId,
+      ...(threading ? { threading } : {}),
     });
     if (!sent.ok) {
       await this.reportDeliveryFailure(

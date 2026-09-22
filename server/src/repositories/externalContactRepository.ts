@@ -96,8 +96,47 @@ export class ExternalContactRepository {
     contactId: number,
   ): Promise<ExternalConversationRow | null> {
     const rows = await this.db.query<ExternalConversationRow[]>(
-      'SELECT * FROM external_conversations WHERE channel = ? AND contact_id = ? LIMIT 1',
+      'SELECT * FROM external_conversations WHERE channel = ? AND contact_id = ? ORDER BY id DESC LIMIT 1',
       [channel, contactId],
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Resolve the conversation an email thread belongs to: find the newest
+   * inbound ledger message whose referenced Message-ID chain (stored in
+   * metadata by the adapter) or own external_message_id matches one of the
+   * supplied ids, and return that message's conversation.
+   *
+   * Matches against both `metadata.email.messageId` (JSON) and
+   * `external_message_id` because some providers store Message-IDs in
+   * different forms. The metadata key is indexed by nothing, so this is a
+   * scan over the channel's inbound rows — bounded by conversation volume and
+   * only executed for emails that carry In-Reply-To/References headers.
+   */
+  async findConversationByThreadMessageIds(
+    channel: string,
+    messageIds: string[],
+  ): Promise<ExternalConversationRow | null> {
+    const ids = [...new Set(messageIds.map((id) => String(id || '').trim()).filter(Boolean))];
+    if (ids.length === 0) return null;
+    const placeholders = ids.map(() => '?').join(',');
+    const normalizedJsonIds = ids.map((id) => JSON.stringify(id));
+    const jsonPlaceholders = normalizedJsonIds.map(() => '?').join(',');
+    const rows = await this.db.query<ExternalConversationRow[]>(
+      `SELECT ec.*
+       FROM external_conversations ec
+       JOIN external_messages em ON em.conversation_id = ec.conversation_id
+       WHERE ec.channel = ?
+         AND em.channel = ?
+         AND em.direction = 'inbound'
+         AND (
+           em.external_message_id IN (${placeholders})
+           OR JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.messageId')) IN (${jsonPlaceholders})
+         )
+       ORDER BY em.id DESC
+       LIMIT 1`,
+      [channel, channel, ...ids, ...normalizedJsonIds],
     );
     return rows[0] || null;
   }

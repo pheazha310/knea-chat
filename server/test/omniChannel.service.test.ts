@@ -65,8 +65,31 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
       });
       return 1;
     },
-    findConversationByContact: async (_channel: string, contactId: number) =>
-      externalConversations.find((c) => c.contact_id === contactId) || null,
+    findConversationByContact: async (_channel: string, contactId: number) => {
+      // Mirrors the SQL: newest conversation for the contact wins.
+      const rows = externalConversations.filter((c) => c.contact_id === contactId);
+      return rows.length > 0 ? rows[rows.length - 1] : null;
+    },
+    // Mirrors the SQL lookup: newest inbound ledger row whose stored metadata
+    // messageId (or external_message_id) is one of the referenced ids.
+    findConversationByThreadMessageIds: async (_channel: string, messageIds: string[]) => {
+      const hits = externalMessages.filter(
+        (m) =>
+          m.direction === 'inbound' &&
+          messageIds.includes(
+            String(
+              (m.metadata as { email?: { messageId?: string } } | null)?.email?.messageId ||
+                m.external_message_id ||
+                '',
+            ),
+          ),
+      );
+      if (hits.length === 0) return null;
+      const hit = hits[hits.length - 1]; // rows are appended oldest-first
+      return (
+        externalConversations.find((c) => c.conversation_id === hit.conversation_id) || null
+      );
+    },
     findConversationWithContact: async (conversationId: number) => {
       const row = externalConversations.find((c) => c.conversation_id === conversationId);
       if (!row) return null;
@@ -122,7 +145,7 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
       externalMessages.push({ id: externalMessages.length + 1, ...data });
       return externalMessages.length;
     },
-  };
+  } as Record<string, unknown>;
 
   const userRepo = {
     create: async (data: Record<string, unknown>) => {
@@ -136,11 +159,21 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
     findByDomain: async (domain: string) => ({ id: 999, name: 'Omni-Channel External', domain }),
   };
 
+  let conversationSeq = 500;
+  /** Names of internal conversations created by the engine (id → name). */
+  const internalConversations = new Map<number, string>();
   const conversationRepo = {
-    create: async () => 500,
+    create: async (data: Record<string, unknown>) => {
+      internalConversations.set(conversationSeq, String(data.name || ''));
+      return conversationSeq++;
+    },
     addMember: async () => 1,
     isMember: async () => true,
-    findById: async (id: number) => ({ id, type: 'direct', name: 'John Smith (Telegram)' }),
+    findById: async (id: number) => ({
+      id,
+      type: 'direct',
+      name: internalConversations.get(id) || 'John Smith (Telegram)',
+    }),
     findMemberIds: async () => [2, 3, 4],
   };
 
@@ -202,6 +235,22 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
 
   const registry = new ChannelRegistry();
   registry.register(adapter);
+
+  // Second adapter (email-like) so thread tests can register hints provider.
+  const emailAdapter: ChannelAdapter = {
+    channel: 'email',
+    parseInbound: async (payload: unknown) =>
+      ((payload as { messages?: OmniInboundMessage[] })?.messages || []) as OmniInboundMessage[],
+    sendMessage: async () => ({ ok: true, externalMessageId: 'mail-2222' }),
+    getHealth: async () => ({ connected: true }),
+    getThreadHints: async (message: OmniInboundMessage) => {
+      const meta = (message.metadata as { threadIds?: string[] } | null) || {};
+      return meta.threadIds && meta.threadIds.length > 0
+        ? { inReplyToMessageIds: meta.threadIds }
+        : null;
+    },
+  };
+  registry.register(emailAdapter);
 
   const service = new OmniChannelService(
     registry,
@@ -346,6 +395,28 @@ describe('OmniChannelService — inbound processing', () => {
       (row.metadata as { media: { kind: string } }).media.kind,
       'image',
     );
+  });
+
+  it('stores every attachment carried by one inbound message', async () => {
+    const result = await h.service.processInbound('telegram', {
+      messages: [
+        makeMessage({
+          externalMessageId: '333-multi',
+          attachments: [
+            { kind: 'file', fileName: 'invoice.pdf', mimeType: 'application/pdf', fileRef: 'file-1' },
+            { kind: 'file', fileName: 'photo.png', mimeType: 'image/png', fileRef: 'file-2' },
+          ],
+        }),
+      ],
+    });
+
+    assert.deepEqual(result, { processed: 1, ignored: 0 });
+    assert.deepEqual(
+      h.attachmentCreates.map((attachment) => attachment.file_name),
+      ['invoice.pdf', 'photo.png'],
+    );
+    const metadata = h.externalMessages[0].metadata as { attachments: Array<{ file_name: string }> };
+    assert.deepEqual(metadata.attachments.map((attachment) => attachment.file_name), ['invoice.pdf', 'photo.png']);
   });
 
   it('dedupes media messages (file downloaded only once)', async () => {
@@ -660,12 +731,19 @@ describe('OmniChannelService — health', () => {
 
 describe('OmniChannelService — capabilities', () => {
   it('advertises media only for adapters that implement sendMedia', () => {
-    // makeHarness() registers a bare adapter without sendMedia.
+    // makeHarness() registers a bare telegram adapter (no sendMedia) and an
+    // email adapter — neither implements media delivery.
     const without = makeHarness();
-    assert.deepEqual(without.service.getCapabilities(), { telegram: { media: false } });
+    assert.deepEqual(without.service.getCapabilities(), {
+      telegram: { media: false },
+      email: { media: false },
+    });
 
     const withMedia = makeHarness({ sendMedia: async () => ({ ok: true }) });
-    assert.deepEqual(withMedia.service.getCapabilities(), { telegram: { media: true } });
+    assert.deepEqual(withMedia.service.getCapabilities(), {
+      telegram: { media: true },
+      email: { media: false },
+    });
   });
 
   it('covers every registered channel', () => {
@@ -673,5 +751,136 @@ describe('OmniChannelService — capabilities', () => {
     for (const channel of h.service.channels()) {
       assert.ok(channel in h.service.getCapabilities());
     }
+  });
+});
+
+describe('OmniChannelService — email thread resolution', () => {
+  /**
+   * An email inbound message with real chaining semantics: a unique own
+   * Message-ID (derived from the unique externalMessageId) plus optional
+   * references (mirroring what the email adapter extracts from In-Reply-To /
+   * References). Replies pass the PARENT's Message-ID in `references`.
+   */
+  const makeEmailMessage = (
+    overrides: Partial<OmniInboundMessage> & { subject?: string; references?: string[] } = {},
+  ): OmniInboundMessage => {
+    const { subject, references, ...messageOverrides } = overrides;
+    const ownMessageId = `${overrides.externalMessageId || 'msg-0'}@example.com`;
+    return makeMessage({
+      externalContactId: 'customer@example.com',
+      username: 'customer@example.com',
+      firstName: null,
+      lastName: null,
+      content: 'Email body',
+      metadata: {
+        email: { subject: subject || 'Subject A', messageId: ownMessageId },
+        ...(references && references.length > 0 ? { threadIds: references } : {}),
+      },
+      ...messageOverrides,
+    });
+  };
+
+  it('separates two unrelated threads from the same contact into two conversations', async () => {
+    const h = makeHarness();
+
+    // Thread 1 — no references → falls back to the contact's conversation.
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm1' })] });
+    // Thread 2 — a fresh thread (references an unknown Message-ID → new
+    // conversation instead of gluing onto thread 1).
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm2', subject: 'Subject B', references: ['unknown-parent@example.com'] })],
+    });
+
+    assert.equal(h.contacts.size, 1, 'same contact');
+    assert.equal(h.externalConversations.length, 2, 'two conversations for one contact');
+    const [first, second] = h.externalConversations;
+    assert.equal(first.channel, 'email');
+    assert.equal(second.channel, 'email');
+    assert.equal(first.conversation_id, 500);
+    assert.equal(second.conversation_id, 501, 'second thread got its own internal conversation');
+  });
+
+  it('joins a reply into the conversation holding the referenced Message-ID', async () => {
+    const h = makeHarness();
+    // Thread 1: header-less starter — occupies the per-contact conversation.
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm1' })] });
+    // Thread 2: new subject — starts its own conversation.
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm2', subject: 'Subject B', references: ['thread2-parent@example.com'] })],
+    });
+    // Reply to thread 2 — references thread 2's stored Message-ID.
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm3', subject: 'Re: Subject B', references: ['m2@example.com'] })],
+    });
+
+    assert.equal(h.externalConversations.length, 2, 'no third conversation');
+    assert.equal(h.externalMessages.length, 3);
+    const last = h.externalMessages[h.externalMessages.length - 1];
+    assert.equal(last.conversation_id, 501, 'reply joined thread 2');
+  });
+
+  it('names a new thread conversation after the email subject', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm1' })] });
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm2', subject: 'Subject B', references: ['unknown-parent@example.com'] })],
+    });
+
+    const secondInternal = await (
+      h.conversationRepo as { findById: (id: number) => Promise<{ name: string }> }
+    ).findById(501);
+    assert.equal(secondInternal.name, 'Subject B');
+  });
+
+  it('keeps header-less emails in the contact conversation (fallback)', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm1' })] });
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm2' })] });
+
+    assert.equal(h.externalConversations.length, 1, 'no new conversation without references');
+    assert.equal(h.externalMessages.length, 2);
+  });
+
+  it('reuses the per-contact conversation for channels without thread hints', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+    await h.service.processInbound('telegram', {
+      messages: [makeMessage({ externalMessageId: '112', content: 'Still here' })],
+    });
+    assert.equal(h.externalConversations.length, 1);
+  });
+
+  it('falls back to per-contact grouping when thread lookup throws', async () => {
+    const h = makeHarness();
+    // Reach the harness' email adapter through the service's private registry
+    // and break getThreadHints — the engine must still persist the message.
+    const emailAdapter = (h.service as unknown as {
+      registry: { get: (channel: string) => ChannelAdapter | undefined };
+    }).registry.get('email');
+    assert.ok(emailAdapter);
+    (emailAdapter as { getThreadHints: unknown }).getThreadHints = async () => {
+      throw new Error('boom');
+    };
+
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm1', references: ['x@example.com'] })],
+    });
+    assert.equal(h.externalConversations.length, 1, 'message still persisted via fallback');
+  });
+
+  it('reopens a closed thread conversation on new inbound activity', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('email', { messages: [makeEmailMessage({ externalMessageId: 'm1' })] });
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm2', subject: 'Subject B', references: ['thread2-parent@example.com'] })],
+    });
+
+    await h.service.setConversationStatus(501, 7, 'closed');
+    await h.service.processInbound('email', {
+      messages: [makeEmailMessage({ externalMessageId: 'm3', subject: 'Re: Subject B', references: ['m2@example.com'] })],
+    });
+
+    const row = h.externalConversations.find((c) => c.conversation_id === 501);
+    assert.equal(row?.status, 'open');
   });
 });

@@ -1,7 +1,7 @@
 # KneaChat — Implementation Status
 
-**Document Version:** 2.0
-**Last Updated:** August 2026
+**Document Version:** 2.1
+**Last Updated:** September 2026
 **Project Status:** MVP Complete ✅
 
 ---
@@ -18,6 +18,7 @@
 | Client App               | ✅ Complete          | 100%       |
 | Mentions & Attachments   | ✅ Complete          | 100%       |
 | Admin / Management UI    | ✅ Complete          | 100%       |
+| Omni-Channel Inbox       | ✅ Delivered (email) | 100%       |
 | Testing                  | ⚠️ In Progress       | 20%        |
 | Deployment               | ⚠️ In Progress       | 30%        |
 | **Overall (MVP)**        | **✅ Complete**      | **~90%**   |
@@ -368,6 +369,53 @@ Enforcement notes:
 - [x] notification events (mention + new message) → live bell updates
 - [x] Client reconnect with exponential backoff + offline queue
 
+### Omni-Channel Inbox (Email) — ✅ Delivered
+- [x] **Inbound email → Omni Inbox** — customer emails arrive at the provider
+      webhook (`POST /api/email/webhook`, signature-verified), are parsed by
+      the email adapter (Mailgun, SendGrid incl. Inbound Parse attachments,
+      Amazon SES/SNS, Postmark, or a generic HMAC webhook), and flow through
+      the shared omni engine (`OmniChannelService`): contact + conversation
+      auto-created (one identity per address — migration 029 adds the unique
+      `external_contacts.email_address`), the message is persisted with the
+      external ledger, and agents receive `receive_message` + notification in
+      real time over WebSocket
+- [x] **Agent replies over SMTP with RFC 5322 threading** — replies derive
+      the `Re:` subject + `In-Reply-To`/`References` chain from the customer's
+      most recent inbound email so mail clients group the thread; delivery
+      happens first and the message is persisted only after the provider
+      accepts it (deliver-then-persist, mirroring the Telegram outbound guard)
+- [x] **Per-thread conversations** — inbound emails are grouped by RFC 5322
+      thread, not just by customer: a reply whose `In-Reply-To`/`References`
+      Message-IDs match the external ledger joins that conversation (closed
+      ones reopen), an unrelated subject starts a NEW conversation named
+      after the email subject, and header-less mail falls back to the
+      contact's most recent thread (migration 030: `external_conversations`
+      allows several conversations per contact; thread hints arrive through
+      the optional `ChannelAdapter.getThreadHints` contract, so other
+      channels keep their own grouping)
+- [x] **Safety** — webhook signature verification (401 on mismatch; generic
+      HMAC or provider key-pair via `EMAIL_WEBHOOK_PUBLIC_KEY`), duplicate
+      Message-ID guard (in-flight set + unique ledger key), and inbound HTML
+      sanitized before storage
+- [x] **Tests** — 47+ unit tests (`server/test/email.adapter.test.ts`:
+      parsing, threading, signatures, sanitization, Resend SDK receiving and
+      attachment fetch; `server/test/omniChannel.service.test.ts`: engine
+      flow incl. email thread resolution) plus integration/E2E: a mock-Resend
+      inbound run (`npm run test:e2e:resend-mock` — content fetch, attachment
+      download via signed URLs), a live E2E (`server/e2e/email-omni.e2e.js`,
+      `npm run test:e2e:email` — signed webhook → realtime fan-out → DB
+      ground truth → dedupe → thread resolution (reply joins the thread,
+      fresh subject opens a second conversation) → webhook security →
+      claim/close/reopen; opt-in real-SMTP reply leg via
+      `E2E_REAL_DELIVERY=1`), and a live Svix check
+      (`npm run resend:check`)
+- [x] **Docs & config** — `docs/EMAIL_INTEGRATION.md` (env vars, provider
+      setup, ngrok local testing, API reference); requires the `EMAIL_*` vars
+      in `server/.env` (Gmail SMTP needs an App Password). Telegram and the
+      website widget share the same engine — see
+      `docs/TELEGRAM_INTEGRATION.md` and
+      `docs/PROJECT_STRUCTURE_AND_WORKFLOW.md` §7
+
 ### Search (US-17, FR-16)
 - [x] **Quick search** — message search (with conversation context) and user
       search (`/api/search/messages|users`) plus the ⌘K modal that jumps
@@ -414,9 +462,10 @@ Enforcement notes:
 
 ## ⚠️ Known Gaps / TODO
 
-- [ ] **Email delivery** — password reset currently returns the reset token
-      in the API response (shown to the user in dev mode). Wire an SMTP
-      provider (see `EMAIL_*` in `.env.example`) for production.
+- [ ] **Email delivery (transactional)** — password reset currently returns
+      the reset token in the API response (shown to the user in dev mode).
+      Wire an SMTP provider for production. Separate from the omni-channel
+      email inbox, which is delivered (see Omni-Channel Inbox above).
 - [ ] **Server tests** — no automated test suite yet (SRS §24). Client has
       only the default smoke test.
 - [ ] **Reconnection queue persistence** — offline WS messages are queued
@@ -464,7 +513,8 @@ Demo accounts (password for all: `kneachat168`):
 - **Client (React + TypeScript + Tailwind):** auth flows, chat dashboard
   (real-time), profile, admin dashboard, search, mentions, attachments,
   replies, pinning, teams/channels/group-chat management.
-- **Docs:** this file, README, QUICK_START, DEVELOPMENT, DELIVERY_SUMMARY.
+- **Docs:** this file, README, QUICK_START, DEVELOPMENT, DELIVERY_SUMMARY,
+  TELEGRAM_INTEGRATION, EMAIL_INTEGRATION.
 
 ---
 

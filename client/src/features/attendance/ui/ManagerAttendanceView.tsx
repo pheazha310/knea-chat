@@ -16,7 +16,7 @@ const MONTH_NAMES = [
 
 const DAY_SHORT = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
-interface Props {
+interface Props { 
   departments?: Array<{ id: number; name: string }>;
   users?: Array<{ id: number; first_name: string; last_name: string; department_id?: number | null; role?: string }>;
 }

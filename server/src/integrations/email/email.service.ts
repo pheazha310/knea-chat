@@ -11,6 +11,7 @@
  */
 import nodemailer, { type Transporter, type SentMessageInfo, type SendMailOptions } from 'nodemailer';
 import crypto from 'crypto';
+import { Resend } from 'resend';
 
 import type {
   EmailAddress,
@@ -35,12 +36,25 @@ export function buildReplySubject(subject: string | null | undefined): string {
   const trimmed = (subject || '').trim();
   if (!trimmed) return 'Message from KneaChat';
   return /^re\s*:/i.test(trimmed) ? trimmed : `Re: ${trimmed}`;
-}
-
-export function wrapMessageId(messageId: string | null | undefined): string | null {
+}export function wrapMessageId(messageId: string | null | undefined): string | null {
   const trimmed = (messageId || '').trim();
   if (!trimmed) return null;
-  return trimmed.startsWith('<') ? trimmed : `<${trimmed}>`; 
+  return trimmed.startsWith('<') ? trimmed : `<${trimmed}>`;
+}
+
+/**
+ * Canonical form of an RFC 5322 Message-ID used as a thread key: lower-cased
+ * and stripped of `<>` / surrounding whitespace. Both the inbound References
+ * entries and the outbound ledger lookups normalize through this so a header
+ * like `<ABC@Example.com>` matches the same stored id.
+ */
+export function normalizeMessageId(messageId: string | null | undefined): string | null {
+  const trimmed = (messageId || '').trim();
+  if (!trimmed) return null;
+  const unwrapped = trimmed.startsWith('<') && trimmed.endsWith('>')
+    ? trimmed.slice(1, -1)
+    : trimmed;
+  return unwrapped.trim().toLowerCase() || null;
 }
 
 export function buildReferencesHeader(
@@ -138,6 +152,9 @@ export function normalizeAttachments(
       ...(a['size'] != null && Number.isFinite(Number(a['size']))
         ? { size: Number(a['size']) }
         : {}),
+      // Resend Receiving API id — survives the reshape so the adapter can
+      // download the bytes later (see email.adapter downloadMedia).
+      ...(a['resend_id'] ? { resend_id: String(a['resend_id']) } : {}),
       ...(a['url'] ? { url: String(a['url']) } : {}),
     }));
   return normalized.length > 0 ? normalized : undefined;
@@ -194,6 +211,27 @@ export function parseHeaderPairs(raw: unknown): Record<string, string> {
     }
   }
   return headers;
+}
+
+/** Full content of a received email, as returned by the Resend Receiving API. */
+export interface ResendEmailContent {
+  from?: string;
+  to?: string[];
+  subject?: string;
+  text?: string;
+  html?: string;
+  headers?: Record<string, string>;
+  message_id?: string;
+  attachments?: Array<{ id: string; filename: string; content_type: string; size?: number; url?: string }>;
+}
+
+/** A downloaded Resend inbound attachment: raw bytes + provenance. */
+export interface ResendAttachmentDownload {
+  id: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  buffer: Buffer;
 }
 
 export class EmailService {
@@ -311,6 +349,199 @@ export class EmailService {
     } catch (error) {
       const description = error instanceof Error ? error.message : 'SMTP delivery failed';
       return { ok: false, description };
+    }
+  }
+
+  /**
+   * Resend (Svix) signature verification.
+   *
+   * Svix signs the string `${id}.${timestamp}.${rawBody}` with HMAC-SHA256,
+   * base64-encodes the digest and prefixes it with `v1,`. Multiple signatures
+   * (space-separated) may be present during secret rotation. The exact raw
+   * request body must be captured before body-parsing — JSON.stringify of the
+   * re-serialized object does not reproduce the signed bytes.
+   *
+   * Secret: `EMAIL_RESEND_WEBHOOK_SECRET` — the `whsec_...` value shown when
+   * creating the webhook in the Resend dashboard. Falls back to the generic
+   * `EMAIL_WEBHOOK_SECRET` when only one is configured.
+   */
+  verifyResendSignature(payload: unknown, headers: EmailWebhookHeaders): boolean {
+    const rawBody = headers['svix-raw-body'];
+    if (!rawBody) {
+      console.warn('[email] Resend webhook rejected: raw body unavailable (server must capture it)');
+      return false;
+    }
+
+    const whsec = process.env.EMAIL_RESEND_WEBHOOK_SECRET || getWebhookSecret();
+    if (!whsec) {
+      console.warn('[email] Resend webhook rejected: no signing secret configured');
+      return false;
+    }
+
+    // Svix secrets are prefixed with whsec_ — strip before decoding.
+    const secretPart = whsec.startsWith('whsec_') ? whsec.slice('whsec_'.length) : whsec;
+    const key = Buffer.from(secretPart, 'base64');
+
+    const id = headers['svix-id'] || '';
+    const timestamp = headers['svix-timestamp'] || '';
+    const signatureHeader = headers['svix-signature'] || '';
+    if (!id || !timestamp || !signatureHeader) return false;
+
+    // Reject stale deliveries (±5 min, matching Svix's own recommendation).
+    const ts = parseInt(timestamp, 10);
+    if (!Number.isFinite(ts)) return false;
+    const skewSeconds = Math.abs(Math.floor(Date.now() / 1000) - ts);
+    if (skewSeconds > 300) {
+      console.warn(`[email] Resend webhook rejected: timestamp skew ${skewSeconds}s`);
+      return false;
+    }
+
+    const signedContent = `${id}.${timestamp}.${rawBody}`;
+    const expected = crypto.createHmac('sha256', key).update(signedContent).digest('base64');
+    // Format: "v1,<sig1> v1,<sig2> ..."
+    const received = signatureHeader
+      .split(' ')
+      .map((s) => s.trim())
+      .filter(Boolean);
+    return received.some((sig) => this.safeCompare(`v1,${expected}`, sig));
+  }
+
+  /**
+   * Lazily-built Resend SDK client, cached per (key, base URL) pair. Built per
+   * call-site configuration rather than in the constructor because the service
+   * is a singleton: EMAIL_RESEND_API_KEY may only appear later (runtime env
+   * changes, tests) and a stale client must never outlive its credentials.
+   */
+  private resendClient: Resend | null = null;
+  private resendClientFingerprint = '';
+
+  private getResendClient(): Resend | null {
+    const apiKey = process.env.EMAIL_RESEND_API_KEY || '';
+    if (!apiKey) return null;
+    // EMAIL_RESEND_API_BASE: optional override (local simulation / proxy);
+    // defaults to the production Resend API.
+    const apiBase = (process.env.EMAIL_RESEND_API_BASE || 'https://api.resend.com').replace(/\/$/, '');
+    const fingerprint = `${apiKey}@${apiBase}`;
+    if (!this.resendClient || this.resendClientFingerprint !== fingerprint) {
+      this.resendClient = new Resend(apiKey, { baseUrl: apiBase });
+      this.resendClientFingerprint = fingerprint;
+    }
+    return this.resendClient;
+  }
+
+  /**
+   * Fetch the full content (text, html, headers) of a received email from the
+   * Resend Receiving API. Resend's email.received webhook carries metadata
+   * only — body and headers must be fetched separately with an API key.
+   *
+   * Uses the official `resend` SDK (EMAIL_RESEND_API_KEY / EMAIL_RESEND_API_BASE)
+   * and normalizes the API response into the internal `ResendEmailContent` shape.
+   */
+  async fetchResendEmailContent(emailId: string): Promise<ResendEmailContent | null> {
+    const client = this.getResendClient();
+    if (!client || !emailId) return null;
+    // The SDK has no per-request timeout option; keep the 10s bound the raw
+    // fetch implementation had so a stuck connection cannot hang the webhook.
+    let timeoutTimer: NodeJS.Timeout | undefined;
+    try {
+      const { data, error } = await Promise.race([
+        client.emails.receiving.get(emailId),
+        new Promise<never>((_, reject) => {
+          timeoutTimer = setTimeout(
+            () => reject(new Error('Resend receiving API timed out after 10000ms')),
+            10_000,
+          );
+        }),
+      ]);
+      if (error || !data) {
+        console.warn(
+          `[email] Resend receiving API error for ${emailId.slice(0, 8)}…:`,
+          error?.message || 'empty response',
+        );
+        return null;
+      }
+      return {
+        from: data.from,
+        to: data.to,
+        subject: data.subject,
+        text: data.text ?? undefined,
+        html: data.html ?? undefined,
+        headers: data.headers ?? {},
+        message_id: data.message_id,
+        attachments: (data.attachments || []).map((a) => ({
+          id: a.id,
+          filename: a.filename ?? 'attachment',
+          content_type: a.content_type,
+          ...(a.size != null ? { size: a.size } : {}),
+        })),
+      };
+    } catch (error) {
+      console.warn('[email] Resend receiving API fetch failed:', (error as Error).message);
+      return null;
+    } finally {
+      if (timeoutTimer) clearTimeout(timeoutTimer);
+    }
+  }
+
+  /**
+   * Resolve a Resend inbound attachment reference to its download URL.
+   * Accepts either the bare attachment id (looked up through the Receiving
+   * attachments API) or a full signed download URL captured earlier.
+   *
+   * Returns null when Resend is not configured (no EMAIL_RESEND_API_KEY) or
+   * the attachment does not exist — callers treat that as "no bytes", not an
+   * error, so an expired/missing file cannot break message rendering.
+   */
+  async getResendAttachmentUrl(emailId: string, attachmentRef: string): Promise<string | null> {
+    if (attachmentRef.startsWith('http')) return attachmentRef;
+    const client = this.getResendClient();
+    if (!client || !emailId || !attachmentRef) return null;
+    try {
+      const { data, error } = await client.emails.receiving.attachments.get({
+        emailId,
+        id: attachmentRef,
+      });
+      if (error || !data?.download_url) {
+        console.warn(
+          `[email] Resend attachment ${attachmentRef.slice(0, 12)}… lookup failed:`,
+          error?.message || 'no download_url',
+        );
+        return null;
+      }
+      return data.download_url;
+    } catch (error) {
+      console.warn('[email] Resend attachment lookup failed:', (error as Error).message);
+      return null;
+    }
+  }
+
+  /**
+   * Download the bytes of a Resend inbound attachment.
+   *
+   * `attachmentRef` is the attachment id (`att_…`) or an already-resolved
+   * signed URL. Signed URLs are short-lived (Resend's `expires_at`), so the
+   * URL is always resolved *now* — never persisted and re-used later.
+   */
+  async fetchResendAttachment(emailId: string, attachmentRef: string): Promise<ResendAttachmentDownload | null> {
+    const url = await this.getResendAttachmentUrl(emailId, attachmentRef);
+    if (!url) return null;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) {
+        console.warn(`[email] Resend attachment download returned ${res.status}`);
+        return null;
+      }
+      const buffer = Buffer.from(await res.arrayBuffer());
+      return {
+        id: attachmentRef,
+        filename: 'attachment',
+        contentType: res.headers.get('content-type') || 'application/octet-stream',
+        size: buffer.length,
+        buffer,
+      };
+    } catch (error) {
+      console.warn('[email] Resend attachment download failed:', (error as Error).message);
+      return null;
     }
   }
 
