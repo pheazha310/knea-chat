@@ -1143,20 +1143,40 @@ async function applyMigrations(admin) {
   // Migration 030: email per-thread conversations — a contact can now hold
   // several conversations (one per RFC 5322 email thread) instead of exactly
   // one, so the (contact_id, channel) UNIQUE key becomes a plain index.
-  // Idempotent: only touches tables still carrying the old unique key.
+  // Idempotent: only touches tables still carrying the old unique key. The
+  // key exists under two historic names — 'uq_external_conversation_contact'
+  // (schema.sql) and 'uq_external_conversation' (migration 024 file) — and
+  // this database may carry either (or both), so each present name is
+  // dropped individually before the plain index is ensured.
   const [threadUniqueKeys] = await admin.query(
-    `SELECT COUNT(*) AS count FROM information_schema.statistics
+    `SELECT DISTINCT index_name AS index_name FROM information_schema.statistics
      WHERE table_schema = ? AND table_name = 'external_conversations'
-       AND index_name = 'uq_external_conversation_contact' AND non_unique = 0`,
+       AND index_name IN ('uq_external_conversation_contact', 'uq_external_conversation')
+       AND non_unique = 0`,
     [DB_NAME],
   );
-  if (threadUniqueKeys[0].count > 0) {
+  const [contactIndexRows] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.statistics
+     WHERE table_schema = ? AND table_name = 'external_conversations'
+       AND index_name = 'idx_external_conversations_contact'`,
+    [DB_NAME],
+  );
+  if (threadUniqueKeys.length > 0) {
+    // The contact_id FK needs a covering index at every moment, so the drop
+    // and the replacement index must happen in ONE ALTER statement.
+    const drops = threadUniqueKeys
+      .map((row) => `DROP INDEX \`${Array.isArray(row) ? row[0] : row.index_name || row.INDEX_NAME}\``)
+      .join(', ');
+    const alter = contactIndexRows[0].count === 0
+      ? `${drops}, ADD INDEX idx_external_conversations_contact (contact_id, channel)`
+      : drops;
+    await admin.query(`USE \`${DB_NAME}\`; ALTER TABLE external_conversations ${alter};`);
+    console.log('🧵 Allowed multiple conversations per contact (migration 030).');
+  } else if (contactIndexRows[0].count === 0) {
     await admin.query(
       `USE \`${DB_NAME}\`; ALTER TABLE external_conversations
-       DROP INDEX uq_external_conversation_contact,
        ADD INDEX idx_external_conversations_contact (contact_id, channel);`,
     );
-    console.log('🧵 Allowed multiple conversations per contact (migration 030).');
   }
 
   const [externalMsgTables] = await admin.query(

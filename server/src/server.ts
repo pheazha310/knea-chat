@@ -12,6 +12,7 @@ import { app } from './app';
 import { container } from './container';
 import { ChatWebSocketServer } from './websocket/websocket.server';
 import { startAttendanceEventRelay } from './websocket/attendance.events';
+import { scheduleEmailStartupChecks } from './integrations/email/startup-checks';
 
 // Attendance real-time relay: subscribes to the Redis attendance channel so
 // clock-in/out events from other server instances fan out to local sockets.
@@ -82,6 +83,10 @@ server.listen(PORT, HOST, () => {
 ║ 🗄️  Database:          ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306}
 ╚════════════════════════════════════════════════════════╝
   `);
+
+  // Email omni-channel diagnostics — warn when DNS/webhook config would
+  // silently drop inbound mail (never fatal; see startup-checks.ts).
+  scheduleEmailStartupChecks();
 });
 
 // Graceful shutdown.

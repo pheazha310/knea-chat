@@ -1,4 +1,4 @@
-# 🚀 KneaChat Backend - Quick Start Guide
+# 🚀 KneaChat Backend — Quick Start Guide
 
 ## ⚡ 5-Minute Setup
 
@@ -6,15 +6,18 @@
 
 ```bash
 cd chat_websocket
-npm install
+npm run install:server
+npm run install:client
 ```
 
 ### Step 2: Configure Environment
 
 ```bash
-cp .env.example .env
-# Edit .env with your MySQL credentials
+cp server/.env.example server/.env
+# Edit server/.env with your MySQL credentials
 ```
+
+Required env vars: `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `JWT_SECRET`, `CORS_ORIGIN`, `PORT`
 
 ### Step 3: Create Database
 
@@ -27,10 +30,18 @@ EXIT;
 ### Step 4: Start Server
 
 ```bash
-npm run dev
+npm run server
 ```
 
 ✅ Server running on `http://localhost:8080`
+
+In another terminal:
+
+```bash
+npm run client
+```
+
+✅ Client running on `http://localhost:3000`
 
 ---
 
@@ -41,7 +52,7 @@ npm run dev
 ```bash
 curl -X POST http://localhost:8080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email":"user@example.com","password":"password123"}'
+  -d '{"email":"admin@kneachat.com","password":"kneachat168"}'
 ```
 
 **Response:**
@@ -51,9 +62,7 @@ curl -X POST http://localhost:8080/api/auth/login \
   "success": true,
   "message": "Login successful",
   "data": {
-    "user": {
-      /* user info */
-    },
+    "user": { "id": 1, "email": "admin@kneachat.com", "role": "admin" },
     "token": "eyJhbGc...",
     "expiresIn": "24h"
   }
@@ -119,21 +128,35 @@ ws.send(
 
 ```
 chat_websocket/
-├── src/
-│   ├── server.js              ← Main Express server
-│   ├── middleware/            ← JWT, error handling
-│   ├── routes/                ← API endpoints
-│   ├── websocket/             ← Real-time handlers
-│   ├── database/              ← MySQL connection
-│   ├── models/                ← TODO: Database models
-│   ├── services/              ← TODO: Business logic
-│   └── utils/                 ← Helpers, validators
-├── .env                       ← Environment config
-├── .env.example               ← Config template
-├── package.json               ← Dependencies
-├── README.md                  ← Full documentation
-├── DEVELOPMENT.md             ← Dev guide
-└── QUICK_START.md             ← This file
+├── client/                         # React + TypeScript + Tailwind — feature-based architecture
+│   └── src/
+│       ├── app/                    # Application shell (router, providers, stores)
+│       ├── entities/               # Domain modules (types + Zustand stores)
+│       ├── features/               # Feature UI components
+│       ├── pages/                  # Page-level layouts (role-based)
+│       ├── shared/                 # Cross-cutting UI and utilities
+│       └── widgets/                # Reusable composite widgets
+├── server/                         # Node.js + Express — MVC architecture
+│   ├── src/
+│   │   ├── server.ts               # HTTP + WS server bootstrap
+│   │   ├── app.ts                  # Express app (middleware, routes)
+│   │   ├── container.ts            # Composition root (DI wiring)
+│   │   ├── database/               # MySQL connection pool
+│   │   ├── cache/                  # Redis client with memory fallback
+│   │   ├── middleware/             # Authentication and error handling
+│   │   ├── types/                  # Server domain and Express types
+│   │   ├── utils/                  # Shared server helpers
+│   │   ├── repositories/           # MySQL data access (35 repositories)
+│   │   ├── services/               # Business logic (29 services)
+│   │   ├── controllers/            # HTTP request handlers (27 controllers)
+│   │   ├── routes/                 # Express route definitions (28 route files)
+│   │   ├── websocket/              # Real-time event handlers
+│   │   └── integrations/           # Omni-channel adapters
+│   ├── database/migrations/        # MySQL schema migrations
+│   ├── test/                       # Node test-runner unit/integration tests
+│   ├── e2e/                        # End-to-end scripts
+│   └── scripts/                    # Database, demo, and local-service scripts
+└── docs/                           # Setup, implementation status, and delivery notes
 ```
 
 ---
@@ -160,6 +183,7 @@ NODE_ENV=development
 
 # Database
 DB_HOST=localhost
+DB_PORT=3306
 DB_USER=root
 DB_PASSWORD=
 DB_NAME=kneachat
@@ -169,6 +193,10 @@ JWT_SECRET=dev-secret-key
 
 # Client URL (CORS)
 CORS_ORIGIN=http://localhost:3000
+
+# Optional
+REDIS_URL=redis://localhost:6379
+UPLOAD_DIR=uploads
 ```
 
 ---
@@ -202,7 +230,7 @@ lsof -i :8080
 
 ```bash
 # Make sure CORS_ORIGIN in .env matches your client URL
-CORS_ORIGIN=http://localhost:3000  # ← Update this
+CORS_ORIGIN=http://localhost:3000
 ```
 
 ---
@@ -212,95 +240,36 @@ CORS_ORIGIN=http://localhost:3000  # ← Update this
 - [x] Express.js server setup
 - [x] JWT authentication middleware
 - [x] Error handling middleware
-- [x] REST API route structure (7 route files)
+- [x] REST API (100+ endpoints, 28 route files)
 - [x] WebSocket server setup
-- [x] Real-time event handlers (messages, presence, typing)
-- [x] MySQL connection pool
+- [x] Real-time event handlers (messages, presence, typing, calls)
+- [x] MySQL connection pool + migrations
 - [x] Environment configuration
 - [x] Response formatting utilities
 - [x] Input validation utilities
 - [x] Password hashing (bcrypt)
 - [x] CORS configuration
+- [x] Rate limiting on auth endpoints
+- [x] Omni-channel adapters (Telegram, Website, Email)
+- [x] Background schedulers (reminders, meetings, tasks, announcements)
 
 ---
 
 ## 📋 What's Next 📝
 
-**High Priority (Do First):**
-
-1. Implement database models (User, Team, Channel, Message, etc.)
-2. Connect routes to actual database queries
-3. Implement complete WebSocket message persistence
-
-**Medium Priority:**
-
-1. Add comprehensive input validation
-2. Implement error logging
-3. Add rate limiting
-4. Write unit tests
-
-**Lower Priority:**
-
-1. Add API documentation (Swagger)
-2. Implement file uploads
-3. Add analytics/monitoring
-4. Performance optimization
+- [ ] Expand server unit test coverage
+- [ ] Reconnection queue persistence (offline WS messages survive reload)
+- [ ] Token blacklist for JWT revocation
+- [ ] Deployment guides (Docker, CI/CD)
 
 See [DEVELOPMENT.md](./DEVELOPMENT.md) for detailed tasks.
 
 ---
 
-## 🔗 Frontend Connection
-
-React frontend should connect like this:
-
-```javascript
-// src/services/websocket.js
-const token = localStorage.getItem("authToken");
-const ws = new WebSocket(`ws://localhost:8080?token=${token}`);
-
-ws.onmessage = (event) => {
-  const message = JSON.parse(event.data);
-  // Handle message...
-};
-```
-
----
-
 ## 📞 Quick Help
 
-- **API Docs:** See [README.md](./README.md)
-- **Dev Guide:** See [DEVELOPMENT.md](./DEVELOPMENT.md)
-- **Database Schema:** See SRS Appendix B
-- **WebSocket Events:** See [README.md](./README.md#-websocket-events)
-
----
-
-## ✨ Pro Tips
-
-1. **Use Postman** for testing REST endpoints
-   - Import methods from README.md
-   - Set Bearer token in Authorization
-
-2. **Use `wscat`** for WebSocket testing
-   - Much easier than browser console
-   - Can send/receive JSON events easily
-
-3. **Check `.env`** first for connection issues
-   - DB credentials
-   - JWT secret
-   - Port conflicts
-
-4. **Monitor logs** for debugging
-   - Look for 🔌, 📨, ✅, ❌ emojis
-   - Shows connection, message, success, error states
-
-5. **Backend changes auto-reload**
-   - Using `npm run dev` (nodemon)
-   - Just save files and server restarts
-
----
-
-**Now you're ready to start developing! 🎉**
-
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for implementation tasks.
+- **API Docs:** See [`API_REFERENCE.md`](API_REFERENCE.md)
+- **Dev Guide:** See [`DEVELOPMENT.md`](DEVELOPMENT.md)
+- **Architecture:** See [`PROJECT_STRUCTURE_AND_WORKFLOW.md`](PROJECT_STRUCTURE_AND_WORKFLOW.md)
+- **Backend Details:** See [`BACKEND_WORKFLOW.md`](BACKEND_WORKFLOW.md)
+- **WebSocket Events:** See [`PROJECT_STRUCTURE_AND_WORKFLOW.md`](PROJECT_STRUCTURE_AND_WORKFLOW.md) §6

@@ -103,6 +103,32 @@ export class ExternalContactRepository {
   }
 
   /**
+   * Find the contact's open conversation whose subject-named thread matches
+   * the given name (email threads are named after their subject when created).
+   * Used by header-less inbound email (a provider that strips RFC 5322
+   * threading headers) to rejoin its thread by subject instead of falling
+   * back to the contact's most recent conversation, which would glue every
+   * new topic onto one thread. Closed conversations never match — a reply to
+   * a closed thread arrives with In-Reply-To/References and reopens it there.
+   */
+  async findOpenConversationByContactAndName(
+    channel: string,
+    contactId: number,
+    name: string,
+  ): Promise<ExternalConversationRow | null> {
+    const rows = await this.db.query<ExternalConversationRow[]>(
+      `SELECT ec.*
+       FROM external_conversations ec
+       JOIN conversations c ON c.id = ec.conversation_id
+       WHERE ec.channel = ? AND ec.contact_id = ? AND ec.status = 'open' AND c.name = ?
+       ORDER BY ec.id DESC
+       LIMIT 1`,
+      [channel, contactId, name],
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Resolve the conversation an email thread belongs to: find the newest
    * inbound ledger message whose referenced Message-ID chain (stored in
    * metadata by the adapter) or own external_message_id matches one of the

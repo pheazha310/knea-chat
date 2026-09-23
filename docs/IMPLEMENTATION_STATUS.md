@@ -221,8 +221,8 @@ Enforcement notes:
       defaults/customization, clock-in/out calculations, breaks, month
       summary, manager dashboard roll-up, employee×day table + report, leave &
       holiday rules); client store + view tests
-      (`client/src/store/attendanceStore.test.ts`,
-      `client/src/components/views/attendanceViews.test.tsx`); live E2E script
+      (`client/src/entities/attendance/model/attendanceStore.test.ts`,
+      `client/src/features/attendance/ui/attendanceViews.test.tsx`); live E2E script
       (`server/e2e/attendance.e2e.js`, `npm run test:e2e:attendance` — 52
       checks covering clock in/out, WebSocket events, schedules, leave
       approval, holidays, overtime and permissions)

@@ -39,7 +39,7 @@
 | **Project** | KneaChat — Real-time workplace communication platform |
 | **Stack** | React 19 (client) + Express + WebSocket (server) + MySQL + Redis |
 | **Node Version** | 24 |
-| **Architecture** | Full-stack TypeScript, layered backend, MVVM + Zustand client |
+| **Architecture** | Full-stack TypeScript, layered backend, feature-based client with entity stores + Zustand |
 | **Real-time** | WebSocket with reconnection, heartbeat, event queuing |
 | **Omni-Channel** | Telegram + website + email via adapter pattern |
 | **Auth** | JWT + RBAC + discretionary permissions |

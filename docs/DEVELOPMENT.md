@@ -1,4 +1,4 @@
-# KneaChat Backend - Development Guide
+# KneaChat Backend — Development Guide
 
 ## Overview
 
@@ -97,9 +97,7 @@ Request flow: **Route → Controller → Service → Repository → MySQL**.
 - `src/types/` — Domain type definitions (24 type files)
 - `src/types/express.d.ts` — Augments Express Request with user
 
-## Implementation Tasks
-
-### Priority 1: Core Backend (Already Implemented)
+## Implementation Status
 
 The backend is fully implemented with:
 - 27 controllers handling all REST endpoints
@@ -109,19 +107,6 @@ The backend is fully implemented with:
 - WebSocket server with handlers for messages, typing, presence, calls
 - Omni-channel adapters for Telegram, Website, and Email
 - Background schedulers for reminders, meetings, tasks, announcements
-
-### Priority 2: Testing (In Progress)
-
-- **E2E tests:** 12 E2E test scripts in `server/e2e/`
-- **Unit tests:** Add unit tests for services and repositories
-- **Integration tests:** Add integration tests for API endpoints
-
-### Priority 3: Documentation (In Progress)
-
-- Architecture documentation
-- API reference
-- Process flows
-- Development guide
 
 ## Database Implementation
 

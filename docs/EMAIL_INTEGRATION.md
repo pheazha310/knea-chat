@@ -78,6 +78,8 @@ Key properties:
 | `EMAIL_WEBHOOK_PUBLIC_KEY` | Optional RSA/ECDSA PEM for providers that sign with a key pair (SendGrid Event Webhook, Postmark) |
 | `EMAIL_RESEND_WEBHOOK_SECRET` | Resend (Svix) `whsec_…` webhook signing secret (`npm run resend:setup` provisions it) |
 | `EMAIL_RESEND_API_KEY` | Resend API key — fetches body/headers after `email.received` |
+| `EMAIL_INBOUND_DOMAIN` | Public domain that receives customer email (default `kneachat.com`); used by startup diagnostics |
+| `EMAIL_STARTUP_CHECKS` | Set `false` to disable the startup MX/webhook diagnostics |
 | `OMNI_INBOX_AGENT_IDS` | Optional comma-separated user ids allowed in the inbox (empty = every internal user) |
 
 ### Thread resolution details
@@ -254,6 +256,109 @@ Tunnel gotchas: `trycloudflare.com` URLs change on every restart (re-run
 tunnel connections — quick tunnels returning `530`/`000` after a minute are
 a network problem, not a backend one. For production use a stable hostname
 (deployed server or a named tunnel) instead of a quick tunnel.
+
+### Startup diagnostics
+
+On boot the server checks the three configuration links that fail silently
+and warns for each problem found:
+
+1. **MX records** — `EMAIL_INBOUND_DOMAIN` (default `kneachat.com`) must have
+   MX records, or senders' servers bounce every email before the webhook is
+   ever involved (`dig MX <domain>` shows what the world sees).
+2. **Webhook URL** — `EMAIL_WEBHOOK_URL` must be set; a `trycloudflare.com`
+   quick-tunnel URL is flagged because its hostname changes on every restart.
+3. **Webhook host** — the host behind `EMAIL_WEBHOOK_URL` must answer
+   `/api/health`, or Resend cannot deliver `email.received` events.
+
+Problems log a `⚠️  [email] …` block with the concrete fix; a clean config
+logs `✅ [email] Inbound check ok: …`. Set `EMAIL_STARTUP_CHECKS=false` to
+opt out. The checks are advisory only — they never block startup.
+
+---
+
+## Post-domain-verification checklist
+
+Run through this after registering the inbound domain (e.g. `kneachat.com`)
+and adding the Resend DNS records. Every step is verifiable from a terminal;
+none require code changes.
+
+1. **Registry + delegation** — the domain must exist before any record can
+   resolve (`NXDOMAIN` at this stage means the registration has not landed,
+   not that propagation is pending):
+
+   ```bash
+   whois -h whois.verisign-grs.com kneachat.com   # .com/.net authority
+   dig +short NS kneachat.com @a.gtld-servers.net # must return nameservers
+   ```
+
+2. **Records resolve publicly** (registrar DNS panel; exact values from
+   [resend.com/domains](https://resend.com/domains) → your domain):
+
+   ```bash
+   dig +short TXT resend._domainkey.kneachat.com  # DKIM (p=MIGf…)
+   dig +short CNAME rsend.kneachat.com            # rsend-apne1.forge.rmta.net
+   dig +short CNAME send.kneachat.com             # send.forge.rmta.net
+   dig +short MX kneachat.com                     # receiving MX (lowest priority wins)
+   ```
+
+3. **Resend flips the domain to verified** — `status: verified` and
+   `capabilities.receiving: enabled` (may take minutes to hours after the
+   records appear; "Verify DNS Records" on the domain page forces a recheck):
+
+   ```bash
+   curl -s https://api.resend.com/domains -H "Authorization: Bearer $EMAIL_RESEND_API_KEY"
+   ```
+
+4. **Switch the sender back to the domain** — during sandbox-only testing
+   `EMAIL_FROM=onboarding@resend.dev` (resend.dev only delivers to the
+   account owner's address). Once verified:
+
+   ```bash
+   # server/.env
+   EMAIL_FROM=support@kneachat.com
+   ```
+
+   Restart the backend and confirm the from-address in the health output:
+
+   ```bash
+   curl -s http://localhost:8080/api/email/health   # "from":"support@kneachat.com"
+   ```
+
+5. **Real outbound delivery to any recipient** (until now only the sandbox
+   recipient worked):
+
+   ```bash
+   E2E_REAL_DELIVERY=1 E2E_EMAIL_CUSTOMER=anyone@example.com npm run test:e2e:email
+   ```
+
+   23/23 with `✅ agent reply accepted for delivery` proves the SMTP leg.
+
+6. **Finish the inbound chain** — expose the webhook on a stable HTTPS host
+   (`npm run telegram:tunnel` locally, or the deployed server URL) and
+   provision the Resend webhook + signing secret:
+
+   ```bash
+   npm run resend:setup -- <RESEND_MANAGEMENT_API_KEY> https://<host>/api/email/webhook
+   ```
+
+   This writes `EMAIL_RESEND_WEBHOOK_SECRET` (Svix `whsec_…`) and
+   `EMAIL_RESEND_API_KEY` into `server/.env`, creates/reuses the
+   `email.received` webhook, and health-pings the host. Restart the backend,
+   then live-check the verification:
+
+   ```bash
+   npm run resend:check
+   ```
+
+7. **End-to-end inbound proof** — send a real email to
+   `admin@kneachat.com` (or run `resend test` at the free `<id>.resend.app`
+   subdomain) and watch it appear in the Omni Inbox within seconds. The
+   startup banner should show only ✅ email checks after this step.
+
+> Gotcha recap: quick-tunnel hostnames change on every restart (re-run step 6
+> with the new URL); the receiving MX only gets mail when it is the
+> lowest-priority MX; and `dig` against 1.1.1.1 / 8.8.8.8 shows the public
+> truth regardless of local resolver caches.
 
 Continuous integration: `.github/workflows/backend-ci.yml` builds the
 server, runs the unit tests, then boots the backend against a MySQL 8

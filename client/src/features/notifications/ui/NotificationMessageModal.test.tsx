@@ -3,6 +3,7 @@ import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import NotificationMessageModal from './NotificationMessageModal';
 import { MessageModel } from '../../../entities/message/model/Message';
+import { useToast } from '../../../app/providers/ToastProvider';
 import type { Message, Notification } from '../../../entities';
 
 const LONG_CONTENT =
@@ -53,8 +54,15 @@ const okResponse = (message: Message) => ({
   },
 });
 
+const mockShowToast = jest.fn();
+
+jest.mock('../../../app/providers/ToastProvider', () => ({
+  useToast: () => ({ showToast: mockShowToast }),
+}));
+
 beforeEach(() => {
   jest.restoreAllMocks();
+  mockShowToast.mockClear();
 });
 
 describe('NotificationMessageModal', () => {
@@ -203,5 +211,11 @@ describe('NotificationMessageModal', () => {
       screen.getByRole('button', { name: 'Open in conversation' }),
     );
     expect(onOpenInChat).toHaveBeenCalledWith(7, 42);
+
+    // The failure is also surfaced as a toast (visible even when the modal
+    // is behind other UI or closed quickly).
+    expect(mockShowToast).toHaveBeenCalledWith('This message is no longer available', {
+      type: 'error',
+    });
   });
 });

@@ -7,7 +7,7 @@ Workplace communication and collaboration platform built with a React + TypeScri
 | Layer                    | Choice                                                                    |
 | ------------------------ | ------------------------------------------------------------------------- |
 | Development environment  | **NVM** — Node.js version management (`.nvmrc` pins Node 24)               |
-| Frontend                 | **MVVM** — React + TypeScript + Tailwind CSS                              |
+| Frontend                 | **React 19** + **TypeScript** + **Tailwind CSS** — feature-based client architecture with entity stores |
 | Backend                  | **MVC** — Node.js + Express                                               |
 | State management         | **Zustand** stores in `client/src/entities/<feature>/model/` and `client/src/app/stores/`                                  |
 | Database                 | **MySQL** (via `mysql2` connection pool)                                   |
@@ -92,23 +92,24 @@ kneachat/
 
 KneaChat is split into two layers with explicit architectural patterns:
 
-### Frontend — Feature-based MVVM
+### Frontend — Feature-based architecture with entity stores
 
-The client is organized by **feature domain** rather than by architectural layer. Each feature owns its types, state, and UI in a single cohesive unit.
+The client is organized by **feature domain**. Each feature owns its types, state, and UI in a single cohesive unit.
 
 | Layer | Location | Responsibility |
 |-------|----------|----------------|
-| **Model** | `client/src/entities/<feature>/model/` | TypeScript interfaces + Zustand store per domain (e.g. `authStore.ts`, `chatStore.ts`) |
-| **ViewModel** | `client/src/features/<feature>/model/` | Feature-level ViewModels (e.g. `useChatViewModel.ts`) that compose entity stores |
-| **View** | `client/src/pages/`, `client/src/features/<feature>/ui/`, `client/src/shared/ui/` | Page layouts, feature screens, and presentational components |
-| **Infrastructure** | `client/src/shared/lib/` | `api.ts` (Axios client), `websocket.ts` (WebSocket singleton), `webrtc.ts` |
-| **Application shell** | `client/src/app/` | Router, route guards, providers (Theme, Toast), stores barrel |
+| **Entity store** | `client/src/entities/<feature>/model/` | TypeScript interfaces + Zustand store per domain (e.g. `authStore.ts`, `chatStore.ts`) |
+| **Feature layer** | `client/src/features/<feature>/` | Optional ViewModel in `model/` (e.g. `useChatViewModel.ts`) + React UI components in `ui/` |
+| **Pages** | `client/src/pages/<role>/ui/` | Role-based page layouts that compose feature views |
+| **Shared** | `client/src/shared/` | Cross-cutting UI (`ui/`), infrastructure (`lib/`), and cross-feature stores (`stores/`) |
+| **Widgets** | `client/src/widgets/` | Reusable composite widgets (e.g. `sidebar/`) |
+| **App shell** | `client/src/app/` | Router, route guards, providers (Theme, Toast), stores barrel + WebSocket→Zustand bridge |
 
 **Data flow:**
 
 ```
 View (pages/features/shared)
-  → ViewModel (features/*/model)
+  → optional ViewModel (features/*/model)
     → Entity Store (entities/*/model)
       → Infrastructure (shared/lib/api.ts, shared/lib/websocket.ts)
         → REST / WebSocket
@@ -183,43 +184,52 @@ API and WebSocket: `http://localhost:8080`
 
 ## Database
 
-Run migrations and seed data:
+From the `server/` directory, run migrations and seed data:
 
 ```bash
-npm run server -- db:setup
-npm run server -- db:seed
+cd server
+npm run db:setup
+npm run db:seed
+```
+
+Or from the project root:
+
+```bash
+npm --prefix server run db:setup
+npm --prefix server run db:seed
 ```
 
 Reset and seed with demo data:
 
 ```bash
-npm run server -- db:init
-npm run server -- seed:demo
+cd server
+npm run db:init
+npm run seed:demo
 ```
 
 ## Testing
 
 ```bash
 npm test                          # client tests
-npm run server -- test            # backend unit/integration tests
-npm run server -- test:e2e        # specific e2e suite
-npm run server -- test:e2e:permissions
-npm run server -- test:e2e:attendance
-npm run server -- test:e2e:files
-npm run server -- test:e2e:tasks
-npm run server -- test:e2e:sessions
+cd server && npm test             # backend unit/integration tests
+cd server && npm run test:e2e     # specific e2e suite
+cd server && npm run test:e2e:permissions
+cd server && npm run test:e2e:attendance
+cd server && npm run test:e2e:files
+cd server && npm run test:e2e:tasks
+cd server && npm run test:e2e:sessions
 ```
 
 ## Scripts
 
 ```bash
-npm run server -- daemon          # run backend as a daemon
-npm run server -- daemon:stop     # stop daemon
-npm run server -- daemon:restart  # restart daemon
-npm run server -- daemon:status   # check daemon status
-npm run server -- lint            # lint server source
-npm run server -- format          # format server source
-npm run client -- build           # build client for production
+cd server && npm run daemon          # run backend as a daemon
+cd server && npm run daemon:stop     # stop daemon
+cd server && npm run daemon:restart  # restart daemon
+cd server && npm run daemon:status   # check daemon status
+cd server && npm run lint            # lint server source
+cd server && npm run format          # format server source
+npm run build                       # build client for production
 ```
 
 ## Telegram omni-channel inbox
@@ -242,7 +252,7 @@ variables. See
 [`docs/EMAIL_INTEGRATION.md`](docs/EMAIL_INTEGRATION.md) for provider setup
 (Mailgun, SendGrid, SES, Postmark, or generic HMAC), env configuration, local
 testing with ngrok, and the API reference. Verified by
-`npm run test:e2e:email`.
+`npm run test:e2e:email` from the `server/` directory.
 
 ## Project hygiene
 

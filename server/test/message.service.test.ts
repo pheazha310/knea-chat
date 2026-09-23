@@ -64,6 +64,7 @@ const notificationModel = {
     notificationModel.creates.push(data);
     return 1;
   },
+  deleteByMessageId: async (_messageId: number) => 0,
 };
 
 const reactionModel = {
@@ -318,6 +319,25 @@ describe('MessageService.deleteMessage', () => {
     const result = await messageService.deleteMessage(42, 1);
     assert.deepEqual(softDelete.mock.calls[0].arguments, [42]);
     assert.equal(result.deletedMessage.id, 42);
+    assert.equal(result.message, 'Message deleted successfully');
+  });
+
+  it('cleans up notifications pointing at the deleted message', async (t) => {
+    t.mock.method(messageModel, 'softDelete', async () => true);
+    const deleteByMessageId = t.mock.method(notificationModel, 'deleteByMessageId', async () => 3);
+
+    await messageService.deleteMessage(42, 1);
+
+    assert.deepEqual(deleteByMessageId.mock.calls[0].arguments, [42]);
+  });
+
+  it('still deletes the message when notification cleanup fails', async (t) => {
+    t.mock.method(messageModel, 'softDelete', async () => true);
+    t.mock.method(notificationModel, 'deleteByMessageId', async () => {
+      throw new Error('table gone');
+    });
+
+    const result = await messageService.deleteMessage(42, 1);
     assert.equal(result.message, 'Message deleted successfully');
   });
 });

@@ -11,6 +11,7 @@ import Modal from '../../../shared/ui/Modal';
 import Avatar from '../../../shared/ui/Avatar';
 import Icon from '../../../shared/ui/Icon';
 import type { IconName } from '../../../shared/ui/Icon';
+import { useToast } from '../../../app/providers/ToastProvider';
 import NotificationReactionAction from '../../../features/notifications/ui/NotificationReactionAction';
 import NotificationReplyAction from '../../../features/notifications/ui/NotificationReplyAction';
 import { MessageModel, resolveFileUrl } from '../../../entities/message/model/Message';
@@ -81,6 +82,7 @@ const NotificationMessageModal = ({
   onReplyMissedCall,
   onAcknowledged,
 }: NotificationMessageModalProps) => {
+  const { showToast } = useToast();
   // Compute the target once on mount. `messageTargetOf` returns a fresh object
   // each call, so deriving it on every render made the effect dependency below
   // change every render — re-fetching in a loop and flickering the modal
@@ -113,11 +115,16 @@ const NotificationMessageModal = ({
         if (!mounted) return;
         setError(true);
         setLoading(false);
+        // The inline error state explains the situation; the toast makes the
+        // failure visible even when the modal is behind other UI (or closed
+        // quickly). `showToast` is referentially stable (useCallback in the
+        // provider), so listing it in deps never re-triggers the fetch.
+        showToast('This message is no longer available', { type: 'error' });
       });
     return () => {
       mounted = false;
     };
-  }, [target]);
+  }, [target, showToast]);
 
   const openInChat = () => {
     if (!target) return;

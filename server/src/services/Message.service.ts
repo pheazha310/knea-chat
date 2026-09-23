@@ -322,6 +322,21 @@ export class MessageService {
       throw new Error('Failed to delete message');
     }
 
+    // The message is gone — drop the mention / new_message notifications that
+    // point at it so nobody opens a notification whose target 404s. Failures
+    // are logged but never block the delete (best-effort cleanup).
+    try {
+      const removed = await this.notificationRepository.deleteByMessageId(id);
+      if (removed > 0) {
+        console.log(`[MessageService] Removed ${removed} notification(s) pointing at deleted message ${id}`);
+      }
+    } catch (error) {
+      console.error(
+        `[MessageService] Could not clean up notifications for deleted message ${id}:`,
+        (error as Error).message,
+      );
+    }
+
     return {
       message: 'Message deleted successfully',
       deletedMessage: { ...message, deleted_at: null } as OutgoingMessage,

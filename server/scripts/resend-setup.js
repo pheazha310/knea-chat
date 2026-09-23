@@ -142,6 +142,17 @@ async function main() {
   }
 
   // ------------------------------------------------------------------
+  // 1b. Persist the endpoint URL itself — the backend reads it for the
+  //     startup reachability check and webhook-info, so it must never go
+  //     stale when the tunnel hostname changes.
+  // ------------------------------------------------------------------
+  if (upsertEnv('EMAIL_WEBHOOK_URL', webhookUrl)) {
+    console.log('   EMAIL_WEBHOOK_URL written to server/.env');
+  } else {
+    console.log('   EMAIL_WEBHOOK_URL unchanged in server/.env');
+  }
+
+  // ------------------------------------------------------------------
   // 2. API key — only created when .env has none: Resend never shows a
   //    key's token again, so an existing one is kept, not rotated.
   // ------------------------------------------------------------------

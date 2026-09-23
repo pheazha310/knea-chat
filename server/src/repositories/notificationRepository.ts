@@ -53,6 +53,19 @@ export class NotificationRepository {
     return result.affectedRows > 0;
   }
 
+  /**
+   * Delete every notification that points at the given message via its JSON
+   * `data.messageId` (mention / new_message rows). Called when a message is
+   * deleted so the bell never keeps a notification whose target 404s.
+   */
+  async deleteByMessageId(messageId: number): Promise<number> {
+    const result = await this.db.query<ResultSetHeader>(
+      "DELETE FROM notifications WHERE type IN ('mention', 'new_message') AND JSON_EXTRACT(data, '$.messageId') = ?",
+      [messageId],
+    );
+    return result.affectedRows;
+  }
+
   async getUnreadCount(userId: number): Promise<number> {
     const [row] = await this.db.query<Array<{ count: number }>>('SELECT COUNT(*) as count FROM notifications WHERE user_id = ? AND is_read = 0', [userId]);
     return parseInt(String(row.count));

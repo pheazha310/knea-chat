@@ -1,311 +1,236 @@
-# 🎉 KneaChat Backend Implementation Complete!
+# KneaChat — Delivery Summary
+
+> **Project:** KneaChat — Real-time workplace communication platform  
+> **Stack:** React 19 (client) + Express + WebSocket (server) + MySQL + Redis  
+> **Node Version:** 24  
+> **Last Updated:** September 2026
+
+---
 
 ## 📦 What Has Been Delivered
 
-A **production-ready backend server framework** for KneaChat with:
+A **production-ready full-stack workplace communication platform** with:
 
-✅ **Express.js REST API** with 50+ endpoints  
-✅ **WebSocket Real-Time Server** for instant messaging  
-✅ **JWT Authentication** with role-based authorization  
-✅ **Comprehensive Documentation** and guides  
-✅ **Modular Architecture** ready for database integration  
-✅ **Error Handling & Validation** middleware  
-✅ **CORS & Security** configuration  
-✅ **Environment Configuration** system
+✅ **Express.js REST API** with 100+ endpoints across 28 route files  
+✅ **WebSocket Real-Time Server** for instant messaging, presence, typing, calls  
+✅ **JWT Authentication** with role-based authorization + session management  
+✅ **MySQL Database** with 40+ tables, migrations, and seed data  
+✅ **React Client** with feature-based architecture, entity stores, and Zustand  
+✅ **Omni-Channel Inbox** — Telegram + Website + Email via adapter pattern  
+✅ **Attendance System** — clock in/out, breaks, leave, overtime, holidays, schedules  
+✅ **Meetings** — create, manage, notes, reminders, attendees, ICS export  
+✅ **Tasks** — Kanban board, comments, attachments, notifications  
+✅ **Announcements** — targeting, pinning, scheduling, read confirmation  
+✅ **File Sharing** — company/team files, version history, permissions, embedding  
+✅ **Search** — quick search + global search across 7 scopes  
+✅ **Comprehensive Documentation** — SRS, API reference, workflow guides, integration docs  
 
 ---
 
-## 📊 Project Structure Created
+## 📊 Project Structure
 
 ```
 chat_websocket/
-│
-├── 📄 Configuration Files
-│   ├── package.json              ← Dependencies & scripts
-│   ├── .env                      ← Dev environment setup
-│   ├── .env.example              ← Template for config
-│   └── .gitignore                ← Git rules
-│
-├── 📁 src/
-│   │
-│   ├── server.js                 ← 🎯 Main Entry Point
-│   │
-│   ├── middleware/
-│   │   ├── auth.middleware.js     ← JWT & role authorization
-│   │   └── error.middleware.js    ← Global error handling
-│   │
-│   ├── routes/                   ← REST API Endpoints (50+)
-│   │   ├── auth.routes.js        ← Login, logout, reset password
-│   │   ├── user.routes.js        ← User CRUD
-│   │   ├── team.routes.js        ← Team management
-│   │   ├── channel.routes.js     ← Channel management
-│   │   ├── conversation.routes.js ← Chat conversations
-│   │   ├── message.routes.js     ← Message operations
-│   │   ├── search.routes.js      ← Search functionality
-│   │   └── notification.routes.js ← Notifications
-│   │
-│   ├── websocket/                ← Real-Time Communication
-│   │   ├── websocket.server.js   ← Connection manager
-│   │   ├── message.handler.js    ← Message events
-│   │   ├── presence.handler.js   ← Status/presence
-│   │   └── typing.handler.js     ← Typing indicators
-│   │
-│   ├── database/
-│   │   └── connection.js         ← MySQL connection pool
-│   │
-│   ├── utils/
-│   │   ├── auth.utils.js         ← JWT, password hashing
-│   │   ├── response.utils.js     ← Response formatting
-│   │   └── validators.js         ← Input validation
-│   │
-│   └── models/
-│       └── User.example.js       ← Template for database models
-│
-└── 📚 Documentation
-    ├── README.md                 ← Full documentation
-    ├── QUICK_START.md            ← 5-minute setup
-    ├── DEVELOPMENT.md            ← Development guide
-    ├── IMPLEMENTATION_STATUS.md   ← Progress & tasks
-    └── setup.sh                  ← Automated setup
+├── client/                         # React + TypeScript + Tailwind — feature-based architecture
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── public/
+│   └── src/
+│       ├── app/                    # Application shell (router, providers, stores barrel)
+│       │   ├── App.tsx             # Root component + route guards
+│       │   ├── routes.ts           # Route definitions + role guards
+│       │   ├── providers/          # ThemeProvider, ToastProvider
+│       │   └── stores/             # Zustand stores barrel + wsListeners bridge
+│       ├── entities/               # Domain modules (types + Zustand stores per feature)
+│       │   ├── auth/               # Auth types + authStore
+│       │   ├── conversation/       # Conversation types + chatStore
+│       │   ├── user/               # User types + userStore
+│       │   ├── notification/       # Notification types + notificationStore
+│       │   ├── company/            # Company/team/department types + companyStore
+│       │   ├── announcement/       # Announcement types + announcementStore
+│       │   ├── task/               # Task types + taskStore
+│       │   ├── meeting/            # Meeting types + meetingStore
+│       │   ├── attendance/         # Attendance types + attendanceStore
+│       │   ├── file/               # Shared file types + sharedFileStore
+│       │   └── ...                 # omni, search, system-setting, subscription, etc.
+│       ├── features/               # Feature UI components (organized by domain)
+│       │   ├── chat/               # MessageList, MessageComposer, ConversationList
+│       │   ├── channels/           # ChannelsView, CreateChannelModal
+│       │   ├── teams/              # TeamsView, CreateTeamModal, TeamModal
+│       │   ├── announcements/      # AnnouncementsView
+│       │   ├── notifications/      # NotifsView, NotificationMessageModal
+│       │   ├── settings/           # SettingsView
+│       │   ├── files/              # SharedFilesView, FilePreview, FileShareModal
+│       │   ├── attendance/         # AttendanceView, ManagerAttendanceView
+│       │   ├── meetings/           # MeetingsView, CreateMeetingModal
+│       │   ├── tasks/              # TasksView, TaskDetailModal
+│       │   ├── bookmarks/          # BookmarksView
+│       │   ├── search/             # SearchModal, SearchView
+│       │   ├── omni-inbox/         # OmniInboxView
+│       │   └── calls/              # CallModal, IncomingCallModal, CallChatPanel
+│       ├── pages/                  # Page-level layouts (role-based)
+│       │   ├── auth/ui/               # LoginPage, ForgotPasswordPage, ResetPasswordPage
+│       │   ├── dashboard/ui/          # DashboardPage (layout shell + sidebar)
+│       │   ├── admin/ui/              # AdminPage
+│       │   ├── super-admin/ui/        # SuperAdminPage
+│       │   ├── manager/ui/            # ManagerPage
+│       │   └── profile/ui/            # ProfilePage
+│       ├── shared/                 # Cross-cutting UI and utilities
+│       │   ├── ui/                 # Avatar, Icon, Modal, Skeleton, EmptyState, etc.
+│       │   ├── lib/                # api.ts, websocket.ts, webrtc.ts
+│       │   └── stores/             # callStore
+│       └── widgets/                # Reusable composite widgets
+│           └── sidebar/            # Sidebar navigation
+├── server/                         # Node.js + Express — MVC architecture
+│   ├── package.json
+│   ├── tsconfig.json
+│   ├── .env                        # Runtime secrets
+│   ├── .env.example
+│   ├── e2e/                        # End-to-end test scripts
+│   ├── test/                       # Unit/integration tests
+│   ├── scripts/                    # Database, demo, and local-service scripts
+│   └── src/
+│       ├── server.ts               # HTTP + WS server bootstrap
+│       ├── app.ts                  # Express app (middleware, routes)
+│       ├── container.ts            # Composition root (DI wiring)
+│       ├── database/               # MySQL connection pool
+│       ├── cache/                  # Redis client with memory fallback
+│       ├── middleware/             # Authentication and error handling
+│       ├── types/                  # Server domain and Express types
+│       ├── utils/                  # Shared server helpers
+│       ├── repositories/           # MySQL data access (35 repositories)
+│       ├── services/               # Business logic (29 services)
+│       ├── controllers/            # HTTP request handlers (27 controllers)
+│       ├── routes/                 # Express route definitions (28 route files)
+│       ├── websocket/              # Real-time event handlers
+│       ├── factories/              # Factory helpers
+│       └── integrations/           # Omni-channel adapters (Telegram, website, email)
+└── docs/                           # Setup, implementation status, and delivery notes
 ```
 
 ---
 
-## 🚀 How to Use
+## 🚀 Run Locally
 
-### Install & Run
+Requires **Node.js 24** (`.nvmrc`), MySQL 8.0+, and optionally Redis.
 
 ```bash
-cd chat_websocket
-
 # Install dependencies
-npm install
+npm run install:server
+npm run install:client
 
-# Copy environment config
-cp .env.example .env
+# Configure environment
+cp server/.env.example server/.env
+# Edit server/.env with your MySQL credentials and JWT secret
 
-# Update .env with your MySQL credentials
-# DB_HOST, DB_USER, DB_PASSWORD, DB_NAME
+# Initialize database
+cd server
+npm run db:init
+npm run db:seed
 
-# Start development server
+# Run development
 npm run dev
 ```
 
-### Test It
+Client: `http://localhost:3000`  
+API and WebSocket: `http://localhost:8080`
+
+---
+
+## 📊 Architecture
+
+### Frontend — Feature-based architecture with entity stores
+
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| **Model** | `client/src/entities/<feature>/model/` | TypeScript interfaces + Zustand store per domain |
+| **ViewModel** | `client/src/features/<feature>/model/` | Feature-level ViewModels that compose entity stores |
+| **View** | `client/src/pages/`, `client/src/features/<feature>/ui/`, `client/src/shared/ui/` | Page layouts, feature screens, presentational components |
+| **Infrastructure** | `client/src/shared/lib/` | `api.ts` (Axios client), `websocket.ts` (WebSocket singleton) |
+| **Application shell** | `client/src/app/` | Router, route guards, providers, stores barrel |
+
+**Data flow:**
+
+```
+View → ViewModel → Entity Store → Infrastructure → REST / WebSocket
+```
+
+### Backend — MVC (Model–View–Controller)
+
+| Layer | Location | Responsibility |
+|-------|----------|----------------|
+| **Controller** | `server/src/controllers` | HTTP request handlers |
+| **Service** | `server/src/services` | Business rules and orchestration |
+| **Repository** | `server/src/repositories` | MySQL queries and persistence |
+
+Request flow: **Route → Controller → Service → Repository → MySQL**
+
+---
+
+## 👥 Roles & Permissions
+
+| Role | Key | Description |
+| --- | --- | --- |
+| Super Admin | `super_admin` | Controls the entire platform (organizations, admins, settings) |
+| Company Admin | `admin` | Manages a company/workspace (users, roles, teams, channels) |
+| Manager | `manager` | Manages assigned teams and their channels/members |
+| Employee | `employee` | Regular workplace user (chat, join teams/channels, own profile) |
+
+Enforcement lives in `server/src/utils/roles.ts` (hierarchy + assign rules), route/service middleware on the server, and route guards in the client.
+
+---
+
+## 📡 Omni-Channel Inbox
+
+KneaChat can act as a support inbox for **Telegram**, **Website**, and **Email**: customer messages arrive via webhook, appear in the Messages view, and agents reply from KneaChat.
+
+- **Telegram:** See [`docs/TELEGRAM_INTEGRATION.md`](docs/TELEGRAM_INTEGRATION.md)
+- **Website:** See [`docs/PROJECT_STRUCTURE_AND_WORKFLOW.md`](docs/PROJECT_STRUCTURE_AND_WORKFLOW.md) §7.6
+- **Email:** See [`docs/EMAIL_INTEGRATION.md`](docs/EMAIL_INTEGRATION.md)
+
+---
+
+## 🧪 Testing
 
 ```bash
-# In terminal 1: Server is running
-
-# In terminal 2: Test health check
-curl http://localhost:8080/api/health
-
-# In terminal 3: Test WebSocket
-wscat -c "ws://localhost:8080?token=demo-token"
+npm test                          # client tests
+npm run server -- test            # backend unit/integration tests
+npm run server -- test:e2e        # specific e2e suite
+npm run server -- test:e2e:permissions
+npm run server -- test:e2e:attendance
+npm run server -- test:e2e:files
+npm run server -- test:e2e:tasks
+npm run server -- test:e2e:sessions
+npm run server -- test:e2e:email
 ```
 
 ---
 
-## 🔌 Key Endpoints Available
+## 📚 Documentation
 
-| Endpoint                      | Method     | Auth | Purpose             |
-| ----------------------------- | ---------- | ---- | ------------------- |
-| `/api/health`                 | GET        | ❌   | Server health check |
-| `/api/auth/login`             | POST       | ❌   | User login          |
-| `/api/auth/refresh`           | POST       | ✅   | Refresh JWT token   |
-| `/api/users`                  | GET        | ✅   | List users          |
-| `/api/teams`                  | GET/POST   | ✅   | Manage teams        |
-| `/api/channels`               | GET/POST   | ✅   | Manage channels     |
-| `/api/conversations`          | GET/POST   | ✅   | Manage chats        |
-| `/api/messages`               | POST/PATCH | ✅   | Send/edit messages  |
-| `ws://localhost:8080?token=X` | WebSocket  | ✅   | Real-time chat      |
-
----
-
-## 📋 Implementation Status
-
-### ✅ Complete
-
-- Express.js server setup
-- All middleware (auth, error handling)
-- All route files (8 files, 50+ endpoints)
-- WebSocket server and handlers
-- Database connection pool setup
-- Authentication utilities
-- Response formatting
-- Documentation and guides
-
-### ⚠️ Ready for Implementation
-
-- **Database Models** - Templates provided
-- **API Integration** - Routes ready to connect
-- **Business Logic** - Service layer structure ready
-- **Testing** - Test framework ready
-
-### ❌ Not Started (Lower Priority)
-
-- Specific database models (User, Team, etc.)
-- Rate limiting
-- File upload handlers
-- Advanced logging
-- Monitoring/metrics
+| Document | Purpose |
+|----------|---------|
+| `README.md` | Project overview, architecture, run commands |
+| `docs/PROJECT_STRUCTURE_AND_WORKFLOW.md` | Full architecture, data flow, workflows |
+| `docs/BACKEND_WORKFLOW.md` | Backend request lifecycles, WebSocket routing |
+| `docs/API_REFERENCE.md` | Complete REST API reference |
+| `docs/DEVELOPMENT.md` | Backend development guide |
+| `docs/QUICK_START.md` | 5-minute backend setup |
+| `docs/SRS.md` | Software Requirements Specification |
+| `docs/PROCESS_FLOWS.md` | Detailed step-by-step feature flows |
+| `docs/EMAIL_INTEGRATION.md` | Email omni-channel setup and API reference |
+| `docs/TELEGRAM_INTEGRATION.md` | Telegram omni-channel setup and API reference |
+| `docs/IMPLEMENTATION_STATUS.md` | Current delivery status and role matrix |
+| `docs/STRUCTURE_IMPROVEMENT_PLAN.md` | Prioritized refactoring plan |
 
 ---
 
-## 📚 Documentation Provided
+## 📝 Project Hygiene
 
-1. **README.md** - Complete API reference and architecture
-2. **QUICK_START.md** - 5-minute setup for new developers
-3. **DEVELOPMENT.md** - Detailed development guide with tasks
-4. **IMPLEMENTATION_STATUS.md** - Progress tracking and remaining work
-5. **This File** - Overview and what's delivered
+- Keep source code in `client/src/` and `server/src/`; place database changes in `server/database/migrations/`, tests in `server/test/`, and one-off developer scripts in `server/scripts/`.
+- Do not commit generated folders (`client/build/`, `server/dist/`) or local dependencies.
+- Treat `docs/IMPLEMENTATION_STATUS.md` as the current delivery status; older delivery and checklist documents are historical project notes.
 
 ---
 
-## 🎯 Next Steps
-
-### For Immediate Use
-
-1. Install dependencies: `npm install`
-2. Setup `.env` with MySQL credentials
-3. Create MySQL database: `CREATE DATABASE kneachat;`
-4. Start server: `npm run dev`
-
-### For Full Implementation (2-3 weeks)
-
-1. **Week 1-2:** Create database models and integrate with routes
-2. **Week 2-3:** Add comprehensive validation and authorization
-3. **Week 3:** Connect WebSocket to database
-4. **Week 4:** Write tests
-5. **Week 5:** Deploy and monitor
-
-See **DEVELOPMENT.md** for detailed task breakdown.
-
----
-
-## 🔐 Security Features Implemented
-
-✅ JWT token-based authentication  
-✅ Role-based access control (RBAC)  
-✅ Password hashing with bcrypt  
-✅ CORS configuration  
-✅ Error message sanitization  
-✅ Input validation utilities  
-✅ Protected API endpoints  
-✅ WebSocket token authentication
-
----
-
-## 📊 Code Statistics
-
-| Metric              | Count  |
-| ------------------- | ------ |
-| Files Created       | 30+    |
-| Lines of Code       | ~3000+ |
-| API Endpoints       | 50+    |
-| Route Files         | 8      |
-| Middleware          | 2 core |
-| WebSocket Handlers  | 3      |
-| Utility Functions   | 15+    |
-| Documentation Pages | 5      |
-
----
-
-## ⚡ Performance & Scalability Ready
-
-✅ Connection pooling for database  
-✅ Modular architecture for scaling  
-✅ Error handling prevents crashes  
-✅ JWT for stateless authentication  
-✅ WebSocket keep-alive mechanism  
-✅ Prepared for horizontal scaling
-
----
-
-## 🎓 For Developers Taking Over
-
-Start here:
-
-1. Read **QUICK_START.md** (5 min)
-2. Read **README.md** (15 min)
-3. Review **DEVELOPMENT.md** (20 min)
-4. Check **IMPLEMENTATION_STATUS.md** for tasks (10 min)
-
-Then start with Task #1 in DEVELOPMENT.md:
-
-- Create `src/models/User.js`
-- Connect to `src/routes/auth.routes.js`
-- Test login with database
-
----
-
-## 🤝 Support Resources
-
-- **API Docs:** See README.md → API Requirements section
-- **WebSocket Events:** See README.md → WebSocket Events section
-- **Database Schema:** See SRS Appendix B
-- **Implementation Tasks:** See DEVELOPMENT.md
-- **Progress Tracking:** See IMPLEMENTATION_STATUS.md
-
----
-
-## ✨ Special Features
-
-### Error Handling
-
-Comprehensive error middleware catches all errors and returns standardized JSON responses with proper HTTP status codes.
-
-### Real-Time Communication
-
-Full WebSocket implementation with:
-
-- Token authentication
-- User presence tracking
-- Typing indicators
-- Message broadcasts
-- Channel membership handling
-
-### Modular Routes
-
-Each feature (auth, users, teams, etc.) is in its own route file for easy maintenance and extension.
-
-### Environment Config
-
-All sensitive values managed through `.env` file - ready for production by changing one file.
-
----
-
-## 🚀 Ready to Ship!
-
-The backend server is **production-ready in terms of infrastructure**. It's a solid foundation that's:
-
-- Secure
-- Scalable
-- Well-documented
-- Easy to extend
-- Following Node.js best practices
-
-Just add database models and business logic, then deploy! 🎉
-
----
-
-## 📞 Questions?
-
-Refer to:
-
-- **Setup issues:** QUICK_START.md → Troubleshooting
-- **Development:** DEVELOPMENT.md
-- **What's left to do:** IMPLEMENTATION_STATUS.md
-- **How it works:** README.md
-
----
-
-**Status:** ✅ **Complete & Ready**  
-**Next Step:** Implement database models  
-**Estimated Time to Production:** 2-3 weeks
-
-**Happy coding! 🎉**
-
----
-
-_Generated: August 2024_  
-_KneaChat Backend Server v1.0_
+**Status:** ✅ MVP complete — ready for testing, security review, and deployment.

@@ -4,12 +4,12 @@ Workplace Communication & Collaboration Platform
 
 | Item | Details |
 | --- | --- |
-| Document Version | 2.0 |
-| Date | August 2026 |
-| Project Status | Proposed |
+| Document Version | 2.1 |
+| Date | September 2026 |
+| Project Status | Delivered |
 | Project Type | Web Application |
 | Architecture | Client–Server + REST API + WebSocket |
-| Frontend Architecture | MVVM |
+| Frontend Architecture | Feature-based with entity stores + Zustand |
 | Backend Architecture | MVC |
 | Programming Paradigm | OOP |
 | Frontend | React.js + TypeScript + Tailwind CSS |
@@ -453,7 +453,7 @@ WebSocket is a core component of KneaChat.
 | --- | --- | --- |
 | Frontend | React.js 19 | UI |
 | Language | TypeScript | Type safety |
-| Frontend Architecture | MVVM | Frontend architecture |
+| Frontend Architecture | Feature-based with entity stores | Frontend architecture |
 | State Management | Zustand | Global state |
 | Styling | Tailwind CSS | UI styling |
 | Routing | React Router DOM | Navigation |
@@ -489,46 +489,59 @@ KneaChat uses a Client–Server Architecture.
 ```
                         KneaChat
                               │
-             ┌──────────────┴──────────────┐
-             │                             │
-         FRONTEND                       BACKEND
-             │                             │
-     React + TypeScript              Node.js + Express
-             │                             │
-            MVVM                            MVC
-             │                             │
-        Zustand                           OOP
-             │                             │
-       API Services                    Controller
-             │                             ↓
-       WebSocket                    Service Layer
-             │                             ↓
-             │                         Repository
-             │                             ↓
-             │                            MySQL
-             │
-             └──────── WebSocket ──────────┘
+              ┌──────────────┴──────────────┐
+              │                             │
+          FRONTEND                       BACKEND
+              │                             │
+      React + TypeScript              Node.js + Express
+              │                             │
+     Feature-based                     MVC
+      architecture                     │
+      with entity stores                │
+              │                     OOP   │
+         Zustand                   │     │
+              │               Controller│
+        API Services                ↓     │
+              │               Service   │
+        WebSocket                ↓     │
+              │               Repository│
+              │                ↓     │
+              │               MySQL     │
+              │                             │
+              └──────── WebSocket ──────────┘
 ```
 
 ---
 
 ## 15. Frontend Architecture
 
-### 15.1 MVVM
+### 15.1 Feature-based client architecture
 
-The frontend uses MVVM (Model–View–ViewModel).
+The client is organized by **feature domain**. Each feature owns its types, state management, and UI in a single cohesive unit.
 
-**Model** — contains TypeScript interfaces, application types, and API data models. Examples: `User`, `Message`, `Conversation`, `Team`, `Channel`, `Notification`.
+**Entity stores** — contains TypeScript interfaces and Zustand stores per domain. Examples: `authStore.ts`, `chatStore.ts`, `userStore.ts`, `notificationStore.ts`.
 
-**View** — contains React components, pages, forms, chat UI, navigation, and notifications.
+**Features** — contains React components organized by domain: chat, channels, teams, announcements, notifications, settings, files, attendance, meetings, tasks, bookmarks, search, omni-inbox, calls. Each feature may optionally include a ViewModel in `model/` (currently only chat has `useChatViewModel.ts`).
 
-**ViewModel** — contains Zustand stores, React hooks, UI/application logic, API calls, and WebSocket interaction.
+**Pages** — role-based page layouts: auth, dashboard, admin, super-admin, manager, profile.
 
-### 15.2 Frontend Flow
+**Shared** — cross-cutting UI components, infrastructure (`api.ts`, `websocket.ts`, `webrtc.ts`), and cross-feature stores (`callStore`).
+
+**App shell** — router, route guards, providers (Theme, Toast), stores barrel, and the WebSocket→Zustand bridge (`wsListeners.ts`).
+
+### 15.2 Frontend Data Flow
 
 ```
-User → React View → Hook / ViewModel → Zustand → Service (Axios | WebSocket) → Backend
+View (pages/features/shared)
+  → optional ViewModel (features/*/model)
+    → Entity Store (entities/*/model)
+      → Infrastructure (shared/lib/api.ts, shared/lib/websocket.ts)
+        → REST / WebSocket
 ```
+
+Shared application state lives in Zustand stores under `client/src/entities/<feature>/model/`. WebSocket events update those stores directly via `app/stores/wsListeners.ts`, so the UI re-renders automatically. `DashboardPage` is the main layout shell; individual feature views are composed inside it.
+
+> **Note:** The original specification described an MVVM architecture. The delivered implementation uses a feature-based client architecture with entity stores; only the chat feature has a dedicated ViewModel (`useChatViewModel.ts`). All other features consume entity stores directly from their UI components.
 
 ---
 
@@ -929,7 +942,7 @@ server/
 
 | Sprint | Focus | Deliverables |
 | --- | --- | --- |
-| Sprint 1 | Architecture & Foundation | React, TypeScript, Tailwind, MVVM, Zustand, Node, Express, TypeScript, MVC, OOP, Repository, Service Layer, MySQL, WebSocket, NVM |
+| Sprint 1 | Architecture & Foundation | React, TypeScript, Tailwind, feature-based client architecture with entity stores, Zustand, Node, Express, TypeScript, MVC, OOP, Repository, Service Layer, MySQL, WebSocket, NVM |
 | Sprint 2 | Authentication | Users, bcrypt, JWT, roles, authorization |
 | Sprint 3 | Direct Messaging | Conversations, messages, REST API, WebSocket |
 | Sprint 4 | Teams & Channels | Teams, members, channels, group chat |
@@ -1053,7 +1066,7 @@ Security must be implemented at the backend rather than relying only on frontend
 
 KneaChat is a workplace communication and collaboration platform designed to centralize communication between employees, managers, and administrators.
 
-- **Frontend:** React + TypeScript + MVVM + Zustand + Tailwind CSS
+- **Frontend:** React + TypeScript + feature-based architecture with entity stores + Zustand + Tailwind CSS
 - **Backend:** Node.js + Express + TypeScript + MVC + OOP + Service Layer + Repository Pattern
 - **Database:** MySQL
 - **Real-Time:** Native WebSocket
@@ -1566,7 +1579,8 @@ User A → React → WebSocket Client → WebSocket Server → Authenticate
 │                                                     │
 │  React + TypeScript + Tailwind CSS                  │
 │                 │                                   │
-│                MVVM                                 │
+│     Feature-based architecture                      │
+│       with entity stores                            │
 │                 │                                   │
 │              Zustand                                │
 │                 │                                   │

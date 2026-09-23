@@ -120,8 +120,8 @@ export class MessageController {
 
   /** GET /api/messages/:id — full message for a notification's "view" action. */
   getOne = async (req: Request, res: Response): Promise<void> => {
+    const messageId = Number(req.params.id);
     try {
-      const messageId = Number(req.params.id);
       if (!Number.isFinite(messageId) || messageId <= 0) {
         res.status(400).json({
           success: false,
@@ -134,9 +134,18 @@ export class MessageController {
       const data = await this.messageService.getSingleMessage(messageId, req.user!.id);
       res.status(200).json({ success: true, data });
     } catch (error) {
+      // Debuggability: 'Message not found' / 'Conversation not found' are true
+      // 404s (deleted or never-existed); anything else is an access failure —
+      // log the real cause so silent 404s can be told apart in the logs.
+      const reason = (error as Error).message;
+      if (!/not found/i.test(reason)) {
+        console.warn(
+          `[messages] GET /api/messages/${messageId} denied for user ${req.user!.id}: ${reason}`,
+        );
+      }
       res.status(404).json({
         success: false,
-        message: (error as Error).message,
+        message: reason,
         errors: {},
       });
     }

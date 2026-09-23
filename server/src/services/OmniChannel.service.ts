@@ -258,8 +258,36 @@ export class OmniChannelService {
       }
     }
 
-    // Header-less messages reuse the contact's most recent conversation; a
-    // message that referenced an unknown thread skips this and starts its own.
+    // Header-less messages (no RFC 5322 threading headers — e.g. a first
+    // email or a provider that strips In-Reply-To/References) resolve their
+    // thread by subject: an email with a brand-new subject starts a NEW
+    // conversation (so unrelated topics never share a thread), while a
+    // repeated subject rejoins the customer's matching OPEN thread. A message
+    // that referenced an unknown thread skips this and starts its own.
+    const threadSubject = extractEmailSubject(message);
+    if (!referencedUnknownThread && threadSubject && channel === 'email') {
+      try {
+        const bySubject = await this.externalRepository.findOpenConversationByContactAndName(
+          channel,
+          contact.id,
+          threadSubject,
+        );
+        if (bySubject) {
+          return bySubject;
+        }
+        // Fresh subject and no threading headers — start a new thread.
+        referencedUnknownThread = true;
+      } catch (error) {
+        console.warn(
+          `[omni:${channel}] Subject-based thread resolution failed — falling back to per-contact grouping:`,
+          (error as Error).message,
+        );
+      }
+    }
+
+    // Fallback: reuse the contact's most recent conversation when there is no
+    // subject signal at all (non-email channels, or an email whose subject the
+    // provider dropped entirely).
     const existing = referencedUnknownThread
       ? null
       : await this.externalRepository.findConversationByContact(channel, contact.id);
@@ -277,7 +305,6 @@ export class OmniChannelService {
     // A thread-starting email names its conversation after the subject so
     // agents can tell apart the customer's open threads at a glance; the
     // generic per-contact name stays the fallback for header-less channels.
-    const threadSubject = extractEmailSubject(message);
     const name = threadSubject
       ? `${threadSubject}`
       : `${contactName(contact)} (${channelLabel(channel)})`;

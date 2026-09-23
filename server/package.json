@@ -29,6 +29,7 @@
     "telegram:bridge": "node scripts/telegram-poll-bridge.js",
     "resend:setup": "node scripts/resend-setup.js",
     "resend:check": "node scripts/resend-webhook-check.js",
+    "domain:watch": "node scripts/domain-activation-watchdog.js",
     "telegram:tunnel": "cloudflared tunnel --url http://localhost:8080 --no-autoupdate",
     "test:e2e:omni-inbox": "node e2e/omni-inbox-browser.e2e.js",
     "test:e2e:permissions": "node e2e/permissions.e2e.js",
