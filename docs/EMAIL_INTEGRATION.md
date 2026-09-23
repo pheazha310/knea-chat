@@ -74,6 +74,7 @@ Key properties:
 | `EMAIL_SMTP_SECURE` | `true` for port 465 (implicit TLS), `false` for 587 (STARTTLS) |
 | `EMAIL_FROM` / `EMAIL_FROM_NAME` | From address shown on agent replies |
 | `EMAIL_WEBHOOK_SECRET` | Shared HMAC secret for the inbound webhook (32+ bytes, e.g. `openssl rand -hex 32`) |
+| `EMAIL_INBOUND_ENABLED` | Set to `true` only when this installation should accept incoming mail into the Omni Inbox. Defaults to `false`; disabled webhooks receive `204` and create no messages. |
 | `EMAIL_WEBHOOK_URL` | Default target for `POST /api/email/setup-webhook` |
 | `EMAIL_WEBHOOK_PUBLIC_KEY` | Optional RSA/ECDSA PEM for providers that sign with a key pair (SendGrid Event Webhook, Postmark) |
 | `EMAIL_RESEND_WEBHOOK_SECRET` | Resend (Svix) `whsec_…` webhook signing secret (`npm run resend:setup` provisions it) |
@@ -126,14 +127,17 @@ conversations per contact — one per email thread.
    **App Password** (Google Account → Security → 2-Step Verification → App
    passwords); your normal login password will not work and is why
    `GET /api/email/health` may report `smtpConnected: false`.
-2. **Expose the webhook publicly** — providers POST over the public internet:
+2. **Enable inbound mail only if wanted** — set
+   `EMAIL_INBOUND_ENABLED=true`. Leave it `false` to prevent email messages
+   from being added to the Omni Inbox.
+3. **Expose the webhook publicly** — providers POST over the public internet:
 
    ```bash
    npx ngrok http 8080          # or: npm run telegram:tunnel (cloudflared)
    ```
 
    Note the generated `https://…` URL.
-3. **Point your provider at it** — in the provider dashboard (or API), set the
+4. **Point your provider at it** — in the provider dashboard (or API), set the
    inbound route/webhook to:
 
    ```

@@ -21,6 +21,13 @@ const WEBHOOK_SECRET_HEADER = 'x-email-webhook-secret';
 const WEBHOOK_PROVIDER_HEADER = 'x-email-provider';
 
 /**
+ * Inbound mail is opt-in. Keeping this separate from SMTP configuration lets
+ * an installation continue to send password-reset or agent emails without
+ * accepting provider webhooks into the Omni Inbox.
+ */
+export const isInboundEmailEnabled = (): boolean => process.env.EMAIL_INBOUND_ENABLED === 'true';
+
+/**
  * In-flight inbound deliveries keyed by Message-ID: a provider retry racing
  * the original request must not double-persist (the DB unique key catches the
  * settled case; this catches the concurrent one).
@@ -40,6 +47,14 @@ export class EmailController {
    */
   webhook = async (req: RawBodyRequest, res: Response): Promise<void> => {
     try {
+      // Acknowledge disabled deliveries so the provider does not keep retrying,
+      // but do not parse or persist anything.
+      if (!isInboundEmailEnabled()) {
+        console.info('[email] Inbound webhook ignored because EMAIL_INBOUND_ENABLED is not true');
+        res.sendStatus(204);
+        return;
+      }
+
       const expectedSecret = process.env.EMAIL_WEBHOOK_SECRET || '';
       const receivedSecret = String(req.headers[WEBHOOK_SECRET_HEADER] || '');
       let provider = String(req.headers[WEBHOOK_PROVIDER_HEADER] || '').toLowerCase();
