@@ -51,6 +51,9 @@ import { serializeMessage } from '../websocket/message.utils';
 import { sendToUser } from '../websocket/connection.registry';
 import { badRequest } from '../utils/errors.utils';
 
+/** WebSocket event for a new customer email in the Omni Inbox. */
+export const EMAIL_MESSAGE_RECEIVED = 'email.message.received';
+
 /** Company domain that hosts external-contact shadow users (see migration 024). */
 const EXTERNAL_COMPANY_DOMAIN = 'omni-channel.external';
 
@@ -181,7 +184,7 @@ export class OmniChannelService {
       message,
     );
     if (persisted) {
-      await this.broadcastInboundMessage(channel, externalConversation.conversation_id, persisted);
+      await this.broadcastInboundMessage(channel, externalConversation.conversation_id, persisted, message);
     }
     return persisted;
   }
@@ -578,17 +581,38 @@ export class OmniChannelService {
     }
   }
 
-  /** Fan the inbound message out to the inbox agents (existing WS conventions). */
+  /**
+   * Fan the inbound message out to the inbox agents. A customer email gets
+   * its own event name, `email.message.received` (carrying the subject and
+   * sender for the inbox preview); every other channel keeps the generic
+   * `receive_message`. Exactly one event is sent per message — the client
+   * routes both names into the same store update.
+   */
   private async broadcastInboundMessage(
     channel: string,
     conversationId: number,
     message: OutgoingMessage,
+    inbound?: OmniInboundMessage,
   ): Promise<void> {
-    await this.broadcastToConversation(conversationId, {
-      type: 'receive_message',
-      message: serializeMessage(message),
-      channel,
-    });
+    if (channel === 'email') {
+      const email = ((inbound?.metadata as { email?: Record<string, unknown> } | null) || {}).email || {};
+      await this.broadcastToConversation(conversationId, {
+        type: EMAIL_MESSAGE_RECEIVED,
+        channel,
+        conversationId,
+        message: serializeMessage(message),
+        email: {
+          subject: typeof email.subject === 'string' ? email.subject : null,
+          from: bareAddress(email.from),
+        },
+      });
+    } else {
+      await this.broadcastToConversation(conversationId, {
+        type: 'receive_message',
+        message: serializeMessage(message),
+        channel,
+      });
+    }
     this.notifyMembers(message, conversationId, message.notifiedUserIds || []);
   }
 

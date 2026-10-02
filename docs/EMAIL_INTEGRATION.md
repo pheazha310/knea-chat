@@ -30,7 +30,7 @@ Customer email ─▶ Email provider (Mailgun/SendGrid/SES/Postmark)
             │                             chain → NEW conversation per subject;
             │                             no headers → contact's latest thread
             ├─ createInboundMessage()     messages row + external ledger
-            └─ broadcast                  'receive_message' + notification
+            └─ broadcast                  'email.message.received' + notification
                     ▼
         Agents see it in the Omni Inbox in real time (WebSocket)
 
@@ -117,6 +117,29 @@ generated column if a mailbox ever grows past tens of thousands of
 messages.
 
 Reference copy: `server/.env.example`.
+
+## WebSocket: `email.message.received`
+
+When a customer email is saved, every member of that conversation receives
+exactly one event:
+
+```json
+{
+  "type": "email.message.received",
+  "channel": "email",
+  "conversationId": 148,
+  "message": { "id": 1652, "conversationId": 148, "content": "Where is my order?", "deliveryStatus": null, "...": "..." },
+  "email": { "subject": "Order #42", "from": "customer@gmail.com" }
+}
+```
+
+In React, `client/src/app/stores/wsListeners.ts` routes this event and the
+generic `receive_message` (Telegram, agent replies) into the same
+`receiveMessage()` step: `chatStore.addMessage(conversationId, message)` puts
+it in the right conversation, a customer's first email triggers
+`refreshConversations()` so the new thread appears in the list, and an
+already-open conversation is marked read. The event is typed in
+`client/src/shared/lib/websocket.ts` (`WsEventMap`).
 
 ## Security
 

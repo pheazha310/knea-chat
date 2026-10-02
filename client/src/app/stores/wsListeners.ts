@@ -6,7 +6,7 @@
 //
 //   WebSocket Server → WebSocket Client → Zustand Stores → React Components → UI
 import { wsService } from '../../shared/lib/websocket';
-import type { PresenceStatus } from '../../entities';
+import type { PresenceStatus, WsMessage } from '../../entities';
 import { useAuthStore } from '../../entities/auth/model/authStore';
 import { useChatStore } from '../../entities/conversation/model/chatStore';
 import { useCompanyStore } from '../../entities/company/model/companyStore';
@@ -31,21 +31,28 @@ export function registerWsListeners(): () => void {
   );
 
   // --- Messages -------------------------------------------------------------
+  // A new message lands in its conversation: append it, load the conversation
+  // list if this is a brand-new thread (e.g. a customer's first email), and
+  // mark it read when the agent is already looking at that conversation.
+  const receiveMessage = (message: WsMessage) => {
+    const convId = toNumber(message.conversationId);
+    if (convId === null) return;
+    const chat = useChatStore.getState();
+    chat.addMessage(convId, message);
+    if (!chat.conversations.some((c) => c.id === convId)) {
+      void chat.refreshConversations();
+    }
+    if (chat.viewingChat && convId === chat.activeId) {
+      void useNotificationStore.getState().markConversationRead(convId);
+    }
+  };
+
   // Server shape: { type: 'receive_message', message: <serialized message> }
-  unsubs.push(
-    wsService.on('receive_message', (payload) => {
-      const convId = toNumber(payload.message.conversationId);
-      if (convId === null) return;
-      const chat = useChatStore.getState();
-      chat.addMessage(convId, payload.message);
-      if (!chat.conversations.some((c) => c.id === convId)) {
-        void chat.refreshConversations();
-      }
-      if (chat.viewingChat && convId === chat.activeId) {
-        void useNotificationStore.getState().markConversationRead(convId);
-      }
-    }),
-  );
+  unsubs.push(wsService.on('receive_message', (payload) => receiveMessage(payload.message)));
+
+  // Customer emails arrive under their own event name (never also as
+  // receive_message), carrying the subject/sender for the inbox preview.
+  unsubs.push(wsService.on('email.message.received', (payload) => receiveMessage(payload.message)));
 
   // Server shape: { type: 'message_sent_ack', data: <serialized message> }
   unsubs.push(

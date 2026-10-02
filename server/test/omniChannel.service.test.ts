@@ -1077,3 +1077,25 @@ describe('OmniChannelService — reply validation', () => {
     assert.equal(h.sendCalls.length, 0);
   });
 });
+
+describe('OmniChannelService — email.message.received event', () => {
+  it('broadcasts ONE email.message.received event (not receive_message) for an inbound email', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('email', {
+      messages: [makeMessage({
+        externalContactId: 'customer@example.com',
+        externalMessageId: 'm1',
+        content: 'Where is my order?',
+        metadata: { email: { subject: 'Order #42', messageId: 'm1@x.com', from: 'Customer <Customer@Example.com>' } },
+      })],
+    });
+
+    assert.equal(h.broadcasts.length, 1, 'exactly one event per message');
+    const event = h.broadcasts[0].event as Record<string, unknown>;
+    assert.equal(event.type, 'email.message.received');
+    assert.equal(event.channel, 'email');
+    assert.equal(event.conversationId, 500);
+    assert.deepEqual(event.email, { subject: 'Order #42', from: 'customer@example.com' });
+    assert.equal((event.message as Record<string, unknown>).content, 'Where is my order?');
+  });
+});

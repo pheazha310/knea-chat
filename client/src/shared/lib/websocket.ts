@@ -38,6 +38,14 @@ export interface WsEventMap {
   };
   connection_ack: { type: 'connection_ack'; userId: number; message: string; timestamp?: string };
   receive_message: { type: 'receive_message'; message: WsMessage };
+  /** A new customer email in the Omni Inbox (server: OmniChannelService). */
+  'email.message.received': {
+    type: 'email.message.received';
+    channel: 'email';
+    conversationId: number;
+    message: WsMessage;
+    email: { subject: string | null; from: string | null };
+  };
   message_sent_ack: { type: 'message_sent_ack'; message?: string; data?: WsMessage };
   message_edited_ack: { type: 'message_edited_ack'; messageId: number; timestamp?: string };
   message_deleted_ack: { type: 'message_deleted_ack'; messageId: number; timestamp?: string };
