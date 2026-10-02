@@ -61,6 +61,11 @@ export interface OmniOutboundThreading {
   subject?: string | null;
   inReplyTo?: string | null;
   references?: string[] | null;
+  /**
+   * Message-ID to give this outbound email. The engine generates it so the
+   * email can be recorded as 'pending' before the send starts.
+   */
+  messageId?: string | null;
 }
 
 /** Binary media an agent sends outbound through a channel adapter. */

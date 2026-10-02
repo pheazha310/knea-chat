@@ -18,6 +18,7 @@ import type {
   OmniMedia,
   OmniOutboundMedia,
   OmniOutboundResult,
+  OmniOutboundThreading,
   OmniThreadHints,
 } from '../omni/omni.types';
 import type { EmailWebhookPayload, EmailWebhookHeaders } from './email.types';
@@ -267,7 +268,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
     text: string,
     options: {
       replyToExternalMessageId?: string | null;
-      threading?: { subject?: string | null; inReplyTo?: string | null; references?: string[] | null } | null;
+      threading?: OmniOutboundThreading | null;
     } = {},
   ): Promise<OmniOutboundResult> {
     const from = this.emailService.getFromAddress();
@@ -278,6 +279,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
       text,
       html: `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
       threading: options.threading || null,
+      messageId: options.threading?.messageId || null,
     });
 
     if (!result.ok) {
@@ -296,7 +298,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
     media: OmniOutboundMedia,
     options: {
       replyToExternalMessageId?: string | null;
-      threading?: { subject?: string | null; inReplyTo?: string | null; references?: string[] | null } | null;
+      threading?: OmniOutboundThreading | null;
     } = {},
   ): Promise<OmniOutboundResult> {
     const from = this.emailService.getFromAddress();
@@ -309,6 +311,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
       html: text ? `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>` : undefined,
       replyTo: options.replyToExternalMessageId || null,
       threading: options.threading || null,
+      messageId: options.threading?.messageId || null,
       attachments: [
         {
           filename: media.fileName,

@@ -8,7 +8,7 @@ import * as path from 'node:path';
 
 import { OmniChannelService } from '../src/services/OmniChannel.service';
 import { ChannelRegistry } from '../src/integrations/omni/channelRegistry';
-import type { ChannelAdapter, OmniInboundMessage } from '../src/integrations/omni/omni.types';
+import type { ChannelAdapter, OmniInboundMessage, OmniOutboundResult } from '../src/integrations/omni/omni.types';
 
 /** A normalized inbound message ready for the generic engine. */
 const makeMessage = (overrides: Partial<OmniInboundMessage> = {}): OmniInboundMessage => ({
@@ -35,16 +35,27 @@ interface Harness {
   attachmentCreates: Array<Record<string, unknown>>;
   conversationRepo: Record<string, unknown>;
   adapter: ChannelAdapter;
+  /** Rows of the fake email_messages table (only with `withEmailMessages`). */
+  emailRows: Array<Record<string, unknown>>;
+  emailSendCalls: Array<Record<string, unknown>>;
+}
+
+interface HarnessOptions {
+  /** Pass a fake EmailMessageRepository (migration 031 status lifecycle). */
+  withEmailMessages?: boolean;
+  /** Override the email adapter's sendMessage result. */
+  emailSend?: (chatId: string | number, text: string, options?: unknown) => Promise<OmniOutboundResult>;
 }
 
 /** Build an OmniChannelService with in-memory fakes + a fake channel adapter. */
-const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness => {
+const makeHarness = (adapterOverrides: Record<string, unknown> = {}, options: HarnessOptions = {}): Harness => {
   const contacts = new Map<string, unknown>();
   const externalConversations: Array<Record<string, unknown>> = [];
   const externalMessages: Array<Record<string, unknown>> = [];
   const users: Array<Record<string, unknown>> = [];
   const broadcasts: Array<{ conversationId: number; event: unknown; options?: unknown }> = [];
   const sendCalls: Array<Record<string, unknown>> = [];
+  const emailSendCalls: Array<Record<string, unknown>> = [];
   const attachmentCreates: Array<Record<string, unknown>> = [];
 
   const externalRepo = {
@@ -179,9 +190,11 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
 
   const messageRepo = {
     lastCreated: { type: 'text', content: 'Hello, I need help.' } as Record<string, unknown>,
+    nextId: 700,
     create: async (data: Record<string, unknown>) => {
       messageRepo.lastCreated = data;
-      return 700;
+      // Distinct ids only for the email-status tests; legacy tests rely on 700.
+      return options.withEmailMessages ? messageRepo.nextId++ : 700;
     },
     createAttachment: async (data: Record<string, unknown>) => {
       attachmentCreates.push(data);
@@ -241,7 +254,12 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
     channel: 'email',
     parseInbound: async (payload: unknown) =>
       ((payload as { messages?: OmniInboundMessage[] })?.messages || []) as OmniInboundMessage[],
-    sendMessage: async () => ({ ok: true, externalMessageId: 'mail-2222' }),
+    sendMessage: async (chatId: string | number, text: string, sendOptions?: unknown): Promise<OmniOutboundResult> => {
+      emailSendCalls.push({ chatId, text, options: sendOptions });
+      return options.emailSend
+        ? options.emailSend(chatId, text, sendOptions)
+        : { ok: true, externalMessageId: 'mail-2222' };
+    },
     getHealth: async () => ({ connected: true }),
     getThreadHints: async (message: OmniInboundMessage) => {
       const meta = (message.metadata as { threadIds?: string[] } | null) || {};
@@ -252,6 +270,43 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
   };
   registry.register(emailAdapter);
 
+  // Fake email_messages repository mirroring the SQL in emailMessageRepository.
+  const emailRows: Array<Record<string, unknown>> = [];
+  const emailMessagesRepo = {
+    create: async (data: Record<string, unknown>) => {
+      const refs = data.references_ids as string[] | null | undefined;
+      emailRows.push({
+        id: emailRows.length + 1,
+        ...data,
+        references_ids: refs && refs.length ? refs.join(' ') : null,
+        delivery_status: data.delivery_status ?? null,
+        delivery_error: null,
+      });
+      return emailRows.length;
+    },
+    markSent: async (messageId: number) => {
+      const row = emailRows.find((r) => r.message_id === messageId);
+      if (row) { row.delivery_status = 'sent'; row.delivery_error = null; }
+    },
+    markFailed: async (messageId: number, error: string) => {
+      const row = emailRows.find((r) => r.message_id === messageId);
+      if (row) { row.delivery_status = 'failed'; row.delivery_error = error; }
+    },
+    findConversationIdByRfcMessageIds: async (ids: string[]) => {
+      const hits = emailRows.filter((r) => ids.includes(String(r.rfc_message_id)));
+      return hits.length ? (hits[hits.length - 1].conversation_id as number) : null;
+    },
+    findReplyParent: async (conversationId: number) => {
+      const candidates = emailRows.filter(
+        (r) => r.conversation_id === conversationId && r.rfc_message_id
+          && (r.direction === 'inbound' || r.delivery_status === 'sent'),
+      );
+      const inbound = candidates.filter((r) => r.direction === 'inbound');
+      const pool = inbound.length ? inbound : candidates;
+      return pool.length ? pool[pool.length - 1] : null;
+    },
+  };
+
   const service = new OmniChannelService(
     registry,
     externalRepo as never,
@@ -261,6 +316,7 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
     messageRepo as never,
     messageService as never,
     broadcast as never,
+    (options.withEmailMessages ? emailMessagesRepo : undefined) as never,
   );
 
   async function broadcast(
@@ -282,6 +338,8 @@ const makeHarness = (adapterOverrides: Record<string, unknown> = {}): Harness =>
     attachmentCreates,
     conversationRepo,
     adapter,
+    emailRows,
+    emailSendCalls,
   };
 };
 
@@ -882,5 +940,126 @@ describe('OmniChannelService — email thread resolution', () => {
 
     const row = h.externalConversations.find((c) => c.conversation_id === 501);
     assert.equal(row?.status, 'open');
+  });
+});
+
+describe('OmniChannelService — email delivery status (migration 031)', () => {
+  /** Inbound customer email with a real Message-ID header. */
+  const customerEmail = (externalMessageId: string, messageId: string, extra: Record<string, unknown> = {}) =>
+    makeMessage({
+      externalContactId: 'customer@example.com',
+      username: 'customer@example.com',
+      firstName: null,
+      lastName: null,
+      externalMessageId,
+      content: 'Where is my order?',
+      metadata: {
+        email: {
+          subject: 'Order #42',
+          messageId,
+          from: 'Customer <Customer@Example.com>',
+          to: 'support@kneachat.com',
+          ...extra,
+        },
+      },
+    });
+
+  it('records the inbound email with normalized threading headers', async () => {
+    const h = makeHarness({}, { withEmailMessages: true });
+    await h.service.processInbound('email', {
+      messages: [customerEmail('m1', '<M1@Mail.Example.com>', { references: '<root@x.com> <M0@x.com>' })],
+    });
+
+    assert.equal(h.emailRows.length, 1);
+    const row = h.emailRows[0];
+    assert.equal(row.direction, 'inbound');
+    assert.equal(row.rfc_message_id, 'm1@mail.example.com');
+    assert.equal(row.references_ids, 'root@x.com m0@x.com');
+    assert.equal(row.from_address, 'customer@example.com');
+    assert.equal(row.delivery_status, null);
+  });
+
+  it('stores the reply as pending BEFORE sending, then marks it sent', async () => {
+    let statusDuringSend: unknown;
+    const h = makeHarness({}, {
+      withEmailMessages: true,
+      emailSend: async () => {
+        statusDuringSend = h.emailRows[h.emailRows.length - 1].delivery_status;
+        return { ok: true, externalMessageId: 'ignored' };
+      },
+    });
+    await h.service.processInbound('email', { messages: [customerEmail('m1', 'm1@mail.example.com')] });
+
+    const reply = await h.service.sendAgentReply(500, 7, 'It ships today.');
+
+    assert.equal(statusDuringSend, 'pending', 'never "sent" before SMTP accepted it');
+    const outbound = h.emailRows[1];
+    assert.equal(outbound.direction, 'outbound');
+    assert.equal(outbound.delivery_status, 'sent');
+    assert.equal(outbound.in_reply_to, 'm1@mail.example.com');
+    assert.equal(outbound.subject, 'Re: Order #42');
+
+    // The adapter received the pre-generated Message-ID + threading headers.
+    const threading = (h.emailSendCalls[0].options as { threading: Record<string, unknown> }).threading;
+    assert.equal(threading.messageId, outbound.rfc_message_id);
+    assert.equal(threading.inReplyTo, 'm1@mail.example.com');
+    assert.equal(reply.id, outbound.message_id);
+  });
+
+  it('marks the reply failed, keeps it visible and answers 502', async () => {
+    const h = makeHarness({}, {
+      withEmailMessages: true,
+      emailSend: async () => ({ ok: false, description: 'Recipient address was rejected' }),
+    });
+    await h.service.processInbound('email', { messages: [customerEmail('m1', 'm1@mail.example.com')] });
+
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'Hello?'), (error: unknown) => {
+      assert.equal((error as { statusCode?: number }).statusCode, 502);
+      assert.match((error as Error).message, /Recipient address was rejected/);
+      return true;
+    });
+
+    const outbound = h.emailRows[1];
+    assert.equal(outbound.delivery_status, 'failed');
+    assert.equal(outbound.delivery_error, 'Recipient address was rejected');
+
+    // The failed bubble reaches EVERY member (the sender's REST call errored).
+    const failedBubble = h.broadcasts.find(
+      (b) => (b.event as { type?: string }).type === 'receive_message' && !b.options,
+    );
+    assert.ok(failedBubble, 'failed message broadcast without excluding the sender');
+    assert.ok(h.broadcasts.some((b) => (b.event as { type?: string }).type === 'omni_delivery_failed'));
+    assert.equal(h.externalConversations[0].delivery_fail_count, 1);
+  });
+
+  it('treats an adapter exception as a failed delivery', async () => {
+    const h = makeHarness({}, {
+      withEmailMessages: true,
+      emailSend: async () => { throw new Error('socket hang up'); },
+    });
+    await h.service.processInbound('email', { messages: [customerEmail('m1', 'm1@mail.example.com')] });
+
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'Hello?'), /Email delivery failed/);
+    assert.equal(h.emailRows[1].delivery_status, 'failed');
+  });
+
+  it("threads a customer reply to the AGENT's email into the same conversation", async () => {
+    const h = makeHarness({}, { withEmailMessages: true });
+    await h.service.processInbound('email', { messages: [customerEmail('m1', 'm1@mail.example.com')] });
+    await h.service.sendAgentReply(500, 7, 'It ships today.');
+    const agentMessageId = String(h.emailRows[1].rfc_message_id);
+
+    // The customer answers the agent's email: only OUR Message-ID is referenced
+    // (the legacy inbound-only lookup could not match this).
+    const reply = makeMessage({
+      externalContactId: 'customer@example.com',
+      externalMessageId: 'm2',
+      content: 'Thanks!',
+      metadata: { email: { subject: 'Something else', messageId: 'm2@mail.example.com' }, threadIds: [agentMessageId] },
+    });
+    await h.service.processInbound('email', { messages: [reply] });
+
+    assert.equal(h.externalConversations.length, 1, 'no new conversation');
+    assert.equal(h.emailRows[2].conversation_id, 500);
   });
 });

@@ -58,6 +58,16 @@ export function normalizeMessageId(messageId: string | null | undefined): string
   return unwrapped.trim().toLowerCase() || null;
 }
 
+/**
+ * A fresh, normalized RFC 5322 Message-ID (`<uuid>@<from-domain>`, no `<>`)
+ * for an outbound email. Generated before sending so the email can be stored
+ * as 'pending' under the exact id the customer's reply will reference.
+ */
+export function generateMessageId(): string {
+  const domain = (process.env.EMAIL_FROM || EMAIL_FROM_ADDRESS).split('@')[1]?.trim() || 'kneachat.local';
+  return `${crypto.randomUUID()}@${domain}`.toLowerCase();
+}
+
 export function buildReferencesHeader(
   references: string | string[] | null | undefined,
   inReplyTo?: string | null,
@@ -260,6 +270,38 @@ export interface ResendAttachmentDownload {
   buffer: Buffer;
 }
 
+/**
+ * Map a Nodemailer/SMTP error to a short, agent-safe reason. Raw SMTP
+ * responses can carry server hostnames, internal ids or account details, so
+ * they are logged server-side only and never stored or shown to agents.
+ */
+export function describeSmtpError(error: unknown): string {
+  const err = (error || {}) as { code?: string; responseCode?: number };
+  switch (err.code) {
+    case 'EAUTH':
+    case 'ENOAUTH':
+      return 'Email server rejected the login (check SMTP credentials)';
+    case 'ETIMEDOUT':
+      return 'Email server timed out';
+    case 'ECONNECTION':
+    case 'ESOCKET':
+    case 'EDNS':
+    case 'ECONNREFUSED':
+      return 'Could not connect to the email server';
+    case 'EENVELOPE':
+      return 'Recipient address was rejected';
+    default:
+      break;
+  }
+  if (err.responseCode && err.responseCode >= 550 && err.responseCode <= 553) {
+    return 'Recipient address was rejected';
+  }
+  if (err.responseCode && err.responseCode >= 400) {
+    return 'Email provider rejected the message';
+  }
+  return 'Email delivery failed';
+}
+
 export interface SmtpTransportOptions {
   host: string;
   port: number;
@@ -396,9 +438,11 @@ export class EmailService {
       } else if (options.replyTo) {
         mailOptions.inReplyTo = options.replyTo;
       }
+      // A caller-supplied Message-ID lets the engine record the email
+      // (status 'pending') BEFORE sending, keyed by the id the customer's
+      // reply will reference. It never touches the threading headers above.
       if (options.messageId) {
-        mailOptions.references = options.references || options.messageId;
-        mailOptions.messageId = options.messageId;
+        mailOptions.messageId = wrapMessageId(options.messageId) || undefined;
       }
 
       const info: SentMessageInfo = await this.transporter.sendMail(mailOptions);
@@ -410,8 +454,13 @@ export class EmailService {
         rejected: info.rejected,
       };
     } catch (error) {
-      const description = error instanceof Error ? error.message : 'SMTP delivery failed';
-      return { ok: false, description };
+      // Full detail stays in the server log; the agent (and the database)
+      // only ever see the sanitized category.
+      const err = error as { code?: string; responseCode?: number; message?: string };
+      console.error(
+        `[email] SMTP send failed (code=${err.code ?? 'n/a'}, response=${err.responseCode ?? 'n/a'}): ${err.message ?? 'unknown error'}`,
+      );
+      return { ok: false, description: describeSmtpError(error) };
     }
   }
 

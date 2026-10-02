@@ -37,18 +37,26 @@ Customer email ─▶ Email provider (Mailgun/SendGrid/SES/Postmark)
 Agent reply (composer in the Messages view):
         POST /api/omni/conversations/:id/messages
                     ▼
-        OmniChannelService.sendAgentReply()
-            ├─ resolveEmailThreading()    subject + Message-ID chain from the
-            │                             customer's last inbound email
-            ├─ adapter.sendMessage()      SMTP delivery FIRST
-            └─ persist only on success    deliver-then-persist
+        OmniChannelService.sendAgentReply() → sendEmailWithStatus()
+            ├─ resolveEmailThreading()    thread parent from email_messages:
+            │                             In-Reply-To = parent Message-ID,
+            │                             References = parent chain + parent
+            ├─ generateMessageId()        our Message-ID, known before sending
+            ├─ persist as 'pending'       messages + external + email_messages
+            ├─ adapter.sendMessage()      SMTP with that exact Message-ID
+            └─ 'sent' on SMTP accept,     'failed' + sanitized reason → the
+               otherwise ─────────────▶   bubble shows "Not delivered", 502
 ```
 
 Key properties:
 
-- **Deliver-then-persist** — outbound messages are stored only after the SMTP
-  provider accepts them, so the inbox never shows replies the customer never
-  got (mirrors the Telegram regression guard).
+- **Pending → sent | failed** — an email reply is stored as `pending` before
+  the SMTP call and becomes `sent` only after the SMTP server accepts it. A
+  rejected send stays in the conversation as `failed` with a sanitized reason
+  ("Recipient address was rejected", "Email server timed out", …) and is
+  rendered as **Not delivered**, so agents never mistake it for a delivered
+  reply. Raw SMTP errors are logged server-side only. (Telegram keeps
+  deliver-then-persist.)
 - **One identity per address** — `external_contacts.email_address` (migration
   029) is unique, so a customer keeps the same contact across threads.
 - **One conversation per email thread** — a reply (any `In-Reply-To` /

@@ -32,3 +32,4 @@ export * from './notificationPreferenceRepository';
 export * from './taskRepository';
 export * from './globalSearchRepository';
 export * from './externalContactRepository';
+export * from './emailMessageRepository';

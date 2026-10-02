@@ -23,6 +23,8 @@ export interface MessageRow {
   profile_picture?: string | null;
   status?: string;
   conversation_type?: string;
+  /** Outbound email delivery state (email_messages, migration 031); null elsewhere. */
+  delivery_status?: 'pending' | 'sent' | 'failed' | null;
 }
 
 export interface MessageAttachment {

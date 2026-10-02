@@ -8,6 +8,8 @@
  *              → notifications → WebSocket
  *   outbound → resolve chat id from the stored contact → adapter.sendMessage
  *              → persist only on delivery success → broadcast
+ *              (email: persist 'pending' → send → 'sent' | 'failed', see
+ *              sendEmailWithStatus)
  *
  * No provider-specific code lives here — Telegram specifics live in
  * `integrations/telegram/telegram.adapter.ts` (and a future channel would add
@@ -22,8 +24,21 @@ import path from 'path';
 import bcrypt from 'bcrypt';
 import { resolveUploadDir } from '../utils/uploads';
 import type { ExternalContactRow, ExternalConversationRow, OutgoingMessage } from '../types';
-import type { ChannelAdapter, OmniInboundMessage, OmniMedia } from '../integrations/omni/omni.types';
+import type {
+  ChannelAdapter,
+  OmniInboundMessage,
+  OmniMedia,
+  OmniOutboundResult,
+  OmniOutboundThreading,
+} from '../integrations/omni/omni.types';
 import type { OmniOutboundMedia } from '../integrations/omni/omni.types';
+import {
+  buildReplySubject,
+  generateMessageId,
+  getFromAddress,
+  normalizeMessageId,
+} from '../integrations/email/email.service';
+import type { EmailMessageRepository } from '../repositories/emailMessageRepository';
 import type { ChannelRegistry } from '../integrations/omni/channelRegistry';
 import type { ExternalContactRepository } from '../repositories/externalContactRepository';
 import type { UserRepository } from '../repositories/userRepository';
@@ -57,6 +72,23 @@ const extractEmailSubject = (message?: OmniInboundMessage): string | null => {
   return subject ? subject.slice(0, 120) : null;
 };
 
+/** Normalized Message-ID list from a References header (string or array). */
+const normalizeReferences = (references: unknown): string[] => {
+  const raw = Array.isArray(references)
+    ? references.map(String)
+    : typeof references === 'string'
+      ? references.split(/\s+/)
+      : [];
+  return [...new Set(raw.map((id) => normalizeMessageId(id)).filter((id): id is string => !!id))];
+};
+
+/** Bare address from an RFC 5322 mailbox (`Name <a@b.c>` → `a@b.c`). */
+const bareAddress = (mailbox: unknown): string | null => {
+  if (typeof mailbox !== 'string' || !mailbox.trim()) return null;
+  const match = mailbox.match(/<([^>]+)>/);
+  return (match ? match[1] : mailbox).trim().toLowerCase();
+};
+
 /** Contact display name used as the internal conversation name. */
 const contactName = (contact: {
   first_name?: string | null;
@@ -81,6 +113,10 @@ export class OmniChannelService {
     private messageRepository: MessageRepository,
     private messageService: MessageService,
     private broadcastToConversation: BroadcastToConversation,
+    // Email threading + delivery-status ledger (migration 031). Optional so
+    // non-email deployments and unit tests can omit it; without it email
+    // falls back to the legacy deliver-then-persist path.
+    private emailMessages?: EmailMessageRepository,
   ) {}
 
   // ---------------------------------------------------------------------------
@@ -224,10 +260,18 @@ export class OmniChannelService {
       try {
         const hints = await adapter.getThreadHints(message);
         if (hints && hints.inReplyToMessageIds.length > 0) {
-          const threaded = await this.externalRepository.findConversationByThreadMessageIds(
-            channel,
-            hints.inReplyToMessageIds,
-          );
+          // Indexed lookup over BOTH directions first (email_messages), then
+          // the legacy JSON scan for rows written before migration 031.
+          const threadConversationId = channel === 'email' && this.emailMessages
+            ? await this.emailMessages.findConversationIdByRfcMessageIds(hints.inReplyToMessageIds)
+            : null;
+          const threaded = (threadConversationId
+            ? await this.externalRepository.findByConversationId(threadConversationId)
+            : null)
+            ?? await this.externalRepository.findConversationByThreadMessageIds(
+              channel,
+              hints.inReplyToMessageIds,
+            );
           if (threaded) {
             if (threaded.status === 'closed') {
               await this.externalRepository.updateConversationStatus(threaded.conversation_id, 'open');
@@ -450,6 +494,10 @@ export class OmniChannelService {
       throw error;
     }
 
+    if (channel === 'email') {
+      await this.recordInboundEmail(messageId, conversationId, message);
+    }
+
     const persisted = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
     persisted.reactions = [];
     persisted.attachments = storedAttachments.some(({ stored }) => !!stored)
@@ -559,6 +607,24 @@ export class OmniChannelService {
 
     const resolved = await this.resolveExternalConversation(conversationId, agentId, replyToMessageId);
 
+    if (resolved.channel === 'email' && this.emailMessages) {
+      return this.sendEmailWithStatus(resolved, agentId, {
+        content: trimmed,
+        createMessage: () => this.messageRepository.create({
+          conversation_id: conversationId,
+          sender_id: agentId,
+          content: trimmed,
+          type: 'text',
+          reply_to: null,
+        }),
+        ledgerMetadata: null,
+        send: (threading) => resolved.adapter.sendMessage(resolved.chatId, trimmed, {
+          replyToExternalMessageId: resolved.replyToExternalMessageId,
+          threading,
+        }),
+      });
+    }
+
     // Deliver through the channel first — only persist on success. Email
     // replies additionally receive RFC 5322 threading headers derived from
     // the customer's last email so mail clients group the thread correctly;
@@ -640,6 +706,41 @@ export class OmniChannelService {
     const adapter = resolved.adapter;
     if (!adapter.sendMedia) {
       throw badRequest(`Channel ${resolved.channel} does not support media delivery`);
+    }
+
+    if (resolved.channel === 'email' && this.emailMessages) {
+      // The local copy is written up front because the message row now exists
+      // before delivery (status 'pending') and must already show its file.
+      const stored = this.storeOutboundMediaBuffer(media);
+      const fileUrl = stored?.fileUrl || '';
+      const displayName = (media.caption || '').trim() || media.fileName;
+      return this.sendEmailWithStatus(resolved, agentId, {
+        content: displayName,
+        createMessage: async () => {
+          const id = await this.messageRepository.create({
+            conversation_id: conversationId,
+            sender_id: agentId,
+            content: displayName,
+            type: media.kind === 'voice' ? 'voice' : media.kind === 'image' ? 'image' : 'file',
+            reply_to: replyToMessageId || null,
+          });
+          await this.messageRepository.createAttachment({
+            message_id: id,
+            file_name: media.fileName,
+            file_url: fileUrl,
+            file_type: media.mimeType,
+            file_size: media.buffer.length,
+          });
+          return id;
+        },
+        ledgerMetadata: {
+          media: { kind: media.kind, file_name: media.fileName, ...(fileUrl ? { file_url: fileUrl } : {}) },
+        },
+        send: (threading) => adapter.sendMedia!(resolved.chatId, media, {
+          replyToExternalMessageId: resolved.replyToExternalMessageId,
+          threading,
+        }),
+      });
     }
 
     const threading = await this.resolveEmailThreading(resolved);
@@ -746,6 +847,142 @@ export class OmniChannelService {
   }
 
   /**
+   * Email outbound lifecycle (migration 031): record → send → finalize.
+   *
+   *   1. Generate the Message-ID and store the message as 'pending' BEFORE
+   *      sending — a crash mid-send leaves a visible pending row, not a gap.
+   *   2. Send through SMTP with that exact Message-ID + threading headers.
+   *   3. Mark 'sent' only after the SMTP server accepted it. Otherwise mark
+   *      'failed' with the sanitized reason, show the failed bubble to every
+   *      inbox member (the agent's REST call answers 502), flag the
+   *      conversation, and throw.
+   */
+  private async sendEmailWithStatus(
+    resolved: { conversationId: number; channel: string; chatId: string | number; deliveryFailCount: number },
+    agentId: number,
+    outbound: {
+      content: string;
+      createMessage: () => Promise<number>;
+      ledgerMetadata: Record<string, unknown> | null;
+      send: (threading: OmniOutboundThreading) => Promise<OmniOutboundResult>;
+    },
+  ): Promise<OutgoingMessage> {
+    const emailMessages = this.emailMessages as EmailMessageRepository;
+    const { conversationId, channel } = resolved;
+
+    // Which previous email + which Message-IDs: the thread parent's id becomes
+    // In-Reply-To, and References = parent's References + parent's own id.
+    const parent = await this.resolveEmailThreading(resolved);
+    const rfcMessageId = generateMessageId();
+    const threading: OmniOutboundThreading = { ...(parent || {}), messageId: rfcMessageId };
+    const inReplyTo = normalizeMessageId(threading.inReplyTo);
+    const references = normalizeReferences([...(threading.references || []), ...(inReplyTo ? [inReplyTo] : [])]);
+
+    const messageId = await outbound.createMessage();
+    await this.externalRepository.createMessage({
+      message_id: messageId,
+      conversation_id: conversationId,
+      external_message_id: `<${rfcMessageId}>`,
+      channel,
+      direction: 'outbound',
+      sender_type: 'agent',
+      content: outbound.content,
+      external_timestamp: new Date(),
+      metadata: { ...(outbound.ledgerMetadata || {}), email: { message_id: `<${rfcMessageId}>` } },
+    });
+    await emailMessages.create({
+      message_id: messageId,
+      conversation_id: conversationId,
+      direction: 'outbound',
+      rfc_message_id: rfcMessageId,
+      in_reply_to: inReplyTo,
+      references_ids: references,
+      subject: threading.inReplyTo || threading.references
+        ? buildReplySubject(threading.subject)
+        : threading.subject || null,
+      from_address: getFromAddress().address.toLowerCase(),
+      to_address: String(resolved.chatId).toLowerCase(),
+      delivery_status: 'pending',
+    });
+
+    let sent: OmniOutboundResult;
+    try {
+      sent = await outbound.send(threading);
+    } catch (error) {
+      console.error(`[omni:${channel}] Adapter threw while sending message ${messageId}:`, (error as Error).message);
+      sent = { ok: false, description: 'Email delivery failed' };
+    }
+
+    if (!sent.ok) {
+      const reason = sent.description || 'Email delivery failed';
+      await emailMessages.markFailed(messageId, reason);
+      const failed = await this.loadOutgoingMessage(messageId);
+      await this.broadcastToConversation(conversationId, {
+        type: 'receive_message',
+        message: serializeMessage(failed),
+        channel,
+      });
+      await this.reportDeliveryFailure(resolved, reason, sent.errorCode);
+    }
+
+    await emailMessages.markSent(messageId);
+    await this.externalRepository.clearDeliveryFailure(conversationId);
+
+    const message = await this.loadOutgoingMessage(messageId);
+    message.notifiedUserIds = await this.messageService.createMessageNotifications(
+      message,
+      agentId,
+      conversationId,
+      outbound.content,
+      [],
+    );
+    await this.broadcastToConversation(
+      conversationId,
+      { type: 'receive_message', message: serializeMessage(message), channel },
+      { excludeUserId: agentId },
+    );
+    this.notifyMembers(message, conversationId, message.notifiedUserIds || []);
+    return message;
+  }
+
+  /** A stored message with sender, attachments and delivery status, ready to serialize. */
+  private async loadOutgoingMessage(messageId: number): Promise<OutgoingMessage> {
+    const message = (await this.messageRepository.findByIdWithSender(messageId)) as OutgoingMessage;
+    message.reactions = [];
+    message.attachments = await this.messageRepository.findAttachments(messageId);
+    return message;
+  }
+
+  /**
+   * Store an inbound email's threading headers (migration 031). Best-effort:
+   * the message itself is already saved, so a bookkeeping failure is logged
+   * and never drops what the customer sent.
+   */
+  private async recordInboundEmail(
+    messageId: number,
+    conversationId: number,
+    message: OmniInboundMessage,
+  ): Promise<void> {
+    if (!this.emailMessages) return;
+    const email = ((message.metadata as { email?: Record<string, unknown> } | null) || {}).email || {};
+    try {
+      await this.emailMessages.create({
+        message_id: messageId,
+        conversation_id: conversationId,
+        direction: 'inbound',
+        rfc_message_id: normalizeMessageId(email.messageId as string | undefined),
+        in_reply_to: normalizeMessageId(email.inReplyTo as string | undefined),
+        references_ids: normalizeReferences(email.references),
+        subject: typeof email.subject === 'string' ? email.subject.slice(0, 998) : null,
+        from_address: bareAddress(email.from),
+        to_address: bareAddress(email.to),
+      });
+    } catch (error) {
+      console.error(`[omni:email] Could not record threading headers for message ${messageId}:`, (error as Error).message);
+    }
+  }
+
+  /**
    * Email threading (RFC 5322) for the reply path: derive subject +
    * Message-ID chain from the customer's most recent inbound email stored in
    * the external ledger. Returns null for every other channel (or when the
@@ -756,6 +993,16 @@ export class OmniChannelService {
     conversationId: number;
   }): Promise<{ subject?: string | null; inReplyTo?: string | null; references?: string[] | null } | null> {
     if (resolved.channel !== 'email') return null;
+    if (this.emailMessages) {
+      const parent = await this.emailMessages.findReplyParent(resolved.conversationId);
+      if (parent) {
+        return {
+          subject: parent.subject,
+          inReplyTo: parent.rfc_message_id,
+          references: parent.references_ids ? parent.references_ids.split(' ') : null,
+        };
+      }
+    }
     const latest = await this.externalRepository.findLatestInboundMessage(
       resolved.conversationId,
       resolved.channel,

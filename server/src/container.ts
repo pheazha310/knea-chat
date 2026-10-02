@@ -43,6 +43,7 @@ import { NotificationPreferenceRepository } from './repositories/notificationPre
 import { TaskRepository } from './repositories/taskRepository';
 import { GlobalSearchRepository } from './repositories/globalSearchRepository';
 import { ExternalContactRepository } from './repositories/externalContactRepository';
+import { EmailMessageRepository } from './repositories/emailMessageRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -163,6 +164,7 @@ const notificationPreferenceRepository = new NotificationPreferenceRepository(db
 const taskRepository = new TaskRepository(db);
 const globalSearchRepository = new GlobalSearchRepository(db);
 const externalContactRepository = new ExternalContactRepository(db);
+const emailMessageRepository = new EmailMessageRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -377,6 +379,7 @@ const omniService = new OmniChannelService(
   messageRepository,
   messageService,
   broadcastToConversation,
+  emailMessageRepository,
 );
 const telegramController = new TelegramController(omniService);
 const websiteController = new WebsiteController(omniService);
