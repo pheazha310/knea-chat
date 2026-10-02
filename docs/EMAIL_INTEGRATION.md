@@ -113,11 +113,24 @@ Migration `029_email_omni_channel.sql` adds `external_contacts.email_address`
 cd server && npm run db:init   # idempotent; prints "Added email_address ..." when applied
 ```
 
-No other schema changes — threading metadata lives in
-`external_messages.metadata` JSON. Migration 030 (applied by the same
-`npm run db:init`) converts `external_conversations`' unique
-`(contact_id, channel)` key into a plain index, allowing several
-conversations per contact — one per email thread.
+Migration 030 (applied by the same `npm run db:init`) converts
+`external_conversations`' unique `(contact_id, channel)` key into a plain
+index, allowing several conversations per contact — one per email thread.
+
+Migration 031 adds `email_messages`: one row per inbound **and** outbound
+email with its threading headers as indexed columns (`rfc_message_id`,
+`in_reply_to`, `references_ids`, all normalized lower-case without `<>`) and
+the outbound `delivery_status` (`pending` → `sent` | `failed`). It backfills
+existing email rows from `external_messages` once, when the table is created.
+
+```text
+customer@gmail.com
+  → external_contacts       (channel='email', email_address unique)
+  → external_conversations  (one per email thread) → conversations
+  → messages                (the chat bubble the inbox shows)
+     ├─ external_messages   (channel-agnostic ledger, webhook dedupe)
+     └─ email_messages      (Message-ID / In-Reply-To / References, status)
+```
 
 ---
 
