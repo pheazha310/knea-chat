@@ -22,10 +22,13 @@ import type {
   EmailWebhookPayload,
   EmailHealthInfo,
 } from './email.types';
+import { buildSmtpTransportOptions, getSenderConfig } from '../../config/email.config';
+
+// Re-exported so existing imports (tests, scripts) keep working.
+export { buildSmtpTransportOptions } from '../../config/email.config';
+export type { SmtpTransportOptions } from '../../config/email.config';
 
 const getWebhookSecret = (): string => process.env.EMAIL_WEBHOOK_SECRET || '';
-const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM || 'noreply@kneachat.com';
-const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'KneaChat';
 
 /**
  * Email threading (RFC 5322) — derive the outbound reply headers from the
@@ -64,7 +67,7 @@ export function normalizeMessageId(messageId: string | null | undefined): string
  * as 'pending' under the exact id the customer's reply will reference.
  */
 export function generateMessageId(): string {
-  const domain = (process.env.EMAIL_FROM || EMAIL_FROM_ADDRESS).split('@')[1]?.trim() || 'kneachat.local';
+  const domain = getSenderConfig().address.split('@')[1]?.trim() || 'kneachat.local';
   return `${crypto.randomUUID()}@${domain}`.toLowerCase();
 }
 
@@ -100,7 +103,8 @@ export function buildThreadingHeaders(threading: EmailSendOptions['threading']):
 }
 
 export function getFromAddress(): EmailAddress {
-  return { name: EMAIL_FROM_NAME || undefined, address: EMAIL_FROM_ADDRESS };
+  const sender = getSenderConfig();
+  return { name: sender.name || undefined, address: sender.address };
 }
 
 /** Minimal HTML sanitizer: strips script tags, event handlers, and dangerous protocols. */
@@ -302,38 +306,6 @@ export function describeSmtpError(error: unknown): string {
   return 'Email delivery failed';
 }
 
-export interface SmtpTransportOptions {
-  host: string;
-  port: number;
-  secure: boolean;
-  auth?: { user: string; pass: string };
-}
-
-/**
- * SMTP transport options from the environment, or null when no host is set.
- *
- * Only the host is required. Credentials are attached when BOTH user and pass
- * are present — local catchers like Mailpit (localhost:1025) accept mail
- * without authentication, while real providers (Gmail, Resend) reject the
- * unauthenticated send with an SMTP auth error at delivery time.
- */
-export function buildSmtpTransportOptions(env: NodeJS.ProcessEnv): SmtpTransportOptions | null {
-  const host = env.EMAIL_SMTP_HOST?.trim();
-  if (!host) return null;
-
-  const options: SmtpTransportOptions = {
-    host,
-    port: parseInt(env.EMAIL_SMTP_PORT || '587', 10),
-    secure: env.EMAIL_SMTP_SECURE === 'true',
-  };
-  const user = env.EMAIL_SMTP_USER;
-  const pass = env.EMAIL_SMTP_PASS;
-  if (user && pass) {
-    options.auth = { user, pass };
-  }
-  return options;
-}
-
 export class EmailService {
   private transporter: Transporter | null = null;
   private configured = false;
@@ -354,7 +326,8 @@ export class EmailService {
   }
 
   getFromAddress(): EmailAddress {
-    return { name: EMAIL_FROM_NAME || undefined, address: EMAIL_FROM_ADDRESS };
+    const sender = getSenderConfig();
+    return { name: sender.name || undefined, address: sender.address };
   }
 
   sanitizeHtml(html: string): string {
@@ -900,7 +873,7 @@ export class EmailService {
       configured: this.configured,
       provider: process.env.EMAIL_SERVICE || 'smtp',
       smtpConnected,
-      from: EMAIL_FROM_ADDRESS,
+      from: getSenderConfig().address,
     };
   }
 }

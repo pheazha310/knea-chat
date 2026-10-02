@@ -22,6 +22,7 @@ import type {
   OmniThreadHints,
 } from '../omni/omni.types';
 import type { EmailWebhookPayload, EmailWebhookHeaders } from './email.types';
+import { isValidEmailAddress } from './email.validator';
 
 const CHANNEL = 'email';
 
@@ -88,6 +89,12 @@ export class EmailChannelAdapter implements ChannelAdapter {
     const senderEmail = sender.includes('<') && sender.includes('>')
       ? sender.match(/<(.+?)>/)?.[1] || sender
       : sender;
+    // The sender becomes the contact's identity and the reply address, so a
+    // malformed one (bounce daemons, spoofed garbage) is never stored.
+    if (!isValidEmailAddress(senderEmail)) {
+      console.warn('[email] Inbound email ignored: sender address is not a valid email');
+      return [];
+    }
 
     const text = webhook.text || '';
     const html = webhook.html || '';
@@ -271,6 +278,9 @@ export class EmailChannelAdapter implements ChannelAdapter {
       threading?: OmniOutboundThreading | null;
     } = {},
   ): Promise<OmniOutboundResult> {
+    if (!isValidEmailAddress(String(chatId))) {
+      return { ok: false, description: 'Recipient address is invalid', errorCode: 400 };
+    }
     const from = this.emailService.getFromAddress();
     const result = await this.emailService.sendMail({
       from,
@@ -301,6 +311,9 @@ export class EmailChannelAdapter implements ChannelAdapter {
       threading?: OmniOutboundThreading | null;
     } = {},
   ): Promise<OmniOutboundResult> {
+    if (!isValidEmailAddress(String(chatId))) {
+      return { ok: false, description: 'Recipient address is invalid', errorCode: 400 };
+    }
     const from = this.emailService.getFromAddress();
     const text = media.caption?.trim() || '';
     const result = await this.emailService.sendMail({

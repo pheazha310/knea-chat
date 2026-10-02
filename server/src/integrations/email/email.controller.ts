@@ -16,6 +16,8 @@ import type { EmailChannelAdapter } from './email.adapter';
 import type { EmailWebhookHeaders, RawBodyRequest } from './email.types';
 import { isInboundEmailEnabled } from './startup-checks';
 import { toClientError } from '../../utils/errors.utils';
+import { getWebhookVerificationConfig } from '../../config/email.config';
+import { validateEmailSendBody } from './email.validator';
 
 const CHANNEL = 'email';
 
@@ -29,12 +31,6 @@ const WEBHOOK_PROVIDER_HEADER = 'x-email-provider';
  */
 const inFlight = new Set<string>();
 
-/**
- * Local-testing escape hatch for posting sample payloads with curl: unsigned
- * webhooks are accepted only when explicitly opted in AND not in production.
- */
-const isUnsignedWebhookAllowed = (): boolean =>
-  process.env.EMAIL_WEBHOOK_ALLOW_UNSIGNED === 'true' && process.env.NODE_ENV !== 'production';
 
 export class EmailController {
   constructor(private omniService: OmniChannelService, private adapter: EmailChannelAdapter) {}
@@ -70,8 +66,8 @@ export class EmailController {
       }
 
       // Either secret enables verification: the generic one (shared-secret /
-      // HMAC providers) or Resend's Svix `whsec_` secret.
-      const expectedSecret = process.env.EMAIL_WEBHOOK_SECRET || process.env.EMAIL_RESEND_WEBHOOK_SECRET || '';
+      // HMAC providers) or Resend's Svix `whsec_` secret (config/email.config.ts).
+      const verification = getWebhookVerificationConfig();
       const receivedSecret = String(req.headers[WEBHOOK_SECRET_HEADER] || '');
       let provider = String(req.headers[WEBHOOK_PROVIDER_HEADER] || '').toLowerCase();
 
@@ -83,7 +79,7 @@ export class EmailController {
         provider = 'mailgun';
       }
 
-      if (expectedSecret) {
+      if (verification.secretConfigured) {
         const headers: EmailWebhookHeaders = {
           provider,
           signature: String(req.headers['x-email-signature'] || ''),
@@ -108,7 +104,7 @@ export class EmailController {
           res.status(401).json({ success: false, message: 'Invalid webhook signature' });
           return;
         }
-      } else if (isUnsignedWebhookAllowed()) {
+      } else if (verification.allowUnsigned) {
         console.warn('[email] Webhook accepted WITHOUT verification (EMAIL_WEBHOOK_ALLOW_UNSIGNED=true, non-production only)');
       } else {
         // Fail closed: an unverified webhook would let anyone who knows the URL
@@ -168,21 +164,18 @@ export class EmailController {
    */
   sendMessage = async (req: Request, res: Response): Promise<void> => {
     try {
-      const { conversationId, text, replyToMessageId } = req.body;
-      if (!conversationId || !text) {
-        res.status(400).json({
-          success: false,
-          message: 'conversationId and text are required',
-          errors: { validation: 'Missing required fields' },
-        });
+      const validation = validateEmailSendBody(req.body);
+      if (!validation.ok) {
+        res.status(400).json({ success: false, message: 'Invalid request', errors: validation.errors });
         return;
       }
+      const { conversationId, text, replyToMessageId } = validation.value;
 
       const message = await this.omniService.sendAgentReply(
-        Number(conversationId),
+        conversationId,
         req.user!.id,
-        String(text),
-        replyToMessageId ? Number(replyToMessageId) : null,
+        text,
+        replyToMessageId,
       );
 
       res.status(201).json({
