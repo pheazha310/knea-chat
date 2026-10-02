@@ -17,6 +17,7 @@
 import { Router } from 'express';
 import type { OmniController } from './omni.controller';
 import type { AuthMiddleware } from '../../middleware/auth.middleware';
+import { agentSendLimiter } from '../../middleware/rateLimit.middleware';
 
 export const createOmniRouter = (
   omniController: OmniController,
@@ -34,8 +35,8 @@ export const createOmniRouter = (
   router.post('/conversations/:id/assign', auth.authenticate, omniController.assignConversation);
   router.delete('/conversations/:id/assign', auth.authenticate, omniController.unassignConversation);
   router.patch('/conversations/:id/status', auth.authenticate, omniController.setStatus);
-  router.post('/conversations/:id/messages', auth.authenticate, omniController.sendMessage);
-  router.post('/conversations/:id/media', auth.authenticate, omniController.sendMedia);
+  router.post('/conversations/:id/messages', auth.authenticate, agentSendLimiter, omniController.sendMessage);
+  router.post('/conversations/:id/media', auth.authenticate, agentSendLimiter, omniController.sendMedia);
 
   return router;
 };

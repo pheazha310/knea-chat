@@ -99,6 +99,12 @@ const contactName = (contact: {
   return full || contact.username || 'External Customer';
 };
 
+/**
+ * Longest agent reply accepted. The JSON body limit is 10 MB; without this a
+ * single request could store and email megabytes of text.
+ */
+export const MAX_REPLY_LENGTH = 20000;
+
 /** A channel send that the provider refused (HTTP 502 to the client). */
 const deliveryError = (description: string): Error =>
   Object.assign(new Error(description || 'Channel delivery failed'), { statusCode: 502 });
@@ -603,6 +609,9 @@ export class OmniChannelService {
     const trimmed = text.trim();
     if (!trimmed) {
       throw badRequest('Message text is required');
+    }
+    if (trimmed.length > MAX_REPLY_LENGTH) {
+      throw badRequest(`Message is too long (max ${MAX_REPLY_LENGTH} characters)`);
     }
 
     const resolved = await this.resolveExternalConversation(conversationId, agentId, replyToMessageId);

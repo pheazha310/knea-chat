@@ -660,8 +660,9 @@ export class EmailService {
   verifyWebhookSignature(payload: unknown, headers: EmailWebhookHeaders): boolean {
     const secret = getWebhookSecret();
     if (!secret) {
-      console.warn('[email] EMAIL_WEBHOOK_SECRET is not set — webhook is unprotected');
-      return true;
+      // Fail closed: without a secret nothing can be verified.
+      console.warn('[email] Webhook rejected: EMAIL_WEBHOOK_SECRET is not set');
+      return false;
     }    const provider = (headers.provider || '').toLowerCase();
 
     // SendGrid: X-Twilio-Email-Event-Webhook-Signature + X-Twilio-Email-Event-Webhook-Timestamp

@@ -112,6 +112,23 @@ messages.
 
 Reference copy: `server/.env.example`.
 
+## Security
+
+| Control | Where | Behaviour |
+|---------|-------|-----------|
+| Webhook verification | `email.controller.ts` | Fails **closed**: no `EMAIL_WEBHOOK_SECRET` / `EMAIL_RESEND_WEBHOOK_SECRET` → `503`, nothing stored (the provider retries once fixed). Bad signature → `401`. `EMAIL_WEBHOOK_ALLOW_UNSIGNED=true` skips verification for local curl tests, never in production. |
+| Webhook rate limit | `webhookLimiter` | 120 requests/min per source IP → `429` (providers retry later). |
+| Send rate limit | `agentSendLimiter` | 30 replies/min **per agent**, shared by `/api/omni/.../messages`, `/media` and `/api/email/messages`. |
+| Authentication | `auth.authenticate` | Every send/assign route requires a valid session. |
+| Authorization | `resolveExternalConversation()` | The agent must be a member of the external conversation; the recipient address is read from the database, never from the request. |
+| Input validation | controller + service | Conversation id must be a positive number; reply text required, max 20,000 characters. |
+| Error sanitization | `toClientError()`, `describeSmtpError()` | Unexpected errors → generic `500` (details only in the server log); SMTP failures → short categories such as "Recipient address was rejected". |
+| Credentials | `server/.env` | SMTP / webhook secrets stay server-side; React only talks to the REST API. |
+
+Behind a tunnel or reverse proxy every webhook request arrives from the proxy's
+IP (Express `trust proxy` is not enabled), so the webhook limit effectively
+applies to all inbound traffic together.
+
 ## Database
 
 Migration `029_email_omni_channel.sql` adds `external_contacts.email_address`

@@ -315,12 +315,12 @@ describe('EmailService — htmlToText', () => {
 });
 
 describe('EmailService — verifyWebhookSignature', () => {
-  it('returns true when EMAIL_WEBHOOK_SECRET is not set', () => {
+  it('fails closed (false) when EMAIL_WEBHOOK_SECRET is not set', () => {
     const original = process.env.EMAIL_WEBHOOK_SECRET;
     process.env.EMAIL_WEBHOOK_SECRET = '';
     const service = new EmailService();
     const result = service.verifyWebhookSignature({ test: true }, {});
-    assert.equal(result, true);
+    assert.equal(result, false);
     process.env.EMAIL_WEBHOOK_SECRET = original;
   });
 

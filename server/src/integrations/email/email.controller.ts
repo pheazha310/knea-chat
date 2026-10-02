@@ -15,6 +15,7 @@ import type { OmniChannelService } from '../../services/OmniChannel.service';
 import type { EmailChannelAdapter } from './email.adapter';
 import type { EmailWebhookHeaders, RawBodyRequest } from './email.types';
 import { isInboundEmailEnabled } from './startup-checks';
+import { toClientError } from '../../utils/errors.utils';
 
 const CHANNEL = 'email';
 
@@ -27,6 +28,13 @@ const WEBHOOK_PROVIDER_HEADER = 'x-email-provider';
  * settled case; this catches the concurrent one).
  */
 const inFlight = new Set<string>();
+
+/**
+ * Local-testing escape hatch for posting sample payloads with curl: unsigned
+ * webhooks are accepted only when explicitly opted in AND not in production.
+ */
+const isUnsignedWebhookAllowed = (): boolean =>
+  process.env.EMAIL_WEBHOOK_ALLOW_UNSIGNED === 'true' && process.env.NODE_ENV !== 'production';
 
 export class EmailController {
   constructor(private omniService: OmniChannelService, private adapter: EmailChannelAdapter) {}
@@ -61,7 +69,9 @@ export class EmailController {
         return;
       }
 
-      const expectedSecret = process.env.EMAIL_WEBHOOK_SECRET || '';
+      // Either secret enables verification: the generic one (shared-secret /
+      // HMAC providers) or Resend's Svix `whsec_` secret.
+      const expectedSecret = process.env.EMAIL_WEBHOOK_SECRET || process.env.EMAIL_RESEND_WEBHOOK_SECRET || '';
       const receivedSecret = String(req.headers[WEBHOOK_SECRET_HEADER] || '');
       let provider = String(req.headers[WEBHOOK_PROVIDER_HEADER] || '').toLowerCase();
 
@@ -98,8 +108,15 @@ export class EmailController {
           res.status(401).json({ success: false, message: 'Invalid webhook signature' });
           return;
         }
+      } else if (isUnsignedWebhookAllowed()) {
+        console.warn('[email] Webhook accepted WITHOUT verification (EMAIL_WEBHOOK_ALLOW_UNSIGNED=true, non-production only)');
       } else {
-        console.warn('[email] EMAIL_WEBHOOK_SECRET is not set — webhook is unprotected');
+        // Fail closed: an unverified webhook would let anyone who knows the URL
+        // inject fake customer emails. 503 makes the provider retry, so mail
+        // queued during the misconfiguration arrives once a secret is set.
+        console.error('[email] Webhook rejected: no EMAIL_WEBHOOK_SECRET / EMAIL_RESEND_WEBHOOK_SECRET configured');
+        res.status(503).json({ success: false, message: 'Webhook verification is not configured' });
+        return;
       }
 
       const messages = await this.adapter.parseInbound(req.body);
@@ -164,10 +181,10 @@ export class EmailController {
         data: { message },
       });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({
         success: false,
-        message: (error as Error).message,
+        message,
         errors: {},
       });
     }
@@ -193,10 +210,10 @@ export class EmailController {
         data: result,
       });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({
         success: false,
-        message: (error as Error).message,
+        message,
         errors: {},
       });
     }
@@ -221,10 +238,10 @@ export class EmailController {
         data: result,
       });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({
         success: false,
-        message: (error as Error).message,
+        message,
         errors: {},
       });
     }
@@ -245,7 +262,7 @@ export class EmailController {
         success: false,
         channel: CHANNEL,
         connected: false,
-        message: (error as Error).message,
+        message: toClientError(error, 'email:health').message,
       });
     }
   };
@@ -280,10 +297,10 @@ export class EmailController {
         data: result,
       });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 500).json({
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({
         success: false,
-        message: (error as Error).message,
+        message,
         errors: {},
       });
     }
@@ -295,8 +312,8 @@ export class EmailController {
       const result = await this.omniService.getWebhookInfo(CHANNEL);
       res.status(200).json({ success: true, data: result });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 500).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 
@@ -314,8 +331,8 @@ export class EmailController {
       }
       res.status(200).json({ success: true, message: 'Email webhook removed', data: result });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 500).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 }

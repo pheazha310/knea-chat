@@ -1063,3 +1063,17 @@ describe('OmniChannelService — email delivery status (migration 031)', () => {
     assert.equal(h.emailRows[2].conversation_id, 500);
   });
 });
+
+describe('OmniChannelService — reply validation', () => {
+  it('rejects replies longer than MAX_REPLY_LENGTH before any delivery', async () => {
+    const h = makeHarness();
+    await h.service.processInbound('telegram', { messages: [makeMessage()] });
+
+    await assert.rejects(h.service.sendAgentReply(500, 7, 'x'.repeat(20001)), (error: unknown) => {
+      assert.equal((error as { statusCode?: number }).statusCode, 400);
+      assert.match((error as Error).message, /too long/);
+      return true;
+    });
+    assert.equal(h.sendCalls.length, 0);
+  });
+});
