@@ -451,9 +451,12 @@ inbox E2E) on every push/PR to `main` (manual trigger included).
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| `POST` | `/api/email/webhook` | signature | Provider inbound delivery (public) |
+| `POST` | `/api/omni/email/send` | agent | Reply on an email conversation — body `{ conversationId, text, replyToMessageId? }` (validated by `email.validator.ts`; the recipient comes from the stored contact, never the body) |
+| `GET` | `/api/omni/conversations/:id/messages` | conversation member | Conversation history, each message with `delivery_status` (`?page=&limit=`) |
+| `POST` | `/api/webhooks/email` | signature | Provider inbound delivery (public) |
+| `POST` | `/api/email/webhook` | signature | Same handler as `/api/webhooks/email` (original path) |
 | `GET` | `/api/email/health` | none | Channel health (`configured` + SMTP reachability) |
-| `POST` | `/api/email/messages` | agent | Reply on an email conversation (conversation-scoped) |
+| `POST` | `/api/email/messages` | agent | Same handler as `/api/omni/email/send` (original path) |
 | `POST/DELETE` | `/api/email/conversations/:id/assign` | inbox member | Claim/unclaim |
 | `POST` | `/api/email/setup-webhook` | admin+ | Echoes the webhook URL to configure at the provider |
 | `GET` | `/api/email/webhook-info` | admin+ | Webhook configuration info |
@@ -462,7 +465,13 @@ inbox E2E) on every push/PR to `main` (manual trigger included).
 Channel-agnostic inbox actions also work on email conversations:
 `POST/PATCH /api/omni/conversations/:id/{assign,status,messages,media}`
 (see `server/src/integrations/omni/omni.routes.ts`). The UI composer uses the
-shared `/api/omni/...` reply route.
+shared `/api/omni/conversations/:id/messages` reply route.
+
+Responses: `201 { success, message, data: { message } }` on send (the message
+carries `delivery_status: 'sent'`); `400 { errors: { field: reason } }` for
+validation; `401` without a session; `429` over the send limit; `502` when
+the email could not be delivered (the message is kept as `failed`); `500`
+with a generic message for unexpected errors (details only in the server log).
 
 ---
 
