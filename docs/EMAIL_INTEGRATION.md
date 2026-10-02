@@ -67,6 +67,12 @@ Key properties:
   plain index). Agent replies inherit the right thread automatically because
   outbound threading headers are derived from the conversation's own ledger
   (`resolveEmailThreading`).
+- **Never acknowledge a lost email** — the webhook answers `200` only when
+  every message was saved (or was a duplicate). A save failure (e.g. MySQL
+  down) or an unexpected error answers `500`, so the provider re-delivers
+  later. Known gap: the save is not one transaction, so a failure *between*
+  the `messages` insert and the ledger insert can leave a duplicate bubble
+  after the retry.
 - **Dedupe** — webhook retries are collapsed by the
   `(channel, external_message_id)` unique key plus an in-flight guard.
 - **Sanitized** — inbound HTML is stripped of scripts/handlers before storage.

@@ -131,18 +131,20 @@ export class OmniChannelService {
 
   /**
    * Process a raw webhook payload for a channel. Returns how many messages
-   * were persisted vs ignored (unsupported updates / duplicates). Never throws
-   * for ignorable updates.
+   * were persisted, ignored (unsupported updates / duplicates) or failed
+   * (unexpected error, e.g. the database is down — the caller should make the
+   * provider retry). Never throws for ignorable updates.
    */
   async processInbound(
     channel: string,
     payload: unknown,
-  ): Promise<{ processed: number; ignored: number }> {
+  ): Promise<{ processed: number; ignored: number; failed: number }> {
     const adapter = this.requireAdapter(channel);
     const messages = await adapter.parseInbound(payload);
 
     let processed = 0;
     let ignored = 0;
+    let failed = 0;
     for (const message of messages) {
       try {
         const persisted = await this.processInboundMessage(channel, adapter, message);
@@ -157,10 +159,10 @@ export class OmniChannelService {
           `[omni:${channel}] Failed to process message ${message.externalMessageId}:`,
           (error as Error).message,
         );
-        ignored += 1;
+        failed += 1;
       }
     }
-    return { processed, ignored };
+    return { processed, ignored, failed };
   }
 
   /** Persist one normalized inbound message (find-or-create → store → broadcast). */

@@ -138,16 +138,26 @@ export class EmailController {
         return;
       }
       for (const id of messageIds) inFlight.add(id);
+      let result: { failed?: number };
       try {
-        await this.omniService.processInbound(CHANNEL, req.body);
+        result = await this.omniService.processInbound(CHANNEL, req.body);
       } finally {
         for (const id of messageIds) inFlight.delete(id);
       }
 
+      // A message that could not be saved (e.g. database down) must not be
+      // acknowledged: 500 makes the provider re-deliver it later, and the
+      // (channel, external_message_id) dedupe skips any already-saved copy.
+      if ((result.failed ?? 0) > 0) {
+        res.sendStatus(500);
+        return;
+      }
       res.sendStatus(200);
     } catch (error) {
+      // Unexpected failure (provider API unreachable while fetching the body,
+      // database error, …) — ask the provider to retry rather than lose mail.
       console.error('[email] Webhook handler error:', (error as Error).message);
-      res.sendStatus(200);
+      res.sendStatus(500);
     }
   };
 

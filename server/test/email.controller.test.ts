@@ -189,3 +189,59 @@ describe('email controller — webhook verification gate', () => {
     assert.equal(calls.verified, 1, 'the Resend secret alone must enable verification');
   });
 });
+
+/** Database / processing failures must make the provider retry (error-handling phase). */
+describe('email controller — retry on failure', () => {
+  let snapshot: NodeJS.ProcessEnv;
+
+  const run = async (engine: { processInbound: () => Promise<unknown> }) => {
+    let status = 0;
+    const res = {
+      set: () => res,
+      status: (code: number) => {
+        status = code;
+        return res;
+      },
+      json: () => res,
+      sendStatus: (code: number) => {
+        status = code;
+        return res;
+      },
+    } as unknown as Response;
+    const adapter = {
+      verifyWebhookSignature: async () => true,
+      parseInbound: async () => [{ externalMessageId: 'm1' }],
+    };
+    await new EmailController(engine as never, adapter as never).webhook({ headers: {}, body: {} } as never, res);
+    return status;
+  };
+
+  beforeEach(() => {
+    snapshot = { ...process.env };
+    process.env.EMAIL_INBOUND_ENABLED = 'true';
+    process.env.EMAIL_WEBHOOK_SECRET = 'test-secret';
+    mock.method(console, 'warn', () => {});
+    mock.method(console, 'error', () => {});
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+    for (const key of Object.keys(process.env)) {
+      if (!(key in snapshot)) delete process.env[key];
+    }
+    Object.assign(process.env, snapshot);
+  });
+
+  it('acknowledges 200 when the email was saved (or was a duplicate)', async () => {
+    assert.equal(await run({ processInbound: async () => ({ processed: 1, ignored: 0, failed: 0 }) }), 200);
+    assert.equal(await run({ processInbound: async () => ({ processed: 0, ignored: 1, failed: 0 }) }), 200);
+  });
+
+  it('answers 500 when a message could not be saved, so the provider re-delivers', async () => {
+    assert.equal(await run({ processInbound: async () => ({ processed: 0, ignored: 0, failed: 1 }) }), 500);
+  });
+
+  it('answers 500 on an unexpected error instead of silently dropping the email', async () => {
+    assert.equal(await run({ processInbound: async () => { throw new Error('ECONNREFUSED'); } }), 500);
+  });
+});

@@ -360,14 +360,14 @@ describe('OmniChannelService — inbound processing', () => {
 
   it('ignores an empty batch (unsupported updates) safely', async () => {
     const result = await h.service.processInbound('telegram', { messages: [] });
-    assert.deepEqual(result, { processed: 0, ignored: 0 });
+    assert.deepEqual(result, { processed: 0, ignored: 0, failed: 0 });
     assert.equal(h.externalMessages.length, 0);
   });
 
   it('creates the contact, conversation and message, then broadcasts', async () => {
     const result = await h.service.processInbound('telegram', { messages: [makeMessage()] });
 
-    assert.deepEqual(result, { processed: 1, ignored: 0 });
+    assert.deepEqual(result, { processed: 1, ignored: 0, failed: 0 });
 
     // Contact: one shadow user with role 'external' + one contact row.
     assert.ok(h.contacts.has('123456789'));
@@ -413,7 +413,7 @@ describe('OmniChannelService — inbound processing', () => {
     await h.service.processInbound('telegram', { messages: [makeMessage()] });
     const result = await h.service.processInbound('telegram', { messages: [makeMessage()] });
 
-    assert.deepEqual(result, { processed: 0, ignored: 1 });
+    assert.deepEqual(result, { processed: 0, ignored: 1, failed: 0 });
     assert.equal(h.externalMessages.length, 1);
     assert.equal(h.broadcasts.length, 1);
   });
@@ -441,7 +441,7 @@ describe('OmniChannelService — inbound processing', () => {
       ],
     });
 
-    assert.deepEqual(result, { processed: 1, ignored: 0 });
+    assert.deepEqual(result, { processed: 1, ignored: 0, failed: 0 });
     assert.equal(h.attachmentCreates.length, 1);
     assert.ok((h.attachmentCreates[0].file_url as string).startsWith('/uploads/'));
     assert.equal(h.attachmentCreates[0].file_name, 'photo_333.jpg');
@@ -468,7 +468,7 @@ describe('OmniChannelService — inbound processing', () => {
       ],
     });
 
-    assert.deepEqual(result, { processed: 1, ignored: 0 });
+    assert.deepEqual(result, { processed: 1, ignored: 0, failed: 0 });
     assert.deepEqual(
       h.attachmentCreates.map((attachment) => attachment.file_name),
       ['invoice.pdf', 'photo.png'],
@@ -503,7 +503,7 @@ describe('OmniChannelService — inbound processing', () => {
       ],
     });
 
-    assert.deepEqual(result, { processed: 1, ignored: 0 });
+    assert.deepEqual(result, { processed: 1, ignored: 0, failed: 0 });
     assert.equal(h.attachmentCreates.length, 0, 'no attachment when download fails');
     assert.equal(h.externalMessages.length, 1);
   });
@@ -520,7 +520,7 @@ describe('OmniChannelService — inbound processing', () => {
 
     const result = await h.service.processInbound('telegram', { messages: [] });
     // Both fail (conversation creation throws) but the engine must not crash.
-    assert.deepEqual(result, { processed: 0, ignored: 2 });
+    assert.deepEqual(result, { processed: 0, ignored: 0, failed: 2 });
   });
 });
 
