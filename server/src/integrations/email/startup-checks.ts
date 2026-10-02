@@ -9,9 +9,9 @@
  * blocking) so a misconfigured channel is caught at boot instead of
  * discovered as "the user emailed admin@kneachat.com and nothing appeared".
  *
- * Runs only when the email channel looks configured — EMAIL_WEBHOOK_SECRET
- * is set (the inbound webhook secret) and an inbound domain is declared via
- * EMAIL_INBOUND_DOMAIN.
+ * Runs only when inbound email is enabled and the email channel looks
+ * configured — EMAIL_WEBHOOK_SECRET is set (the inbound webhook secret) and
+ * an inbound domain is declared via EMAIL_INBOUND_DOMAIN.
  *
  * Skipped entirely when EMAIL_STARTUP_CHECKS=false.
  */
@@ -35,9 +35,16 @@ export function getInboundDomain(): string {
   return (process.env.EMAIL_INBOUND_DOMAIN || 'kneachat.com').trim().toLowerCase();
 }
 
+/** Inbound mail is deliberately opt-in, even when SMTP is configured. */
+export function isInboundEmailEnabled(): boolean {
+  return (process.env.EMAIL_INBOUND_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
 /** True when the email inbound pipeline is configured enough to check. */
 export function isEmailInboundConfigured(): boolean {
-  return !!(process.env.EMAIL_WEBHOOK_SECRET || '').trim() && !!getInboundDomain();
+  return isInboundEmailEnabled()
+    && !!(process.env.EMAIL_WEBHOOK_SECRET || '').trim()
+    && !!getInboundDomain();
 }
 
 /** True when the webhook URL is a quick-tunnel host whose hostname changes on every restart. */

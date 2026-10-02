@@ -14,18 +14,12 @@ import type { Request, Response } from 'express';
 import type { OmniChannelService } from '../../services/OmniChannel.service';
 import type { EmailChannelAdapter } from './email.adapter';
 import type { EmailWebhookHeaders, RawBodyRequest } from './email.types';
+import { isInboundEmailEnabled } from './startup-checks';
 
 const CHANNEL = 'email';
 
 const WEBHOOK_SECRET_HEADER = 'x-email-webhook-secret';
 const WEBHOOK_PROVIDER_HEADER = 'x-email-provider';
-
-/**
- * Inbound mail is opt-in. Keeping this separate from SMTP configuration lets
- * an installation continue to send password-reset or agent emails without
- * accepting provider webhooks into the Omni Inbox.
- */
-export const isInboundEmailEnabled = (): boolean => process.env.EMAIL_INBOUND_ENABLED === 'true';
 
 /**
  * In-flight inbound deliveries keyed by Message-ID: a provider retry racing
@@ -48,9 +42,21 @@ export class EmailController {
   webhook = async (req: RawBodyRequest, res: Response): Promise<void> => {
     try {
       // Acknowledge disabled deliveries so the provider does not keep retrying,
-      // but do not parse or persist anything.
+      // but do not parse or persist anything. This is deliberately LOUD: the
+      // silent 204 here cost a real debugging session — the server loaded .env
+      // before EMAIL_INBOUND_ENABLED was added and every inbound delivery was
+      // dropped with no visible trace (dotenv reads the env once at boot).
       if (!isInboundEmailEnabled()) {
-        console.info('[email] Inbound webhook ignored because EMAIL_INBOUND_ENABLED is not true');
+        console.warn(
+          [
+            '⚠️  [email] Inbound webhook delivery DROPPED — responding 204 without persisting.',
+            '   Reason: EMAIL_INBOUND_ENABLED is not "true" in this process.',
+            '   If server/.env already sets it, the server was started before the change: dotenv loads .env once at boot — restart the server (npm run dev).',
+            '   Until fixed, no inbound email reaches the Omni Inbox. Provider retries will keep hitting this warning.',
+          ].join('\n'),
+        );
+        // Visible in curl -i / provider logs even when stdout is missed.
+        res.set('X-Email-Inbound-Disabled', '1');
         res.sendStatus(204);
         return;
       }

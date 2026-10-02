@@ -6,6 +6,7 @@ import http from 'node:http';
 
 import {
   getInboundDomain,
+  isInboundEmailEnabled,
   isEmailInboundConfigured,
   isQuickTunnelUrl,
   resolveMxRecords,
@@ -37,15 +38,25 @@ describe('email startup checks — configuration detection', () => {
   });
 
   it('is not configured without the webhook secret', () => {
+    process.env.EMAIL_INBOUND_ENABLED = 'true';
     delete process.env.EMAIL_WEBHOOK_SECRET;
     process.env.EMAIL_INBOUND_DOMAIN = 'kneachat.com';
     assert.equal(isEmailInboundConfigured(), false);
   });
 
   it('is configured with secret + domain', () => {
+    process.env.EMAIL_INBOUND_ENABLED = 'true';
     process.env.EMAIL_WEBHOOK_SECRET = 'whsec-test';
     process.env.EMAIL_INBOUND_DOMAIN = 'kneachat.com';
     assert.equal(isEmailInboundConfigured(), true);
+  });
+
+  it('is not configured when inbound email is disabled', () => {
+    process.env.EMAIL_INBOUND_ENABLED = 'false';
+    process.env.EMAIL_WEBHOOK_SECRET = 'whsec-test';
+    process.env.EMAIL_INBOUND_DOMAIN = 'kneachat.com';
+    assert.equal(isInboundEmailEnabled(), false);
+    assert.equal(isEmailInboundConfigured(), false);
   });
 });
 
