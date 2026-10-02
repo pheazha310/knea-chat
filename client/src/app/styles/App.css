@@ -6972,6 +6972,26 @@ select:focus-visible {
   gap: 3px;
   font-weight: 600;
 }
+
+/* Outbound email delivery state under the message (email_messages, migration 031). */
+.delivery-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.delivery-status.failed {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-border);
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+.delivery-status.pending {
+  color: var(--text-muted);
+}
 .message-row.pinned .message-content {
   background: linear-gradient(90deg, var(--accent-soft), transparent 60%);
   border-radius: 8px;
