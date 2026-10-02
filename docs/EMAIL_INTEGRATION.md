@@ -167,6 +167,38 @@ curl http://localhost:8080/api/email/health
 - `smtpConnected: true` — a live SMTP handshake succeeded (outbound works).
   Inbound never needs SMTP.
 
+### Testing outbound replies with Mailpit
+
+[Mailpit](https://mailpit.axllent.org/) is a fake SMTP server that **catches**
+every email and shows it in a web UI. Nothing is delivered to a real inbox, so
+it proves that Nodemailer built the right message — not that Gmail/Resend would
+accept or deliver it (SPF/DKIM, spam filtering, and provider limits are not
+exercised). It is outbound-only: Mailpit never calls `/api/email/webhook`.
+
+```text
+Agent reply → EmailService (Nodemailer) → Mailpit SMTP :1025 → Mailpit UI :8025
+```
+
+1. Start it (Docker): `cd server && npm run mailpit`
+2. Point SMTP at it in `server/.env`, then restart the backend:
+
+   | Variable | Value | Why |
+   |----------|-------|-----|
+   | `EMAIL_SMTP_HOST` | `localhost` | Mailpit runs on your machine |
+   | `EMAIL_SMTP_PORT` | `1025` | Mailpit's SMTP port |
+   | `EMAIL_SMTP_SECURE` | `false` | Plain SMTP — no TLS locally |
+   | `EMAIL_SMTP_USER` / `EMAIL_SMTP_PASS` | *(empty)* | Mailpit needs no login; credentials are only sent when **both** are set |
+
+3. `curl http://localhost:8080/api/email/health` → `smtpConnected: true`.
+4. Reply to an email conversation from the Omni Inbox, then open
+   <http://localhost:8025>. Check the **Headers** tab: `Subject` has `Re:`,
+   and `In-Reply-To` / `References` hold the customer's Message-IDs.
+
+Common errors: `ECONNREFUSED 127.0.0.1:1025` → Mailpit is not running;
+`SMTP is not configured` → `EMAIL_SMTP_HOST` is empty or the server was not
+restarted after editing `.env`; port already allocated → another Mailpit is
+running (`docker stop kneachat-mailpit`).
+
 ---
 
 ## Provider notes

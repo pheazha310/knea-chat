@@ -29,6 +29,7 @@
     "telegram:bridge": "node scripts/telegram-poll-bridge.js",
     "resend:setup": "node scripts/resend-setup.js",
     "resend:check": "node scripts/resend-webhook-check.js",
+    "mailpit": "docker run --rm --name kneachat-mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit",
     "email:named-tunnel": "node scripts/email-named-tunnel.js",
     "email:dns-harden": "node scripts/email-dns-harden.js",
     "email:inbound-activate": "node scripts/inbound-activate.js",

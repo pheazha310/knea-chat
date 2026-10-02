@@ -260,24 +260,49 @@ export interface ResendAttachmentDownload {
   buffer: Buffer;
 }
 
+export interface SmtpTransportOptions {
+  host: string;
+  port: number;
+  secure: boolean;
+  auth?: { user: string; pass: string };
+}
+
+/**
+ * SMTP transport options from the environment, or null when no host is set.
+ *
+ * Only the host is required. Credentials are attached when BOTH user and pass
+ * are present — local catchers like Mailpit (localhost:1025) accept mail
+ * without authentication, while real providers (Gmail, Resend) reject the
+ * unauthenticated send with an SMTP auth error at delivery time.
+ */
+export function buildSmtpTransportOptions(env: NodeJS.ProcessEnv): SmtpTransportOptions | null {
+  const host = env.EMAIL_SMTP_HOST?.trim();
+  if (!host) return null;
+
+  const options: SmtpTransportOptions = {
+    host,
+    port: parseInt(env.EMAIL_SMTP_PORT || '587', 10),
+    secure: env.EMAIL_SMTP_SECURE === 'true',
+  };
+  const user = env.EMAIL_SMTP_USER;
+  const pass = env.EMAIL_SMTP_PASS;
+  if (user && pass) {
+    options.auth = { user, pass };
+  }
+  return options;
+}
+
 export class EmailService {
   private transporter: Transporter | null = null;
   private configured = false;
 
   constructor() {
-    const host = process.env.EMAIL_SMTP_HOST;
-    const port = parseInt(process.env.EMAIL_SMTP_PORT || '587', 10);
-    const user = process.env.EMAIL_SMTP_USER;
-    const pass = process.env.EMAIL_SMTP_PASS;
-    const secure = process.env.EMAIL_SMTP_SECURE === 'true';
-
-    if (host && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user, pass },
-      });
+    const options = buildSmtpTransportOptions(process.env);
+    if (options) {
+      if (!options.auth && process.env.NODE_ENV === 'production') {
+        console.warn('[email] EMAIL_SMTP_HOST is set without EMAIL_SMTP_USER/EMAIL_SMTP_PASS — sending unauthenticated (expected only for local catchers like Mailpit)');
+      }
+      this.transporter = nodemailer.createTransport(options);
       this.configured = true;
     }
   }
