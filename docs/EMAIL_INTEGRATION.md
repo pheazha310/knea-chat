@@ -500,6 +500,24 @@ with a generic message for unexpected errors (details only in the server log).
 
 ## Testing
 
+### Full loop with Mailpit (`npm run test:e2e:mailpit`)
+
+`server/e2e/email-mailpit.e2e.js` drives the complete flow against a running
+backend whose SMTP points at Mailpit (see "Testing outbound replies with
+Mailpit"), with `EMAIL_INBOUND_ENABLED=true` and `EMAIL_WEBHOOK_SECRET` set:
+
+1. signed customer email → `POST /api/webhooks/email` → `email.message.received` over WebSocket
+2. `GET /api/omni/conversations/:id/messages` shows it
+3. `POST /api/omni/email/send` → `delivery_status: 'sent'`; Mailpit's copy has
+   `Subject: Re: …`, `In-Reply-To` / `References` = the customer's Message-ID
+4. the customer answers the **agent's** email with a different subject → same conversation
+5. unsigned webhook → `401`; client-supplied recipient → `400`
+
+It removes its customer, conversations and Mailpit messages afterwards
+(`--keep` leaves them). To see the failure path, stop Mailpit and reply from
+the inbox: the API answers `502 Could not connect to the email server` and the
+bubble shows **Not delivered**.
+
 ```bash
 # Unit tests (parsing, threading, signatures, sanitization)
 cd server && node --test dist/test/email.adapter.test.js

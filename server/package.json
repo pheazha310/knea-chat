@@ -22,6 +22,7 @@
     "test:e2e:avatar": "node e2e/avatar-upload.e2e.js",
     "test:e2e:telegram": "node e2e/telegram-omni.e2e.js",
     "test:e2e:email": "node e2e/email-omni.e2e.js",
+    "test:e2e:mailpit": "node e2e/email-mailpit.e2e.js",
     "test:e2e:email-suite": "node e2e/resend-inbound-mock.e2e.js && node e2e/email-omni.e2e.js",
     "test:e2e:resend-mock": "node e2e/resend-inbound-mock.e2e.js",
     "telegram:status": "node scripts/telegram-status.js",
