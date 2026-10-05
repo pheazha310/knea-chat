@@ -33,3 +33,4 @@ export * from './taskRepository';
 export * from './globalSearchRepository';
 export * from './externalContactRepository';
 export * from './emailMessageRepository';
+export * from './integrationConfigRepository';

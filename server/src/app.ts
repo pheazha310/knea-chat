@@ -40,6 +40,7 @@ import { createTelegramRouter } from './integrations/telegram/telegram.routes';
 import { createEmailRouter } from './integrations/email/email.routes';
 import { createWebsiteRouter } from './integrations/website/website.routes';
 import { createOmniRouter } from './integrations/omni/omni.routes';
+import { createIntegrationConfigRouter } from './routes/integrationConfig.routes';
 import { agentSendLimiter, webhookLimiter } from './middleware/rateLimit.middleware';
 
 export const app = express();
@@ -142,6 +143,10 @@ app.use('/api/telegram', createTelegramRouter(container.telegramController, cont
 // The webhook + health routes are public (email provider calls the webhook);
 // the reply and webhook-administration routes apply their own auth inside the router.
 app.use('/api/email', createEmailRouter(container.emailController, container.auth));
+
+// ============ INTEGRATIONS ==========
+// Per-company integration management (admin only for mutation).
+app.use('/api/integrations', createIntegrationConfigRouter(container.integrationConfigController, container.auth));
 
 // ============ PROTECTED ROUTES (Authentication Required) ============
 // All routes below require authentication

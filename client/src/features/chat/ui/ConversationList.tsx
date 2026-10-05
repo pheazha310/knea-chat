@@ -98,32 +98,38 @@ const ConversationList = ({
           </span>
         </div>
         <div className={`section-body ${channelsOpen ? 'open' : ''}`}>
-          {filteredChannels.length === 0 && filterText && (
-            <div className="list-empty">No channels match &ldquo;{filterText}&rdquo;</div>
-          )}
-          {filteredChannels.map((channel) => (
-            <button
-              key={channel.id}
-              onClick={() => onSelectChannel(channel)}
-              className={`list-row ${
-                selectedKey === `channel:${channel.id}` ? 'selected' : ''
-              }`}
-              title={channel.description || channel.name}
-            >
-              <span className="row-icon">
-                <Icon name="hash" size={15} />
-              </span>
-              <span className="row-name">{channel.name}</span>
-              <span className="row-meta">
-                {unreadMap[`channel:${channel.id}`] > 0 && (
-                  <span className="unread-badge">{unreadMap[`channel:${channel.id}`]}</span>
-                )}
-                {channel.member_count != null && (
-                  <span className="count-badge">{channel.member_count}</span>
-                )}
-              </span>
-            </button>
-          ))}
+          <div className="section-body-inner">
+            {filteredChannels.length === 0 && filterText && (
+              <div className="list-empty">No channels match &ldquo;{filterText}&rdquo;</div>
+            )}
+            {filteredChannels.map((channel) => {
+              const unread = unreadMap[`channel:${channel.id}`] || 0;
+              return (
+                <button
+                  key={channel.id}
+                  onClick={() => onSelectChannel(channel)}
+                  className={`list-row ${unread > 0 ? 'has-unread' : ''} ${
+                    selectedKey === `channel:${channel.id}` ? 'selected' : ''
+                  }`}
+                  title={channel.description || channel.name}
+                  aria-current={
+                    selectedKey === `channel:${channel.id}` ? 'true' : undefined
+                  }
+                >
+                  <span className="row-icon">
+                    <Icon name="hash" size={15} />
+                  </span>
+                  <span className="row-name">{channel.name}</span>
+                  <span className="row-meta">
+                    {unread > 0 && <span className="unread-badge">{unread}</span>}
+                    {channel.member_count != null && (
+                      <span className="count-badge">{channel.member_count}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
       <section className="side-section">
@@ -159,42 +165,46 @@ const ConversationList = ({
           </span>
         </div>
         <div className={`section-body ${teamsOpen ? 'open' : ''}`}>
-          {filteredTeams.length === 0 && filterText && (
-            <div className="list-empty">No teams match &ldquo;{filterText}&rdquo;</div>
-          )}
-          {filteredTeams.map((team) => {
-            const accessible = canAccessTeam(team);
-            return (
-              <button
-                key={team.id}
-                onClick={() => onSelectTeam(team)}
-                className={`list-row team-row ${selectedKey === `team:${team.id}` ? 'selected' : ''}`}
-                title={
-                  accessible
-                    ? team.description || team.name
-                    : 'Members only — join this team to message it'
-                }
-              >
-                <span className="row-icon">
-                  <Icon name="grid" size={15} />
-                </span>
-                <span className="row-name">{team.name}</span>
-                <span className="row-meta">
-                  {unreadMap[`team:${team.id}`] > 0 && (
-                    <span className="unread-badge">{unreadMap[`team:${team.id}`]}</span>
-                  )}
-                  {!accessible && (
-                    <span className="row-icon lock-icon">
-                      <Icon name="lock" size={12} />
-                    </span>
-                  )}
-                  {team.member_count != null && (
-                    <span className="count-badge">{team.member_count}</span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          <div className="section-body-inner">
+            {filteredTeams.length === 0 && filterText && (
+              <div className="list-empty">No teams match &ldquo;{filterText}&rdquo;</div>
+            )}
+            {filteredTeams.map((team) => {
+              const accessible = canAccessTeam(team);
+              const unread = unreadMap[`team:${team.id}`] || 0;
+              return (
+                <button
+                  key={team.id}
+                  onClick={() => onSelectTeam(team)}
+                  className={`list-row team-row ${unread > 0 ? 'has-unread' : ''} ${selectedKey === `team:${team.id}` ? 'selected' : ''}`}
+                  title={
+                    accessible
+                      ? team.description || team.name
+                      : 'Members only — join this team to message it'
+                  }
+                  aria-current={
+                    selectedKey === `team:${team.id}` ? 'true' : undefined
+                  }
+                >
+                  <span className="row-icon">
+                    <Icon name="grid" size={15} />
+                  </span>
+                  <span className="row-name">{team.name}</span>
+                  <span className="row-meta">
+                    {unread > 0 && <span className="unread-badge">{unread}</span>}
+                    {!accessible && (
+                      <span className="row-icon lock-icon">
+                        <Icon name="lock" size={12} />
+                      </span>
+                    )}
+                    {team.member_count != null && (
+                      <span className="count-badge">{team.member_count}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
       <section className="side-section direct-section">
@@ -228,33 +238,37 @@ const ConversationList = ({
           </span>
         </div>
         <div className={`section-body ${dmsOpen ? 'open' : ''}`}>
-          {filteredPeople.length === 0 && filterText && (
-            <div className="list-empty">No people match &ldquo;{filterText}&rdquo;</div>
-          )}
-          {filteredPeople.map((person) => {
-            const name = `${person.first_name} ${person.last_name}`;
-            return (
-              <button
-                key={person.id}
-                onClick={() => onSelectPerson(person)}
-                className={`list-row person-row ${
-                  selectedKey === `user:${person.id}` ? 'selected' : ''
-                }`}
-                title={person.email}
-              >
-                <Avatar person={person} className="small" showStatus />
-                <span className="row-name">{name}</span>
-                <span className="row-meta">
-                  {unreadMap[`user:${person.id}`] > 0 && (
-                    <span className="unread-badge">{unreadMap[`user:${person.id}`]}</span>
-                  )}
-                  {person.job_title && (
-                    <span className="job-title">{person.job_title}</span>
-                  )}
-                </span>
-              </button>
-            );
-          })}
+          <div className="section-body-inner">
+            {filteredPeople.length === 0 && filterText && (
+              <div className="list-empty">No people match &ldquo;{filterText}&rdquo;</div>
+            )}
+            {filteredPeople.map((person) => {
+              const name = `${person.first_name} ${person.last_name}`;
+              const unread = unreadMap[`user:${person.id}`] || 0;
+              return (
+                <button
+                  key={person.id}
+                  onClick={() => onSelectPerson(person)}
+                  className={`list-row person-row ${unread > 0 ? 'has-unread' : ''} ${
+                    selectedKey === `user:${person.id}` ? 'selected' : ''
+                  }`}
+                  title={person.email}
+                  aria-current={
+                    selectedKey === `user:${person.id}` ? 'true' : undefined
+                  }
+                >
+                  <Avatar person={person} className="small" showStatus />
+                  <span className="row-name">{name}</span>
+                  <span className="row-meta">
+                    {unread > 0 && <span className="unread-badge">{unread}</span>}
+                    {person.job_title && (
+                      <span className="job-title">{person.job_title}</span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </section>
       <div className="sidebar-footer">

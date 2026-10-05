@@ -83,6 +83,7 @@ const TABLES = [
   'work_schedules',
   'leave_requests',
   'holidays',
+  'integration_configs',
   'users',
   'departments',
   'companies',

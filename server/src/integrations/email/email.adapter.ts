@@ -21,7 +21,7 @@ import type {
   OmniOutboundThreading,
   OmniThreadHints,
 } from '../omni/omni.types';
-import type { EmailWebhookPayload, EmailWebhookHeaders } from './email.types';
+import type { EmailWebhookPayload, EmailWebhookHeaders, EmailAddress } from './email.types';
 import { isValidEmailAddress } from './email.validator';
 
 const CHANNEL = 'email';
@@ -276,6 +276,8 @@ export class EmailChannelAdapter implements ChannelAdapter {
     options: {
       replyToExternalMessageId?: string | null;
       threading?: OmniOutboundThreading | null;
+      cc?: EmailAddress | EmailAddress[] | null;
+      bcc?: EmailAddress | EmailAddress[] | null;
     } = {},
   ): Promise<OmniOutboundResult> {
     if (!isValidEmailAddress(String(chatId))) {
@@ -290,6 +292,8 @@ export class EmailChannelAdapter implements ChannelAdapter {
       html: `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
       threading: options.threading || null,
       messageId: options.threading?.messageId || null,
+      cc: options.cc || null,
+      bcc: options.bcc || null,
     });
 
     if (!result.ok) {
@@ -309,6 +313,8 @@ export class EmailChannelAdapter implements ChannelAdapter {
     options: {
       replyToExternalMessageId?: string | null;
       threading?: OmniOutboundThreading | null;
+      cc?: EmailAddress | EmailAddress[] | null;
+      bcc?: EmailAddress | EmailAddress[] | null;
     } = {},
   ): Promise<OmniOutboundResult> {
     if (!isValidEmailAddress(String(chatId))) {
@@ -325,6 +331,8 @@ export class EmailChannelAdapter implements ChannelAdapter {
       replyTo: options.replyToExternalMessageId || null,
       threading: options.threading || null,
       messageId: options.threading?.messageId || null,
+      cc: options.cc || null,
+      bcc: options.bcc || null,
       attachments: [
         {
           filename: media.fileName,

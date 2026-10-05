@@ -53,7 +53,6 @@ import type {
   Team,
   User,
 } from "../../../entities";
-import { avatarClass } from "../../../shared/lib/utils/avatar";
 import { conversationIdOf } from "../../../shared/lib/utils/notifications";
 import { reactableTargetOf } from "../../../shared/lib/utils/reactions";
 import { roleLabel } from "../../../shared/lib/utils/roles";
@@ -62,6 +61,7 @@ import AttendanceView from "../../../features/attendance/ui/AttendanceView";
 import ManagerAttendanceView from "../../../features/attendance/ui/ManagerAttendanceView";
 import TasksView from "../../../features/tasks/ui/TasksView";
 import OmniInboxView from "../../../features/omni-inbox/ui/OmniInboxView";
+import IntegrationsView from "../../../features/integrations/ui/IntegrationsView";
 
 /** Shape used by the members panel (conversation members or user fallback). */
 type PanelMember = {
@@ -967,24 +967,15 @@ const Dashboard = () => {
                     <header className="chat-header" role="banner">
                       <div className="chat-header-info">
                         {activeConversation.type === "direct" && (
-                          <span
-                            className={`${avatarClass(activeConversation.members?.find((m) => m.id !== currentUserId)?.id)} small`}
-                            style={{ marginRight: 8 }}
-                          >
-                            {activeConversation.members?.find(
-                              (m) => m.id !== currentUserId,
-                            )?.first_name?.[0] ?? "U"}
-                            {activeConversation.members?.find(
-                              (m) => m.id !== currentUserId,
-                            )?.last_name?.[0] ?? ""}
-                            <i
-                              className={
-                                activeConversation.members?.find(
-                                  (m) => m.id !== currentUserId,
-                                )?.status || "offline"
-                              }
-                            />
-                          </span>
+                          <Avatar
+                            person={
+                              activeConversation.members?.find(
+                                (m) => m.id !== currentUserId,
+                              ) || null
+                            }
+                            className="small"
+                            showStatus
+                          />
                         )}
                         <h3>
                           {activeConversation.type === "channel" ? "# " : ""}
@@ -1211,6 +1202,8 @@ const Dashboard = () => {
               }
               onUnassignConversation={(id) => void unassignConversation(id)}
             />
+          ) : view === "integrations" ? (
+            <IntegrationsView userRole={role} />
           ) : view === "channels" ? (
             <ChannelsView
               channels={channels}

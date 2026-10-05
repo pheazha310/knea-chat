@@ -27,9 +27,20 @@ const WEBHOOK_PROVIDER_HEADER = 'x-email-provider';
 /**
  * In-flight inbound deliveries keyed by Message-ID: a provider retry racing
  * the original request must not double-persist (the DB unique key catches the
- * settled case; this catches the concurrent one).
+ * settled case; this catches the concurrent one). Entries are auto-expired
+ * after 5 minutes to prevent unbounded memory growth.
  */
-const inFlight = new Set<string>();
+const inFlight = new Map<string, number>();
+const INFLIGHT_TTL_MS = 5 * 60 * 1000;
+
+function cleanInFlight(): void {
+  const now = Date.now();
+  for (const [key, ts] of inFlight) {
+    if (now - ts > INFLIGHT_TTL_MS) inFlight.delete(key);
+  }
+}
+
+setInterval(cleanInFlight, 60_000);
 
 
 export class EmailController {
@@ -133,7 +144,8 @@ export class EmailController {
         res.sendStatus(200);
         return;
       }
-      for (const id of messageIds) inFlight.add(id);
+      const now = Date.now();
+      for (const id of messageIds) inFlight.set(id, now);
       let result: { failed?: number };
       try {
         result = await this.omniService.processInbound(CHANNEL, req.body);

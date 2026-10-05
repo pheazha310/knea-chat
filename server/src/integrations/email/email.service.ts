@@ -364,7 +364,21 @@ export class EmailService {
       return { ok: false, description: 'SMTP is not configured' };
     }
 
-    try {
+    const RETRYABLE_CODES = new Set([
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ESOCKET',
+      'ENOTFOUND',
+      'ECONNABORTED',
+      'EPIPE',
+    ]);
+    const MAX_RETRIES = 2;
+    const BASE_DELAY_MS = 500;
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
       const from =
         typeof options.from === 'string'
           ? options.from
@@ -376,17 +390,42 @@ export class EmailService {
           ? options.to
           : `${options.to.name ? `${options.to.name} <${options.to.address}>` : options.to.address}`;
 
-      if (process.env.NODE_ENV !== 'production') {
-        const recipientAddresses = extractRecipientAddresses(options.to);
-        for (const address of recipientAddresses) {
-          const domain = address.split('@')[1];
-          if (!domain) continue;
-          const hasMx = await domainHasMxRecords(domain);
-          if (!hasMx) {
-            console.warn(`[email] Recipient domain "${domain}" has no MX records — delivery may fail`);
+      const cc = options.cc
+        ? Array.isArray(options.cc)
+          ? options.cc.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ')
+          : typeof options.cc === 'string'
+            ? options.cc
+            : `${options.cc.name ? `${options.cc.name} <${options.cc.address}>` : options.cc.address}`
+        : undefined;
+
+      const bcc = options.bcc
+        ? Array.isArray(options.bcc)
+          ? options.bcc.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ')
+          : typeof options.bcc === 'string'
+            ? options.bcc
+            : `${options.bcc.name ? `${options.bcc.name} <${options.bcc.address}>` : options.bcc.address}`
+        : undefined;
+
+      const replyTo =
+        typeof options.replyTo === 'string'
+          ? options.replyTo
+          : options.replyTo?.address
+            ? options.replyTo.name
+              ? `${options.replyTo.name} <${options.replyTo.address}>`
+              : options.replyTo.address
+            : undefined;
+
+        if (process.env.NODE_ENV !== 'production') {
+          const recipientAddresses = extractRecipientAddresses(options.to);
+          for (const address of recipientAddresses) {
+            const domain = address.split('@')[1];
+            if (!domain) continue;
+            const hasMx = await domainHasMxRecords(domain);
+            if (!hasMx) {
+              console.warn(`[email] Recipient domain "${domain}" has no MX records — delivery may fail`);
+            }
           }
         }
-      }
 
       const mailOptions: SendMailOptions = {
         from,
@@ -400,41 +439,53 @@ export class EmailService {
           content: a.content,
           contentType: a.contentType,
         })),
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
+        ...(replyTo ? { replyTo } : {}),
       };
 
-      if (options.threading?.inReplyTo || options.threading?.references) {
-        // Structured threading wins when present (adapter-supplied).
-        const threading = buildThreadingHeaders(options.threading);
-        mailOptions.subject = threading.subject;
-        if (threading.inReplyTo) mailOptions.inReplyTo = threading.inReplyTo;
-        if (threading.references) mailOptions.references = threading.references;
-      } else if (options.replyTo) {
-        mailOptions.inReplyTo = options.replyTo;
-      }
-      // A caller-supplied Message-ID lets the engine record the email
-      // (status 'pending') BEFORE sending, keyed by the id the customer's
-      // reply will reference. It never touches the threading headers above.
-      if (options.messageId) {
-        mailOptions.messageId = wrapMessageId(options.messageId) || undefined;
-      }
+        if (options.threading?.inReplyTo || options.threading?.references) {
+          const threading = buildThreadingHeaders(options.threading);
+          mailOptions.subject = threading.subject;
+          if (threading.inReplyTo) mailOptions.inReplyTo = threading.inReplyTo;
+          if (threading.references) mailOptions.references = threading.references;
+        } else if (options.replyTo) {
+          mailOptions.inReplyTo = typeof options.replyTo === 'string' ? options.replyTo : options.replyTo.address;
+        }
+        if (options.messageId) {
+          mailOptions.messageId = wrapMessageId(options.messageId) || undefined;
+        }
 
-      const info: SentMessageInfo = await this.transporter.sendMail(mailOptions);
+        const info: SentMessageInfo = await this.transporter.sendMail(mailOptions);
 
-      return {
-        ok: true,
-        messageId: info.messageId,
-        accepted: info.accepted,
-        rejected: info.rejected,
-      };
-    } catch (error) {
-      // Full detail stays in the server log; the agent (and the database)
-      // only ever see the sanitized category.
-      const err = error as { code?: string; responseCode?: number; message?: string };
-      console.error(
-        `[email] SMTP send failed (code=${err.code ?? 'n/a'}, response=${err.responseCode ?? 'n/a'}): ${err.message ?? 'unknown error'}`,
-      );
-      return { ok: false, description: describeSmtpError(error) };
+        return {
+          ok: true,
+          messageId: info.messageId,
+          accepted: info.accepted,
+          rejected: info.rejected,
+        };
+      } catch (error) {
+        lastError = error;
+        const err = error as { code?: string; responseCode?: number };
+        const isRetryable = RETRYABLE_CODES.has(err.code || '') || (err.responseCode != null && err.responseCode >= 400 && err.responseCode < 500);
+        const shouldRetry = attempt < MAX_RETRIES && isRetryable;
+
+        if (shouldRetry) {
+          const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+          console.warn(`[email] SMTP send failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying in ${delay}ms):`, describeSmtpError(error));
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        console.error(
+          `[email] SMTP send failed (code=${err.code ?? 'n/a'}, response=${err.responseCode ?? 'n/a'}): ${(err as { message?: string }).message ?? 'unknown error'}`,
+        );
+        return { ok: false, description: describeSmtpError(error) };
+      }
     }
+
+    // Exhausted retries.
+    return { ok: false, description: describeSmtpError(lastError) };
   }
 
   /**
