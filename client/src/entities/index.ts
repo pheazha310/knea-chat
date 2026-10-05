@@ -12,6 +12,7 @@ export * from './company';
 export * from './company-setting';
 export * from './conversation';
 export * from './file';
+export * from './integration';
 export * from './meeting';
 export * from './message';
 export * from './notification';

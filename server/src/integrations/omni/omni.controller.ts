@@ -20,6 +20,7 @@ import path from 'path';
 import fs from 'fs';
 import type { OmniChannelService } from '../../services/OmniChannel.service';
 import { resolveUploadDir, isAllowedUpload, MAX_FILE_SIZE } from '../../utils/uploads';
+import { toClientError } from '../../utils/errors.utils';
 
 // ---------------------------------------------------------------------------
 // Outbound media upload configuration — the SAME file policy as the internal
@@ -70,7 +71,7 @@ export class OmniController {
         success: false,
         channel,
         connected: false,
-        message: (error as Error).message,
+        message: toClientError(error, 'omni:health').message,
       });
     }
   };
@@ -96,8 +97,8 @@ export class OmniController {
       const result = await this.omniService.assignAgent(conversationId, req.user!.id, agentId);
       res.status(200).json({ success: true, message: 'Conversation assigned', data: result });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'omni');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 
@@ -112,8 +113,8 @@ export class OmniController {
       const result = await this.omniService.assignAgent(conversationId, req.user!.id, null);
       res.status(200).json({ success: true, message: 'Conversation unassigned', data: result });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'omni');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 
@@ -144,8 +145,8 @@ export class OmniController {
       );
       res.status(201).json({ success: true, data: { message } });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'omni');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 
@@ -204,8 +205,8 @@ export class OmniController {
         );
         res.status(201).json({ success: true, data: { message } });
       } catch (error) {
-        const statusCode = (error as { statusCode?: number }).statusCode;
-        res.status(statusCode || 400).json({ success: false, message: (error as Error).message, errors: {} });
+        const { statusCode, message } = toClientError(error, 'omni');
+        res.status(statusCode).json({ success: false, message, errors: {} });
       } finally {
         // The service keeps its own copy under /uploads; the temp file goes.
         cleanup();
@@ -229,8 +230,8 @@ export class OmniController {
       const result = await this.omniService.setConversationStatus(conversationId, req.user!.id, status);
       res.status(200).json({ success: true, message: `Conversation ${status}`, data: result });
     } catch (error) {
-      const statusCode = (error as { statusCode?: number }).statusCode;
-      res.status(statusCode || 400).json({ success: false, message: (error as Error).message, errors: {} });
+      const { statusCode, message } = toClientError(error, 'omni');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 }

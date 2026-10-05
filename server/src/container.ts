@@ -43,6 +43,8 @@ import { NotificationPreferenceRepository } from './repositories/notificationPre
 import { TaskRepository } from './repositories/taskRepository';
 import { GlobalSearchRepository } from './repositories/globalSearchRepository';
 import { ExternalContactRepository } from './repositories/externalContactRepository';
+import { EmailMessageRepository } from './repositories/emailMessageRepository';
+import { IntegrationConfigRepository } from './repositories/integrationConfigRepository';
 
 // Services
 import { AuthService } from './services/Auth.service';
@@ -73,6 +75,7 @@ import { HolidayService } from './services/Holiday.service';
 import { NotificationPreferenceService } from './services/NotificationPreference.service';
 import { TaskService } from './services/Task.service';
 import { OmniChannelService } from './services/OmniChannel.service';
+import { IntegrationConfigService } from './services/IntegrationConfig.service';
 
 // Controllers
 import { AuthController } from './controllers/auth.controller';
@@ -93,6 +96,7 @@ import { DepartmentController } from './controllers/department.controller';
 import { AnnouncementController } from './controllers/announcement.controller';
 import { ReminderController } from './controllers/reminder.controller';
 import { BookmarkController } from './controllers/bookmark.controller';
+import { IntegrationConfigController } from './controllers/integrationConfig.controller';
 import { SharedFileController } from './controllers/sharedFile.controller';
 import { MeetingController } from './controllers/meeting.controller';
 import { AttendanceController } from './controllers/attendance.controller';
@@ -163,6 +167,8 @@ const notificationPreferenceRepository = new NotificationPreferenceRepository(db
 const taskRepository = new TaskRepository(db);
 const globalSearchRepository = new GlobalSearchRepository(db);
 const externalContactRepository = new ExternalContactRepository(db);
+const emailMessageRepository = new EmailMessageRepository(db);
+const integrationConfigRepository = new IntegrationConfigRepository(db);
 
 // ---------------------------------------------------------------------------
 // Services (receive their repositories)
@@ -377,11 +383,18 @@ const omniService = new OmniChannelService(
   messageRepository,
   messageService,
   broadcastToConversation,
+  emailMessageRepository,
 );
 const telegramController = new TelegramController(omniService);
 const websiteController = new WebsiteController(omniService);
 const emailController = new EmailController(omniService, emailAdapter);
 const omniController = new OmniController(omniService);
+
+const integrationConfigService = new IntegrationConfigService(
+  integrationConfigRepository,
+  channelRegistry,
+);
+const integrationConfigController = new IntegrationConfigController(integrationConfigService);
 
 // ---------------------------------------------------------------------------
 // Middleware (bound to the settings service for maintenance-mode checks and
@@ -427,6 +440,7 @@ export const container = {
   taskRepository,
   globalSearchRepository,
   externalContactRepository,
+  integrationConfigRepository,
   // services
   systemSettingService,
   auditLogService,
@@ -458,13 +472,7 @@ export const container = {
   omniService,
   channelRegistry,
   emailService,
-  // websocket
-  broadcastToConversation,
-  messageHandler,
-  typingHandler,
-  presenceHandler,
-  callHandler,
-  chatWebSocketServer,
+  integrationConfigService,
   // controllers
   authController,
   auditLogController,
@@ -496,6 +504,14 @@ export const container = {
   websiteController,
   emailController,
   omniController,
+  integrationConfigController,
+  // websocket
+  broadcastToConversation,
+  messageHandler,
+  typingHandler,
+  presenceHandler,
+  callHandler,
+  chatWebSocketServer,
   attendanceEventPublisher,
   // middleware
   auth,

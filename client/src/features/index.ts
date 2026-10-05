@@ -10,6 +10,7 @@ export * from './calls';
 export * from './channels';
 export * from './chat';
 export * from './files';
+export * from './integrations';
 export * from './meetings';
 export * from './notifications';
 export * from './omni-inbox';

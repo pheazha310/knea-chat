@@ -48,7 +48,12 @@ export interface Message {
   status?: PresenceStatus;
   reactions?: Reaction[];
   attachments?: Attachment[];
+  /** Outbound email delivery state; null/absent for every other message. */
+  delivery_status?: DeliveryStatus | null;
 }
+
+/** Outbound email lifecycle (server email_messages.delivery_status). */
+export type DeliveryStatus = "pending" | "sent" | "failed";
 
 /**
  * WebSocket-serialized message shape (server/src/websocket/message.utils.js).
@@ -72,6 +77,7 @@ export interface WsMessage {
   isPinned?: boolean;
   mentionedUserIds?: number[];
   deletedAt?: string | null;
+  deliveryStatus?: DeliveryStatus | null;
 }
 
 /**

@@ -43,6 +43,12 @@ const TABLES = [
   'announcements',
   'attachments',
   'message_reactions',
+  // omni-channel ledger (migrations 024/027/031) — reference messages,
+  // conversations and users, so they drop before them.
+  'email_messages',
+  'external_messages',
+  'external_conversations',
+  'external_contacts',
   'messages',
   'conversation_members',
   'conversations',
@@ -77,6 +83,7 @@ const TABLES = [
   'work_schedules',
   'leave_requests',
   'holidays',
+  'integration_configs',
   'users',
   'departments',
   'companies',
@@ -1207,6 +1214,72 @@ async function applyMigrations(admin) {
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
     );
     console.log('🎫 Created external_messages table (migration 027).');
+  }
+
+  // Migration 031: email_messages — one row per inbound/outbound email with
+  // its RFC 5322 threading headers as indexed columns (Message-IDs normalized:
+  // lower-case, no <>) plus outbound delivery status. The one-time backfill
+  // from external_messages runs only when the table is first created.
+  const [emailMessageTables] = await admin.query(
+    `SELECT COUNT(*) AS count FROM information_schema.tables
+     WHERE table_schema = ? AND table_name = 'email_messages'`,
+    [DB_NAME],
+  );
+  if (emailMessageTables[0].count === 0) {
+    await admin.query(
+      `USE \`${DB_NAME}\`; CREATE TABLE email_messages (
+        id BIGINT UNSIGNED PRIMARY KEY AUTO_INCREMENT,
+        message_id BIGINT UNSIGNED NOT NULL,
+        conversation_id BIGINT UNSIGNED NOT NULL,
+        direction ENUM('inbound','outbound') NOT NULL,
+        rfc_message_id VARCHAR(191) NULL COMMENT 'Normalized Message-ID (NULL only when the sender omitted it)',
+        in_reply_to VARCHAR(191) NULL COMMENT 'Normalized In-Reply-To (direct parent)',
+        references_ids TEXT NULL COMMENT 'Normalized References, space-separated, oldest first',
+        subject VARCHAR(998) NULL,
+        from_address VARCHAR(255) NULL,
+        to_address VARCHAR(255) NULL,
+        delivery_status ENUM('pending','sent','failed') NULL COMMENT 'Outbound only, NULL for inbound',
+        delivery_error VARCHAR(255) NULL COMMENT 'Sanitized provider error when delivery_status = failed',
+        created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_email_messages_message (message_id),
+        UNIQUE KEY uq_email_messages_rfc_id (rfc_message_id),
+        INDEX idx_email_messages_conversation (conversation_id, id),
+        FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE,
+        FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;`,
+    );
+    // Outbound ledger rows were only written after SMTP accepted them, so they
+    // backfill as 'sent'. INSERT IGNORE skips duplicate Message-IDs.
+    await admin.query(
+      `USE \`${DB_NAME}\`; INSERT IGNORE INTO email_messages
+        (message_id, conversation_id, direction, rfc_message_id, in_reply_to,
+         references_ids, subject, from_address, to_address, delivery_status, created_at)
+      SELECT
+        em.message_id,
+        em.conversation_id,
+        em.direction,
+        NULLIF(LOWER(TRIM(BOTH '>' FROM TRIM(BOTH '<' FROM TRIM(em.external_message_id)))), ''),
+        NULLIF(LOWER(TRIM(BOTH '>' FROM TRIM(BOTH '<' FROM TRIM(
+          JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.inReplyTo')))))), 'null'),
+        NULLIF(LOWER(REPLACE(REPLACE(TRIM(
+          JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.references'))), '<', ''), '>', '')), 'null'),
+        JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.subject')),
+        CASE WHEN em.direction = 'inbound'
+          THEN LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.from')), '<', -1), '>', 1))
+        END,
+        CASE WHEN em.direction = 'inbound'
+          THEN LOWER(SUBSTRING_INDEX(SUBSTRING_INDEX(JSON_UNQUOTE(JSON_EXTRACT(em.metadata, '$.email.to')), '<', -1), '>', 1))
+          ELSE ct.email_address
+        END,
+        CASE WHEN em.direction = 'outbound' THEN 'sent' END,
+        em.created_at
+      FROM external_messages em
+      LEFT JOIN external_conversations ec ON ec.conversation_id = em.conversation_id AND ec.channel = 'email'
+      LEFT JOIN external_contacts ct ON ct.id = ec.contact_id
+      WHERE em.channel = 'email';`,
+    );
+    console.log('📧 Created email_messages table (migration 031).');
   }
 
   // Migration 028: omni-channel delivery health — per-conversation delivery

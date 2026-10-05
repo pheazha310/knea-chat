@@ -22,10 +22,13 @@ import type {
   EmailWebhookPayload,
   EmailHealthInfo,
 } from './email.types';
+import { buildSmtpTransportOptions, getSenderConfig } from '../../config/email.config';
+
+// Re-exported so existing imports (tests, scripts) keep working.
+export { buildSmtpTransportOptions } from '../../config/email.config';
+export type { SmtpTransportOptions } from '../../config/email.config';
 
 const getWebhookSecret = (): string => process.env.EMAIL_WEBHOOK_SECRET || '';
-const EMAIL_FROM_ADDRESS = process.env.EMAIL_FROM || 'noreply@kneachat.com';
-const EMAIL_FROM_NAME = process.env.EMAIL_FROM_NAME || 'KneaChat';
 
 /**
  * Email threading (RFC 5322) — derive the outbound reply headers from the
@@ -56,6 +59,16 @@ export function normalizeMessageId(messageId: string | null | undefined): string
     ? trimmed.slice(1, -1)
     : trimmed;
   return unwrapped.trim().toLowerCase() || null;
+}
+
+/**
+ * A fresh, normalized RFC 5322 Message-ID (`<uuid>@<from-domain>`, no `<>`)
+ * for an outbound email. Generated before sending so the email can be stored
+ * as 'pending' under the exact id the customer's reply will reference.
+ */
+export function generateMessageId(): string {
+  const domain = getSenderConfig().address.split('@')[1]?.trim() || 'kneachat.local';
+  return `${crypto.randomUUID()}@${domain}`.toLowerCase();
 }
 
 export function buildReferencesHeader(
@@ -90,7 +103,8 @@ export function buildThreadingHeaders(threading: EmailSendOptions['threading']):
 }
 
 export function getFromAddress(): EmailAddress {
-  return { name: EMAIL_FROM_NAME || undefined, address: EMAIL_FROM_ADDRESS };
+  const sender = getSenderConfig();
+  return { name: sender.name || undefined, address: sender.address };
 }
 
 /** Minimal HTML sanitizer: strips script tags, event handlers, and dangerous protocols. */
@@ -260,24 +274,49 @@ export interface ResendAttachmentDownload {
   buffer: Buffer;
 }
 
+/**
+ * Map a Nodemailer/SMTP error to a short, agent-safe reason. Raw SMTP
+ * responses can carry server hostnames, internal ids or account details, so
+ * they are logged server-side only and never stored or shown to agents.
+ */
+export function describeSmtpError(error: unknown): string {
+  const err = (error || {}) as { code?: string; responseCode?: number };
+  switch (err.code) {
+    case 'EAUTH':
+    case 'ENOAUTH':
+      return 'Email server rejected the login (check SMTP credentials)';
+    case 'ETIMEDOUT':
+      return 'Email server timed out';
+    case 'ECONNECTION':
+    case 'ESOCKET':
+    case 'EDNS':
+    case 'ECONNREFUSED':
+      return 'Could not connect to the email server';
+    case 'EENVELOPE':
+      return 'Recipient address was rejected';
+    default:
+      break;
+  }
+  if (err.responseCode && err.responseCode >= 550 && err.responseCode <= 553) {
+    return 'Recipient address was rejected';
+  }
+  if (err.responseCode && err.responseCode >= 400) {
+    return 'Email provider rejected the message';
+  }
+  return 'Email delivery failed';
+}
+
 export class EmailService {
   private transporter: Transporter | null = null;
   private configured = false;
 
   constructor() {
-    const host = process.env.EMAIL_SMTP_HOST;
-    const port = parseInt(process.env.EMAIL_SMTP_PORT || '587', 10);
-    const user = process.env.EMAIL_SMTP_USER;
-    const pass = process.env.EMAIL_SMTP_PASS;
-    const secure = process.env.EMAIL_SMTP_SECURE === 'true';
-
-    if (host && user && pass) {
-      this.transporter = nodemailer.createTransport({
-        host,
-        port,
-        secure,
-        auth: { user, pass },
-      });
+    const options = buildSmtpTransportOptions(process.env);
+    if (options) {
+      if (!options.auth && process.env.NODE_ENV === 'production') {
+        console.warn('[email] EMAIL_SMTP_HOST is set without EMAIL_SMTP_USER/EMAIL_SMTP_PASS — sending unauthenticated (expected only for local catchers like Mailpit)');
+      }
+      this.transporter = nodemailer.createTransport(options);
       this.configured = true;
     }
   }
@@ -287,7 +326,8 @@ export class EmailService {
   }
 
   getFromAddress(): EmailAddress {
-    return { name: EMAIL_FROM_NAME || undefined, address: EMAIL_FROM_ADDRESS };
+    const sender = getSenderConfig();
+    return { name: sender.name || undefined, address: sender.address };
   }
 
   sanitizeHtml(html: string): string {
@@ -324,7 +364,21 @@ export class EmailService {
       return { ok: false, description: 'SMTP is not configured' };
     }
 
-    try {
+    const RETRYABLE_CODES = new Set([
+      'ETIMEDOUT',
+      'ECONNREFUSED',
+      'ECONNRESET',
+      'ESOCKET',
+      'ENOTFOUND',
+      'ECONNABORTED',
+      'EPIPE',
+    ]);
+    const MAX_RETRIES = 2;
+    const BASE_DELAY_MS = 500;
+
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
       const from =
         typeof options.from === 'string'
           ? options.from
@@ -336,17 +390,42 @@ export class EmailService {
           ? options.to
           : `${options.to.name ? `${options.to.name} <${options.to.address}>` : options.to.address}`;
 
-      if (process.env.NODE_ENV !== 'production') {
-        const recipientAddresses = extractRecipientAddresses(options.to);
-        for (const address of recipientAddresses) {
-          const domain = address.split('@')[1];
-          if (!domain) continue;
-          const hasMx = await domainHasMxRecords(domain);
-          if (!hasMx) {
-            console.warn(`[email] Recipient domain "${domain}" has no MX records — delivery may fail`);
+      const cc = options.cc
+        ? Array.isArray(options.cc)
+          ? options.cc.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ')
+          : typeof options.cc === 'string'
+            ? options.cc
+            : `${options.cc.name ? `${options.cc.name} <${options.cc.address}>` : options.cc.address}`
+        : undefined;
+
+      const bcc = options.bcc
+        ? Array.isArray(options.bcc)
+          ? options.bcc.map((a) => (a.name ? `${a.name} <${a.address}>` : a.address)).join(', ')
+          : typeof options.bcc === 'string'
+            ? options.bcc
+            : `${options.bcc.name ? `${options.bcc.name} <${options.bcc.address}>` : options.bcc.address}`
+        : undefined;
+
+      const replyTo =
+        typeof options.replyTo === 'string'
+          ? options.replyTo
+          : options.replyTo?.address
+            ? options.replyTo.name
+              ? `${options.replyTo.name} <${options.replyTo.address}>`
+              : options.replyTo.address
+            : undefined;
+
+        if (process.env.NODE_ENV !== 'production') {
+          const recipientAddresses = extractRecipientAddresses(options.to);
+          for (const address of recipientAddresses) {
+            const domain = address.split('@')[1];
+            if (!domain) continue;
+            const hasMx = await domainHasMxRecords(domain);
+            if (!hasMx) {
+              console.warn(`[email] Recipient domain "${domain}" has no MX records — delivery may fail`);
+            }
           }
         }
-      }
 
       const mailOptions: SendMailOptions = {
         from,
@@ -360,34 +439,53 @@ export class EmailService {
           content: a.content,
           contentType: a.contentType,
         })),
+        ...(cc ? { cc } : {}),
+        ...(bcc ? { bcc } : {}),
+        ...(replyTo ? { replyTo } : {}),
       };
 
-      if (options.threading?.inReplyTo || options.threading?.references) {
-        // Structured threading wins when present (adapter-supplied).
-        const threading = buildThreadingHeaders(options.threading);
-        mailOptions.subject = threading.subject;
-        if (threading.inReplyTo) mailOptions.inReplyTo = threading.inReplyTo;
-        if (threading.references) mailOptions.references = threading.references;
-      } else if (options.replyTo) {
-        mailOptions.inReplyTo = options.replyTo;
-      }
-      if (options.messageId) {
-        mailOptions.references = options.references || options.messageId;
-        mailOptions.messageId = options.messageId;
-      }
+        if (options.threading?.inReplyTo || options.threading?.references) {
+          const threading = buildThreadingHeaders(options.threading);
+          mailOptions.subject = threading.subject;
+          if (threading.inReplyTo) mailOptions.inReplyTo = threading.inReplyTo;
+          if (threading.references) mailOptions.references = threading.references;
+        } else if (options.replyTo) {
+          mailOptions.inReplyTo = typeof options.replyTo === 'string' ? options.replyTo : options.replyTo.address;
+        }
+        if (options.messageId) {
+          mailOptions.messageId = wrapMessageId(options.messageId) || undefined;
+        }
 
-      const info: SentMessageInfo = await this.transporter.sendMail(mailOptions);
+        const info: SentMessageInfo = await this.transporter.sendMail(mailOptions);
 
-      return {
-        ok: true,
-        messageId: info.messageId,
-        accepted: info.accepted,
-        rejected: info.rejected,
-      };
-    } catch (error) {
-      const description = error instanceof Error ? error.message : 'SMTP delivery failed';
-      return { ok: false, description };
+        return {
+          ok: true,
+          messageId: info.messageId,
+          accepted: info.accepted,
+          rejected: info.rejected,
+        };
+      } catch (error) {
+        lastError = error;
+        const err = error as { code?: string; responseCode?: number };
+        const isRetryable = RETRYABLE_CODES.has(err.code || '') || (err.responseCode != null && err.responseCode >= 400 && err.responseCode < 500);
+        const shouldRetry = attempt < MAX_RETRIES && isRetryable;
+
+        if (shouldRetry) {
+          const delay = BASE_DELAY_MS * Math.pow(2, attempt);
+          console.warn(`[email] SMTP send failed (attempt ${attempt + 1}/${MAX_RETRIES + 1}, retrying in ${delay}ms):`, describeSmtpError(error));
+          await new Promise((r) => setTimeout(r, delay));
+          continue;
+        }
+
+        console.error(
+          `[email] SMTP send failed (code=${err.code ?? 'n/a'}, response=${err.responseCode ?? 'n/a'}): ${(err as { message?: string }).message ?? 'unknown error'}`,
+        );
+        return { ok: false, description: describeSmtpError(error) };
+      }
     }
+
+    // Exhausted retries.
+    return { ok: false, description: describeSmtpError(lastError) };
   }
 
   /**
@@ -586,8 +684,9 @@ export class EmailService {
   verifyWebhookSignature(payload: unknown, headers: EmailWebhookHeaders): boolean {
     const secret = getWebhookSecret();
     if (!secret) {
-      console.warn('[email] EMAIL_WEBHOOK_SECRET is not set — webhook is unprotected');
-      return true;
+      // Fail closed: without a secret nothing can be verified.
+      console.warn('[email] Webhook rejected: EMAIL_WEBHOOK_SECRET is not set');
+      return false;
     }    const provider = (headers.provider || '').toLowerCase();
 
     // SendGrid: X-Twilio-Email-Event-Webhook-Signature + X-Twilio-Email-Event-Webhook-Timestamp
@@ -825,7 +924,7 @@ export class EmailService {
       configured: this.configured,
       provider: process.env.EMAIL_SERVICE || 'smtp',
       smtpConnected,
-      from: EMAIL_FROM_ADDRESS,
+      from: getSenderConfig().address,
     };
   }
 }

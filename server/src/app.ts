@@ -40,6 +40,8 @@ import { createTelegramRouter } from './integrations/telegram/telegram.routes';
 import { createEmailRouter } from './integrations/email/email.routes';
 import { createWebsiteRouter } from './integrations/website/website.routes';
 import { createOmniRouter } from './integrations/omni/omni.routes';
+import { createIntegrationConfigRouter } from './routes/integrationConfig.routes';
+import { agentSendLimiter, webhookLimiter } from './middleware/rateLimit.middleware';
 
 export const app = express();
 
@@ -70,6 +72,10 @@ app.use(
   }),
 );
 
+// Both email webhook paths (the original and the /api/webhooks alias) need
+// the raw body for signature verification.
+const EMAIL_WEBHOOK_PATHS = new Set(['/api/email/webhook', '/api/webhooks/email']);
+
 // Body parsing
 // The verify callback captures the exact raw bytes for the email webhook —
 // Svix (Resend) signatures are computed over the raw body, which JSON
@@ -78,7 +84,8 @@ app.use(
   express.json({
     limit: '10mb',
     verify: (req, _res, buf, encoding) => {
-      if ((req as RawBodyRequest).originalUrl === '/api/email/webhook') {
+      const urlPath = ((req as RawBodyRequest).originalUrl || '').split('?')[0];
+      if (EMAIL_WEBHOOK_PATHS.has(urlPath)) {
         (req as RawBodyRequest).rawBody = buf.toString((encoding as BufferEncoding) || 'utf8');
       }
     },
@@ -113,6 +120,12 @@ app.get('/api/health', (req, res) => {
 // per-channel health probes. Channel webhooks are mounted by each channel's
 // own router (see the Website and Telegram sections below) so every webhook
 // keeps its provider-specific secret validation.
+// Email routes under the documented omni names (aliases of the handlers in the
+// EMAIL section below — same auth, validation, rate limits and responses).
+app.post('/api/omni/email/send', container.auth.authenticate, agentSendLimiter, container.emailController.sendMessage);
+app.get('/api/omni/conversations/:id/messages', container.auth.authenticate, container.conversationController.getMessages);
+app.post('/api/webhooks/email', webhookLimiter, container.emailController.webhook);
+
 app.use('/api/omni', createOmniRouter(container.omniController, container.auth));
 
 // ============ WEBSITE (Omni-Channel) ==========
@@ -130,6 +143,10 @@ app.use('/api/telegram', createTelegramRouter(container.telegramController, cont
 // The webhook + health routes are public (email provider calls the webhook);
 // the reply and webhook-administration routes apply their own auth inside the router.
 app.use('/api/email', createEmailRouter(container.emailController, container.auth));
+
+// ============ INTEGRATIONS ==========
+// Per-company integration management (admin only for mutation).
+app.use('/api/integrations', createIntegrationConfigRouter(container.integrationConfigController, container.auth));
 
 // ============ PROTECTED ROUTES (Authentication Required) ============
 // All routes below require authentication

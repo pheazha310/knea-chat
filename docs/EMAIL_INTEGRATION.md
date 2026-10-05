@@ -30,25 +30,33 @@ Customer email ─▶ Email provider (Mailgun/SendGrid/SES/Postmark)
             │                             chain → NEW conversation per subject;
             │                             no headers → contact's latest thread
             ├─ createInboundMessage()     messages row + external ledger
-            └─ broadcast                  'receive_message' + notification
+            └─ broadcast                  'email.message.received' + notification
                     ▼
         Agents see it in the Omni Inbox in real time (WebSocket)
 
 Agent reply (composer in the Messages view):
         POST /api/omni/conversations/:id/messages
                     ▼
-        OmniChannelService.sendAgentReply()
-            ├─ resolveEmailThreading()    subject + Message-ID chain from the
-            │                             customer's last inbound email
-            ├─ adapter.sendMessage()      SMTP delivery FIRST
-            └─ persist only on success    deliver-then-persist
+        OmniChannelService.sendAgentReply() → sendEmailWithStatus()
+            ├─ resolveEmailThreading()    thread parent from email_messages:
+            │                             In-Reply-To = parent Message-ID,
+            │                             References = parent chain + parent
+            ├─ generateMessageId()        our Message-ID, known before sending
+            ├─ persist as 'pending'       messages + external + email_messages
+            ├─ adapter.sendMessage()      SMTP with that exact Message-ID
+            └─ 'sent' on SMTP accept,     'failed' + sanitized reason → the
+               otherwise ─────────────▶   bubble shows "Not delivered", 502
 ```
 
 Key properties:
 
-- **Deliver-then-persist** — outbound messages are stored only after the SMTP
-  provider accepts them, so the inbox never shows replies the customer never
-  got (mirrors the Telegram regression guard).
+- **Pending → sent | failed** — an email reply is stored as `pending` before
+  the SMTP call and becomes `sent` only after the SMTP server accepts it. A
+  rejected send stays in the conversation as `failed` with a sanitized reason
+  ("Recipient address was rejected", "Email server timed out", …) and is
+  rendered as **Not delivered**, so agents never mistake it for a delivered
+  reply. Raw SMTP errors are logged server-side only. (Telegram keeps
+  deliver-then-persist.)
 - **One identity per address** — `external_contacts.email_address` (migration
   029) is unique, so a customer keeps the same contact across threads.
 - **One conversation per email thread** — a reply (any `In-Reply-To` /
@@ -59,6 +67,12 @@ Key properties:
   plain index). Agent replies inherit the right thread automatically because
   outbound threading headers are derived from the conversation's own ledger
   (`resolveEmailThreading`).
+- **Never acknowledge a lost email** — the webhook answers `200` only when
+  every message was saved (or was a duplicate). A save failure (e.g. MySQL
+  down) or an unexpected error answers `500`, so the provider re-delivers
+  later. Known gap: the save is not one transaction, so a failure *between*
+  the `messages` insert and the ledger insert can leave a duplicate bubble
+  after the retry.
 - **Dedupe** — webhook retries are collapsed by the
   `(channel, external_message_id)` unique key plus an in-flight guard.
 - **Sanitized** — inbound HTML is stripped of scripts/handlers before storage.
@@ -104,6 +118,46 @@ messages.
 
 Reference copy: `server/.env.example`.
 
+## WebSocket: `email.message.received`
+
+When a customer email is saved, every member of that conversation receives
+exactly one event:
+
+```json
+{
+  "type": "email.message.received",
+  "channel": "email",
+  "conversationId": 148,
+  "message": { "id": 1652, "conversationId": 148, "content": "Where is my order?", "deliveryStatus": null, "...": "..." },
+  "email": { "subject": "Order #42", "from": "customer@gmail.com" }
+}
+```
+
+In React, `client/src/app/stores/wsListeners.ts` routes this event and the
+generic `receive_message` (Telegram, agent replies) into the same
+`receiveMessage()` step: `chatStore.addMessage(conversationId, message)` puts
+it in the right conversation, a customer's first email triggers
+`refreshConversations()` so the new thread appears in the list, and an
+already-open conversation is marked read. The event is typed in
+`client/src/shared/lib/websocket.ts` (`WsEventMap`).
+
+## Security
+
+| Control | Where | Behaviour |
+|---------|-------|-----------|
+| Webhook verification | `email.controller.ts` | Fails **closed**: no `EMAIL_WEBHOOK_SECRET` / `EMAIL_RESEND_WEBHOOK_SECRET` → `503`, nothing stored (the provider retries once fixed). Bad signature → `401`. `EMAIL_WEBHOOK_ALLOW_UNSIGNED=true` skips verification for local curl tests, never in production. |
+| Webhook rate limit | `webhookLimiter` | 120 requests/min per source IP → `429` (providers retry later). |
+| Send rate limit | `agentSendLimiter` | 30 replies/min **per agent**, shared by `/api/omni/.../messages`, `/media` and `/api/email/messages`. |
+| Authentication | `auth.authenticate` | Every send/assign route requires a valid session. |
+| Authorization | `resolveExternalConversation()` | The agent must be a member of the external conversation; the recipient address is read from the database, never from the request. |
+| Input validation | controller + service | Conversation id must be a positive number; reply text required, max 20,000 characters. |
+| Error sanitization | `toClientError()`, `describeSmtpError()` | Unexpected errors → generic `500` (details only in the server log); SMTP failures → short categories such as "Recipient address was rejected". |
+| Credentials | `server/.env` | SMTP / webhook secrets stay server-side; React only talks to the REST API. |
+
+Behind a tunnel or reverse proxy every webhook request arrives from the proxy's
+IP (Express `trust proxy` is not enabled), so the webhook limit effectively
+applies to all inbound traffic together.
+
 ## Database
 
 Migration `029_email_omni_channel.sql` adds `external_contacts.email_address`
@@ -113,11 +167,24 @@ Migration `029_email_omni_channel.sql` adds `external_contacts.email_address`
 cd server && npm run db:init   # idempotent; prints "Added email_address ..." when applied
 ```
 
-No other schema changes — threading metadata lives in
-`external_messages.metadata` JSON. Migration 030 (applied by the same
-`npm run db:init`) converts `external_conversations`' unique
-`(contact_id, channel)` key into a plain index, allowing several
-conversations per contact — one per email thread.
+Migration 030 (applied by the same `npm run db:init`) converts
+`external_conversations`' unique `(contact_id, channel)` key into a plain
+index, allowing several conversations per contact — one per email thread.
+
+Migration 031 adds `email_messages`: one row per inbound **and** outbound
+email with its threading headers as indexed columns (`rfc_message_id`,
+`in_reply_to`, `references_ids`, all normalized lower-case without `<>`) and
+the outbound `delivery_status` (`pending` → `sent` | `failed`). It backfills
+existing email rows from `external_messages` once, when the table is created.
+
+```text
+customer@gmail.com
+  → external_contacts       (channel='email', email_address unique)
+  → external_conversations  (one per email thread) → conversations
+  → messages                (the chat bubble the inbox shows)
+     ├─ external_messages   (channel-agnostic ledger, webhook dedupe)
+     └─ email_messages      (Message-ID / In-Reply-To / References, status)
+```
 
 ---
 
@@ -166,6 +233,38 @@ curl http://localhost:8080/api/email/health
 - `configured: true` — SMTP env vars present.
 - `smtpConnected: true` — a live SMTP handshake succeeded (outbound works).
   Inbound never needs SMTP.
+
+### Testing outbound replies with Mailpit
+
+[Mailpit](https://mailpit.axllent.org/) is a fake SMTP server that **catches**
+every email and shows it in a web UI. Nothing is delivered to a real inbox, so
+it proves that Nodemailer built the right message — not that Gmail/Resend would
+accept or deliver it (SPF/DKIM, spam filtering, and provider limits are not
+exercised). It is outbound-only: Mailpit never calls `/api/email/webhook`.
+
+```text
+Agent reply → EmailService (Nodemailer) → Mailpit SMTP :1025 → Mailpit UI :8025
+```
+
+1. Start it (Docker): `cd server && npm run mailpit`
+2. Point SMTP at it in `server/.env`, then restart the backend:
+
+   | Variable | Value | Why |
+   |----------|-------|-----|
+   | `EMAIL_SMTP_HOST` | `localhost` | Mailpit runs on your machine |
+   | `EMAIL_SMTP_PORT` | `1025` | Mailpit's SMTP port |
+   | `EMAIL_SMTP_SECURE` | `false` | Plain SMTP — no TLS locally |
+   | `EMAIL_SMTP_USER` / `EMAIL_SMTP_PASS` | *(empty)* | Mailpit needs no login; credentials are only sent when **both** are set |
+
+3. `curl http://localhost:8080/api/email/health` → `smtpConnected: true`.
+4. Reply to an email conversation from the Omni Inbox, then open
+   <http://localhost:8025>. Check the **Headers** tab: `Subject` has `Re:`,
+   and `In-Reply-To` / `References` hold the customer's Message-IDs.
+
+Common errors: `ECONNREFUSED 127.0.0.1:1025` → Mailpit is not running;
+`SMTP is not configured` → `EMAIL_SMTP_HOST` is empty or the server was not
+restarted after editing `.env`; port already allocated → another Mailpit is
+running (`docker stop kneachat-mailpit`).
 
 ---
 
@@ -375,9 +474,12 @@ inbox E2E) on every push/PR to `main` (manual trigger included).
 
 | Method | Path | Auth | Purpose |
 |--------|------|------|---------|
-| `POST` | `/api/email/webhook` | signature | Provider inbound delivery (public) |
+| `POST` | `/api/omni/email/send` | agent | Reply on an email conversation — body `{ conversationId, text, replyToMessageId? }` (validated by `email.validator.ts`; the recipient comes from the stored contact, never the body) |
+| `GET` | `/api/omni/conversations/:id/messages` | conversation member | Conversation history, each message with `delivery_status` (`?page=&limit=`) |
+| `POST` | `/api/webhooks/email` | signature | Provider inbound delivery (public) |
+| `POST` | `/api/email/webhook` | signature | Same handler as `/api/webhooks/email` (original path) |
 | `GET` | `/api/email/health` | none | Channel health (`configured` + SMTP reachability) |
-| `POST` | `/api/email/messages` | agent | Reply on an email conversation (conversation-scoped) |
+| `POST` | `/api/email/messages` | agent | Same handler as `/api/omni/email/send` (original path) |
 | `POST/DELETE` | `/api/email/conversations/:id/assign` | inbox member | Claim/unclaim |
 | `POST` | `/api/email/setup-webhook` | admin+ | Echoes the webhook URL to configure at the provider |
 | `GET` | `/api/email/webhook-info` | admin+ | Webhook configuration info |
@@ -386,11 +488,35 @@ inbox E2E) on every push/PR to `main` (manual trigger included).
 Channel-agnostic inbox actions also work on email conversations:
 `POST/PATCH /api/omni/conversations/:id/{assign,status,messages,media}`
 (see `server/src/integrations/omni/omni.routes.ts`). The UI composer uses the
-shared `/api/omni/...` reply route.
+shared `/api/omni/conversations/:id/messages` reply route.
+
+Responses: `201 { success, message, data: { message } }` on send (the message
+carries `delivery_status: 'sent'`); `400 { errors: { field: reason } }` for
+validation; `401` without a session; `429` over the send limit; `502` when
+the email could not be delivered (the message is kept as `failed`); `500`
+with a generic message for unexpected errors (details only in the server log).
 
 ---
 
 ## Testing
+
+### Full loop with Mailpit (`npm run test:e2e:mailpit`)
+
+`server/e2e/email-mailpit.e2e.js` drives the complete flow against a running
+backend whose SMTP points at Mailpit (see "Testing outbound replies with
+Mailpit"), with `EMAIL_INBOUND_ENABLED=true` and `EMAIL_WEBHOOK_SECRET` set:
+
+1. signed customer email → `POST /api/webhooks/email` → `email.message.received` over WebSocket
+2. `GET /api/omni/conversations/:id/messages` shows it
+3. `POST /api/omni/email/send` → `delivery_status: 'sent'`; Mailpit's copy has
+   `Subject: Re: …`, `In-Reply-To` / `References` = the customer's Message-ID
+4. the customer answers the **agent's** email with a different subject → same conversation
+5. unsigned webhook → `401`; client-supplied recipient → `400`
+
+It removes its customer, conversations and Mailpit messages afterwards
+(`--keep` leaves them). To see the failure path, stop Mailpit and reply from
+the inbox: the API answers `502 Could not connect to the email server` and the
+bubble shows **Not delivered**.
 
 ```bash
 # Unit tests (parsing, threading, signatures, sanitization)

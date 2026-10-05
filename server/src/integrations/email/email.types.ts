@@ -27,10 +27,12 @@ export interface EmailSendOptions {
     content: Buffer;
     contentType?: string;
   }>;
-  replyTo?: string | null;
+  replyTo?: EmailAddress | string | null;
   messageId?: string | null;
   inReplyTo?: string | null;
   references?: string | null;
+  cc?: EmailAddress | EmailAddress[] | null;
+  bcc?: EmailAddress | EmailAddress[] | null;
   /**
    * Structured email threading (RFC 5322): the adapter derives these from the
    * inbound message so replies thread correctly in the customer's mail

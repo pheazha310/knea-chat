@@ -43,6 +43,10 @@ const isEdited = (m: ChatMessage) => {
 const isPinned = (m: ChatMessage) =>
   !!asMessage(m).is_pinned || !!asWs(m).isPinned;
 
+/** Outbound email delivery state (REST snake_case or WS camelCase). */
+const deliveryStatusOf = (m: ChatMessage) =>
+  asMessage(m).delivery_status ?? asWs(m).deliveryStatus ?? null;
+
 const forwardedOf = (m: ChatMessage) =>
   asMessage(m).forwarded_from ?? asWs(m).forwardedFrom ?? null;
 
@@ -576,6 +580,17 @@ const MessageList = ({
                     <span>
                       <b>File attachment</b>
                     </span>
+                  </div>
+                )}
+                {deliveryStatusOf(message) === "failed" && (
+                  <div className="delivery-status failed" role="status">
+                    <Icon name="alert" size={11} /> Not delivered — the
+                    customer did not receive this email
+                  </div>
+                )}
+                {deliveryStatusOf(message) === "pending" && (
+                  <div className="delivery-status pending" role="status">
+                    <Icon name="clock" size={11} /> Sending…
                   </div>
                 )}
                 {reactions.length > 0 && (

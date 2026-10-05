@@ -24,9 +24,11 @@ export class MessageRepository {
     // Older pages return progressively older history for infinite scroll.
     return this.db.query<MessageRow[]>(
       `SELECT * FROM (
-         SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture
+         SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture,
+                em.delivery_status
          FROM messages m
          JOIN users u ON m.sender_id = u.id
+         LEFT JOIN email_messages em ON em.message_id = m.id
          WHERE m.conversation_id = ? AND m.deleted_at IS NULL
          ORDER BY m.created_at DESC
          LIMIT ? OFFSET ?
@@ -46,9 +48,11 @@ export class MessageRepository {
 
   async findByIdWithSender(id: number): Promise<MessageRow | null> {
     const messages = await this.db.query<MessageRow[]>(
-      `SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture, u.status
+      `SELECT m.*, u.first_name, u.last_name, u.email, u.profile_picture, u.status,
+              em.delivery_status
        FROM messages m
        JOIN users u ON m.sender_id = u.id
+       LEFT JOIN email_messages em ON em.message_id = m.id
        WHERE m.id = ? AND m.deleted_at IS NULL`,
       [id],
     );

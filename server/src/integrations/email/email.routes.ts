@@ -13,6 +13,7 @@
 import { Router } from 'express';
 import type { EmailController } from './email.controller';
 import type { AuthMiddleware } from '../../middleware/auth.middleware';
+import { agentSendLimiter, webhookLimiter } from '../../middleware/rateLimit.middleware';
 
 export const createEmailRouter = (
   emailController: EmailController,
@@ -20,9 +21,9 @@ export const createEmailRouter = (
 ): Router => {
   const router = Router();
 
-  router.post('/webhook', emailController.webhook);
+  router.post('/webhook', webhookLimiter, emailController.webhook);
   router.get('/health', emailController.health);
-  router.post('/messages', auth.authenticate, emailController.sendMessage);
+  router.post('/messages', auth.authenticate, agentSendLimiter, emailController.sendMessage);
   router.post('/conversations/:id/assign', auth.authenticate, emailController.assignAgent);
   router.delete('/conversations/:id/assign', auth.authenticate, emailController.unassignAgent);
   router.post('/setup-webhook', auth.authenticate, auth.authorizeAtLeast('admin'), emailController.setupWebhook);

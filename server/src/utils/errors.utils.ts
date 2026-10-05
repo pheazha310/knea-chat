@@ -37,3 +37,22 @@ export const getSafeErrorMessage = (error: unknown): string => {
 export const badRequest = (message: string): Error => {
   return Object.assign(new Error(message), { statusCode: 400 });
 };
+
+/**
+ * Status + client-safe message for an error caught in a controller. Errors
+ * carrying a `statusCode` (badRequest, channel delivery 502) are deliberate,
+ * user-facing rejections and pass through. Anything else is an unexpected
+ * server failure (DB down, bug): the client gets a generic 500 and the real
+ * error is logged under `context` — never a raw SQL/stack message.
+ */
+export const toClientError = (
+  error: unknown,
+  context: string,
+): { statusCode: number; message: string } => {
+  const statusCode = (error as { statusCode?: number } | null)?.statusCode;
+  if (statusCode) {
+    return { statusCode, message: getSafeErrorMessage(error) };
+  }
+  console.error(`[${context}] Unexpected error:`, error instanceof Error ? error.stack || error.message : error);
+  return { statusCode: 500, message: 'Internal server error' };
+};

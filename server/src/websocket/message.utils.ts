@@ -23,6 +23,8 @@ export interface SerializedMessage {
   isPinned: boolean;
   mentionedUserIds: number[];
   deletedAt: Date | string | null;
+  /** Outbound email only: 'pending' | 'sent' | 'failed'. Null for everything else. */
+  deliveryStatus: 'pending' | 'sent' | 'failed' | null;
 }
 
 export const serializeMessage = (message: OutgoingMessage): SerializedMessage => ({
@@ -44,4 +46,5 @@ export const serializeMessage = (message: OutgoingMessage): SerializedMessage =>
   isPinned: !!message.is_pinned,
   mentionedUserIds: message.mentionedUserIds || [],
   deletedAt: message.deleted_at,
+  deliveryStatus: message.delivery_status ?? null,
 });

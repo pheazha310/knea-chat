@@ -10,7 +10,7 @@
  *                         HMAC signature (same controller a provider hits).
  *                         Asserts the contact/conversation is found or
  *                         created, the message is persisted, the agent sees
- *                         `receive_message` + `notification` over WebSocket,
+ *                         `email.message.received` + `notification` over WebSocket,
  *                         and the external ledger row is written.
  *   3. Duplicate guard  — replaying the same Message-ID must not double-persist
  *                         (unique (channel, external_message_id) key).
@@ -303,10 +303,10 @@ async function main() {
   check('webhook POST acknowledged', hookPost.status === 200, `HTTP ${hookPost.status}`);
 
   const [msgEvent, notifEvent] = await Promise.all([
-    waitFor(agentWs.events, (e) => e?.type === 'receive_message' && JSON.stringify(e).includes(MARKER)),
+    waitFor(agentWs.events, (e) => e?.type === 'email.message.received' && JSON.stringify(e).includes(MARKER)),
     waitFor(agentWs.events, (e) => e?.type === 'notification' && JSON.stringify(e).includes(MARKER)),
   ]);
-  check("agent received 'receive_message' in realtime", !!msgEvent);
+  check("agent received 'email.message.received' in realtime", !!msgEvent);
   check("agent received 'notification' in realtime", !!notifEvent);
 
   // 5. Ground truth — ledger row + persisted message + agent-visible message.

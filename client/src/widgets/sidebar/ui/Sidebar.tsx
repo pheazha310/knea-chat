@@ -6,7 +6,7 @@ import Avatar from '../../../shared/ui/Avatar';
 import Modal from '../../../shared/ui/Modal';
 import type { User } from '../../../entities';
 
-export type AppView = 'home' | 'search' | 'messages' | 'omni' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'attendance' | 'tasks' | 'notifs' | 'bookmarks' | 'files' | 'settings';
+export type AppView = 'home' | 'search' | 'messages' | 'omni' | 'channels' | 'teams' | 'announcements' | 'meetings' | 'attendance' | 'tasks' | 'notifs' | 'bookmarks' | 'files' | 'integrations' | 'settings';
 
 interface NavItemBase {
   label: string;
@@ -44,6 +44,7 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { kind: 'view', id: 'messages', label: 'Messages', icon: 'message' },
       { kind: 'view', id: 'omni', label: 'Omni Inbox', icon: 'external' },
+      { kind: 'view', id: 'integrations', label: 'Integrations', icon: 'key' },
       { kind: 'view', id: 'channels', label: 'Channels', icon: 'hash' },
       { kind: 'view', id: 'teams', label: 'Teams', icon: 'grid' },
       { kind: 'view', id: 'announcements', label: 'Announcements', icon: 'megaphone' },
@@ -91,6 +92,16 @@ interface SidebarProps {
 }
 
 const STORAGE_KEY = 'kneachat.sidebar.collapsedGroups';
+
+/** Human label + tone for a presence status. */
+const presenceOf = (s?: string | null) =>
+  s === 'online'
+    ? { label: 'Online', tone: 'online' }
+    : s === 'away'
+      ? { label: 'Away', tone: 'away' }
+      : s === 'dnd'
+        ? { label: 'Do not disturb', tone: 'dnd' }
+        : { label: 'Offline', tone: 'offline' };
 
 const readCollapsed = (): Set<string> => {
   try {
@@ -184,10 +195,14 @@ const Sidebar = ({ view, onSelectView, unreadCounts, user }: SidebarProps) => {
         <div className="sidebar-user-info">
           <Avatar person={user} className="small" showStatus />
           <div>
-            <div className="sidebar-user-email">{user.email}</div>
-            <div className="sidebar-user-status">
+            <div className="sidebar-user-email" title={user.email}>
+              {user.email}
+            </div>
+            <div
+              className={`sidebar-user-status status-${presenceOf(user.status).tone}`}
+            >
               <span className="sidebar-status-dot" />
-              <span>Online</span>
+              <span>{presenceOf(user.status).label}</span>
             </div>
           </div>
         </div>
