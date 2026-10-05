@@ -200,7 +200,25 @@ export class OmniChannelService {
   ): Promise<ExternalContactRow> {
     const externalId = String(message.externalContactId);
     const existing = await this.externalRepository.findByChannelAndExternalId(channel, externalId);
-    if (existing) return existing;
+    if (existing) {
+      // Some providers expose a sender's display name only on a later email.
+      // Update the existing shadow contact when that name becomes available.
+      if (channel === 'email' && message.firstName) {
+        await this.externalRepository.updateContactIdentity(existing.id, {
+          username: String(message.username || externalId),
+          firstName: message.firstName,
+          lastName: message.lastName || null,
+        });
+        await this.userRepository.update(existing.user_id, {
+          first_name: message.firstName,
+          last_name: message.lastName || 'Customer',
+        });
+        existing.username = String(message.username || externalId);
+        existing.first_name = message.firstName;
+        existing.last_name = message.lastName || null;
+      }
+      return existing;
+    }
 
     // Shadow user backing the contact (required by the users-table FKs).
     const company = await this.companyRepository.findByDomain(EXTERNAL_COMPANY_DOMAIN);
@@ -619,6 +637,51 @@ export class OmniChannelService {
   // ---------------------------------------------------------------------------
   // Outbound agent reply
   // ---------------------------------------------------------------------------
+
+  /** Start a new outbound email thread addressed to a customer. */
+  async startEmailConversation(
+    agentId: number,
+    to: string,
+    subject: string,
+    text: string,
+  ): Promise<{ conversationId: number; message: OutgoingMessage }> {
+    const recipient = to.trim().toLowerCase();
+    const emailHealth = await this.requireAdapter('email').getHealth();
+    if (!emailHealth.connected) {
+      throw badRequest('Email delivery is not configured. Set up the server email provider before sending.');
+    }
+    const contact = await this.findOrCreateContact('email', {
+      externalContactId: recipient,
+      username: recipient,
+      firstName: 'Email',
+      lastName: 'Customer',
+      externalMessageId: `outbound-${crypto.randomUUID()}`,
+      content: text,
+      metadata: { email: { address: recipient } },
+    });
+
+    const conversationId = await this.conversationRepository.create({
+      type: 'direct',
+      created_by: agentId,
+      name: subject.trim(),
+      description: `Email conversation with ${recipient}`,
+    });
+    await this.conversationRepository.addMember(conversationId, contact.user_id, 'member');
+    await this.conversationRepository.addMember(conversationId, agentId, 'member');
+    await this.joinInboxAgents(conversationId);
+    await this.externalRepository.createConversation({
+      conversation_id: conversationId,
+      contact_id: contact.id,
+      channel: 'email',
+      status: 'open',
+      assigned_agent_id: agentId,
+    });
+
+    // The normal outbound path delivers through the configured email adapter,
+    // records delivery status and keeps the new conversation replyable.
+    const message = await this.sendAgentReply(conversationId, agentId, text);
+    return { conversationId, message };
+  }
 
   /**
    * Send an agent reply to the external customer through the conversation's
@@ -1042,7 +1105,10 @@ export class OmniChannelService {
       resolved.conversationId,
       resolved.channel,
     );
-    if (!latest) return null;
+    if (!latest) {
+      const conversation = await this.conversationRepository.findById(resolved.conversationId);
+      return conversation?.name ? { subject: conversation.name } : null;
+    }
     const metadata = (latest.metadata as { email?: { subject?: string; messageId?: string; references?: string | string[] } } | null) || {};
     const emailMeta = metadata.email || {};
     return {

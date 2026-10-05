@@ -35,6 +35,35 @@ export interface Conversation {
   last_delivery_error?: string | null;
   /** When the last delivery failure was recorded. */
   last_delivery_failure_at?: string | null;
+  /** Sender identity for external inbox conversations. */
+  external_contact_name?: string | null;
+  external_contact_email?: string | null;
+}
+
+/** Short customer label for inbox conversations, with a readable email fallback. */
+export function conversationContactName(
+  conversation: Conversation,
+  currentUserId: number | null,
+): string | null {
+  const other = conversation.members?.find((member) => member.id !== currentUserId);
+  const email = conversation.external_contact_email || other?.email || null;
+  const knownName = conversation.external_contact_name?.trim();
+
+  if (knownName && knownName.toLowerCase() !== email?.toLowerCase() && knownName !== 'Email Customer') {
+    return knownName;
+  }
+  if (email) {
+    const localPart = email.split('@')[0] || '';
+    const shortName = localPart
+      .replace(/[._+-]+/g, ' ')
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(' ');
+    return shortName || email;
+  }
+  return knownName || conversation.name || null;
 }
 
 export const ConversationModel = {

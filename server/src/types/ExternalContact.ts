@@ -33,6 +33,10 @@ export interface ExternalConversationRow {
   last_delivery_error?: string | null;
   /** When the last failure was recorded. */
   last_delivery_failure_at?: Date | string | null;
+  external_contact_username?: string | null;
+  external_contact_first_name?: string | null;
+  external_contact_last_name?: string | null;
+  latest_inbound_metadata?: unknown | null;
   created_at: Date | string;
   updated_at: Date | string;
 }
@@ -57,4 +61,5 @@ export interface ExternalConversationWithContact extends ExternalConversationRow
   username: string | null;
   first_name: string | null;
   last_name: string | null;
+  email_address?: string | null;
 }

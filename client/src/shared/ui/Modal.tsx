@@ -10,6 +10,11 @@ interface ModalProps {
 
 const Modal = ({ title, onClose, children, width = 470 }: ModalProps) => {
   const dialogRef = useRef<HTMLDivElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   // Escape closes the dialog, body scroll is locked while open, focus moves
   // into the dialog on mount and returns to the trigger on close.
@@ -18,19 +23,20 @@ const Modal = ({ title, onClose, children, width = 470 }: ModalProps) => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation();
-        onClose();
+        onCloseRef.current();
       }
     };
     document.addEventListener('keydown', onKeyDown);
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    dialogRef.current?.focus();
+    const autofocusTarget = dialogRef.current?.querySelector<HTMLElement>('[autofocus]');
+    (autofocusTarget || dialogRef.current)?.focus();
     return () => {
       document.removeEventListener('keydown', onKeyDown);
       document.body.style.overflow = previousOverflow;
       previouslyFocused?.focus?.();
     };
-  }, [onClose]);
+  }, []);
 
   return (
     <div className="modal-overlay anim-overlay-in" onClick={onClose}>

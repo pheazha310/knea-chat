@@ -17,7 +17,7 @@ import type { EmailWebhookHeaders, RawBodyRequest } from './email.types';
 import { isInboundEmailEnabled } from './startup-checks';
 import { toClientError } from '../../utils/errors.utils';
 import { getWebhookVerificationConfig } from '../../config/email.config';
-import { validateEmailSendBody } from './email.validator';
+import { validateEmailComposeBody, validateEmailSendBody } from './email.validator';
 
 const CHANNEL = 'email';
 
@@ -202,6 +202,27 @@ export class EmailController {
         message,
         errors: {},
       });
+    }
+  };
+
+  /** POST /api/email/compose — start an email conversation with a customer. */
+  compose = async (req: Request, res: Response): Promise<void> => {
+    const validation = validateEmailComposeBody(req.body);
+    if (!validation.ok) {
+      res.status(400).json({ success: false, message: 'Invalid email', errors: validation.errors });
+      return;
+    }
+    try {
+      const result = await this.omniService.startEmailConversation(
+        req.user!.id,
+        validation.value.to,
+        validation.value.subject,
+        validation.value.text,
+      );
+      res.status(201).json({ success: true, data: result });
+    } catch (error) {
+      const { statusCode, message } = toClientError(error, 'email');
+      res.status(statusCode).json({ success: false, message, errors: {} });
     }
   };
 

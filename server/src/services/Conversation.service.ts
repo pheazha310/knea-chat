@@ -12,6 +12,23 @@ import type { TeamRepository } from '../repositories/teamRepository';
 import type { TeamMemberRepository } from '../repositories/teamMemberRepository';
 import type { Conversation, ConversationRow } from '../types';
 
+function displayNameFromInboundMetadata(value: unknown): string | null {
+  let metadata = value;
+  if (typeof metadata === 'string') {
+    try {
+      metadata = JSON.parse(metadata);
+    } catch {
+      return null;
+    }
+  }
+  if (!metadata || typeof metadata !== 'object') return null;
+  const email = (metadata as { email?: { from?: unknown } }).email;
+  if (typeof email?.from !== 'string') return null;
+  const match = email.from.match(/^\s*(.*?)\s*<\s*[^<>]+\s*>\s*$/);
+  const name = (match?.[1] || '').trim().replace(/^(["'])(.*)\1$/, '$2').trim();
+  return name || null;
+}
+
 export class ConversationService {
   constructor(
     private conversationRepository: ConversationRepository,
@@ -216,6 +233,18 @@ export class ConversationService {
         const row = byConversationId.get(conv.id);
         if (row) {
           conv.channel = row.channel;
+          const contactName = [row.external_contact_first_name, row.external_contact_last_name]
+            .filter(Boolean)
+            .join(' ');
+          const inboundName = row.channel === 'email'
+            ? displayNameFromInboundMetadata(row.latest_inbound_metadata)
+            : null;
+          conv.external_contact_name = contactName && contactName !== 'Email Customer'
+            ? contactName
+            : inboundName || null;
+          conv.external_contact_email = row.channel === 'email'
+            ? row.external_contact_username || null
+            : null;
           conv.external_status = row.status;
           conv.assigned_agent_id = row.assigned_agent_id;
           conv.assigned_agent_name =

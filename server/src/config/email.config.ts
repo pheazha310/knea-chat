@@ -50,6 +50,12 @@ export function getSenderConfig(env: NodeJS.ProcessEnv = process.env): { name: s
   };
 }
 
+/** Optional address where customer replies should be delivered. */
+export function getReplyToAddress(env: NodeJS.ProcessEnv = process.env): string | null {
+  const address = env.EMAIL_REPLY_TO?.trim();
+  return address || null;
+}
+
 /**
  * Inbound webhook verification settings.
  *   - `secretConfigured`: either the generic secret or Resend's `whsec_`

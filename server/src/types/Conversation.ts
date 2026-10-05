@@ -30,6 +30,9 @@ export interface ConversationRow {
   last_delivery_error?: string | null;
   /** When the last delivery failure was recorded. */
   last_delivery_failure_at?: Date | string | null;
+  /** External customer identity attached by the omni-channel service. */
+  external_contact_name?: string | null;
+  external_contact_email?: string | null;
 }
 
 export interface ConversationMember {

@@ -43,6 +43,7 @@ import { useTheme } from "../../../app/providers/ThemeProvider";
 import { useToast } from "../../../app/providers/ToastProvider";
 import { wsService } from "../../../shared/lib/websocket";
 import { SystemSettingModel } from "../../../entities";
+import { conversationContactName } from "../../../entities/conversation/model/Conversation";
 import { useChatViewModel } from "../../../features/chat/model/useChatViewModel";
 import type {
   Channel,
@@ -218,6 +219,7 @@ const Dashboard = () => {
   const [showPinnedRail, setShowPinnedRail] = useState(true);
   const [threadParent, setThreadParent] = useState<ChatMessage | null>(null);
   const [view, setView] = useState<AppView>("home");
+  const [omniChannelFilter, setOmniChannelFilter] = useState<string | null>(null);
   // Latest view the user asked for — guards the async open handlers from
   // force-switching views after the user has navigated elsewhere.
   const viewRef = useRef<AppView>("home");
@@ -450,7 +452,16 @@ const Dashboard = () => {
 
   const handleSelectView = (next: AppView) => {
     viewRef.current = next;
+    if (next === "omni") setOmniChannelFilter(null);
     setView(next);
+    setSidebarOpen(false);
+    setMembersOpen(false);
+  };
+
+  const handleOpenIntegrationInbox = (channel: string) => {
+    setOmniChannelFilter(channel);
+    viewRef.current = "omni";
+    setView("omni");
     setSidebarOpen(false);
     setMembersOpen(false);
   };
@@ -974,12 +985,15 @@ const Dashboard = () => {
                               ) || null
                             }
                             className="small"
-                            showStatus
+                            showStatus={activeConversation.channel !== "email"}
                           />
                         )}
                         <h3>
                           {activeConversation.type === "channel" ? "# " : ""}
-                          {activeConversation.name}
+                          {activeConversation.channel === "email"
+                            ? conversationContactName(activeConversation, currentUserId) ||
+                              activeConversation.name
+                            : activeConversation.name}
                         </h3>
                         {activeConversation.type === "channel" ? (
                           <p>
@@ -989,6 +1003,11 @@ const Dashboard = () => {
                         ) : activeConversation.type === "team" ? (
                           <p>
                             {activeTeam?.description || "Team conversation"}
+                          </p>
+                        ) : activeConversation.channel === "email" ? (
+                          <p className="email-contact-details">
+                            {activeConversation.external_contact_email || "Customer email unavailable"}
+                            {activeConversation.name && ` · Subject: ${activeConversation.name}`}
                           </p>
                         ) : activeConversation.type === "direct" ? (
                           <p
@@ -1196,6 +1215,9 @@ const Dashboard = () => {
               currentUserId={currentUserId}
               messages={messages}
               unreadMap={unreadByConversation}
+              channelFilter={omniChannelFilter}
+              onShowAllChannels={() => setOmniChannelFilter(null)}
+              onManageIntegrations={() => handleSelectView("integrations")}
               onOpenConversation={handleOpenConversation}
               onAssignConversation={(id, agentId) =>
                 void assignConversation(id, agentId)
@@ -1203,7 +1225,7 @@ const Dashboard = () => {
               onUnassignConversation={(id) => void unassignConversation(id)}
             />
           ) : view === "integrations" ? (
-            <IntegrationsView userRole={role} />
+            <IntegrationsView userRole={role} onOpenInbox={handleOpenIntegrationInbox} />
           ) : view === "channels" ? (
             <ChannelsView
               channels={channels}

@@ -33,6 +33,12 @@ export interface EmailSendInput {
   replyToMessageId: number | null;
 }
 
+export interface EmailComposeInput {
+  to: string;
+  subject: string;
+  text: string;
+}
+
 export type ValidationResult<T> =
   | { ok: true; value: T }
   | { ok: false; errors: Record<string, string> };
@@ -76,4 +82,22 @@ export function validateEmailSendBody(body: unknown): ValidationResult<EmailSend
       replyToMessageId: hasReplyTo ? Number(input.replyToMessageId) : null,
     },
   };
+}
+
+/** Validate the first-contact email composer body. */
+export function validateEmailComposeBody(body: unknown): ValidationResult<EmailComposeInput> {
+  const input = (body && typeof body === 'object' ? body : {}) as Record<string, unknown>;
+  const errors: Record<string, string> = {};
+  const to = typeof input.to === 'string' ? input.to.trim().toLowerCase() : '';
+  const subject = typeof input.subject === 'string' ? input.subject.trim() : '';
+  const text = typeof input.text === 'string' ? input.text.trim() : '';
+
+  if (!isValidEmailAddress(to)) errors.to = 'Enter a valid customer email address';
+  if (!subject) errors.subject = 'Subject is required';
+  else if (/[\r\n]/.test(subject) || subject.length > 200) errors.subject = 'Subject must be at most 200 characters';
+  if (!text) errors.text = 'Message is required';
+  else if (text.length > MAX_REPLY_LENGTH) errors.text = `Message must be at most ${MAX_REPLY_LENGTH} characters`;
+
+  if (Object.keys(errors).length) return { ok: false, errors };
+  return { ok: true, value: { to, subject, text } };
 }

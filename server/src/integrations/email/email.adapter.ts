@@ -26,6 +26,26 @@ import { isValidEmailAddress } from './email.validator';
 
 const CHANNEL = 'email';
 
+/** Parse the display name and mailbox from a standard RFC 5322 From header. */
+function parseFromAddress(from: string): { name: string | null; email: string } {
+  const match = from.match(/^\s*(.*?)\s*<\s*([^<>]+)\s*>\s*$/);
+  const email = (match?.[2] || from).trim();
+  const name = (match?.[1] || '')
+    .trim()
+    .replace(/^(["'])(.*)\1$/, '$2')
+    .trim();
+  return { name: name || null, email };
+}
+
+function splitDisplayName(name: string | null): { firstName: string | null; lastName: string | null } {
+  if (!name) return { firstName: null, lastName: null };
+  const parts = name.split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts[0] || null,
+    lastName: parts.length > 1 ? parts.slice(1).join(' ') : null,
+  };
+}
+
 /** Minimal shape of Resend's `email.received` webhook event envelope. */
 interface ResendReceivedEvent {
   type?: string;
@@ -86,15 +106,14 @@ export class EmailChannelAdapter implements ChannelAdapter {
     }
 
     const sender = webhook.from || '';
-    const senderEmail = sender.includes('<') && sender.includes('>')
-      ? sender.match(/<(.+?)>/)?.[1] || sender
-      : sender;
+    const { email: senderEmail, name: senderName } = parseFromAddress(sender);
     // The sender becomes the contact's identity and the reply address, so a
     // malformed one (bounce daemons, spoofed garbage) is never stored.
     if (!isValidEmailAddress(senderEmail)) {
       console.warn('[email] Inbound email ignored: sender address is not a valid email');
       return [];
     }
+    const { firstName, lastName } = splitDisplayName(senderName);
 
     const text = webhook.text || '';
     const html = webhook.html || '';
@@ -146,8 +165,8 @@ export class EmailChannelAdapter implements ChannelAdapter {
       {
         externalContactId: this.normalizeEmail(senderEmail),
         username: senderEmail,
-        firstName: null,
-        lastName: null,
+        firstName,
+        lastName,
         externalMessageId: webhook.messageId || `${Date.now()}-${Math.random()}`,
         content,
         attachments: attachments.length > 0 ? attachments : undefined,
@@ -287,6 +306,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
     const result = await this.emailService.sendMail({
       from,
       to: { address: chatId },
+      replyTo: this.emailService.getReplyTo(),
       subject: options.threading?.subject || '',
       text,
       html: `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>`,
@@ -328,7 +348,7 @@ export class EmailChannelAdapter implements ChannelAdapter {
       subject: text || media.fileName,
       text,
       html: text ? `<p>${text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>` : undefined,
-      replyTo: options.replyToExternalMessageId || null,
+      replyTo: this.emailService.getReplyTo(),
       threading: options.threading || null,
       messageId: options.threading?.messageId || null,
       cc: options.cc || null,

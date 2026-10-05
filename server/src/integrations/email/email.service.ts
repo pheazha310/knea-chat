@@ -22,7 +22,7 @@ import type {
   EmailWebhookPayload,
   EmailHealthInfo,
 } from './email.types';
-import { buildSmtpTransportOptions, getSenderConfig } from '../../config/email.config';
+import { buildSmtpTransportOptions, getReplyToAddress, getSenderConfig } from '../../config/email.config';
 
 // Re-exported so existing imports (tests, scripts) keep working.
 export { buildSmtpTransportOptions } from '../../config/email.config';
@@ -105,6 +105,10 @@ export function buildThreadingHeaders(threading: EmailSendOptions['threading']):
 export function getFromAddress(): EmailAddress {
   const sender = getSenderConfig();
   return { name: sender.name || undefined, address: sender.address };
+}
+
+export function getReplyTo(): string | null {
+  return getReplyToAddress();
 }
 
 /** Minimal HTML sanitizer: strips script tags, event handlers, and dangerous protocols. */
@@ -328,6 +332,10 @@ export class EmailService {
   getFromAddress(): EmailAddress {
     const sender = getSenderConfig();
     return { name: sender.name || undefined, address: sender.address };
+  }
+
+  getReplyTo(): string | null {
+    return getReplyToAddress();
   }
 
   sanitizeHtml(html: string): string {

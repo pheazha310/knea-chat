@@ -107,8 +107,8 @@ export class IntegrationConfigService {
     return dto;
   }
 
-  async listAvailable(): Promise<AvailableChannel[]> {
-    const rows = await this.integrationConfigRepository.findAll();
+  async listAvailable(companyId: number): Promise<AvailableChannel[]> {
+    const rows = await this.integrationConfigRepository.findByCompany(companyId);
     const enabledChannels = new Set(rows.filter((r) => r.enabled).map((r) => r.channel));
 
     return KNOWN_CHANNELS.map((ch) => ({

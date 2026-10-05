@@ -24,6 +24,7 @@ export const createEmailRouter = (
   router.post('/webhook', webhookLimiter, emailController.webhook);
   router.get('/health', emailController.health);
   router.post('/messages', auth.authenticate, agentSendLimiter, emailController.sendMessage);
+  router.post('/compose', auth.authenticate, agentSendLimiter, emailController.compose);
   router.post('/conversations/:id/assign', auth.authenticate, emailController.assignAgent);
   router.delete('/conversations/:id/assign', auth.authenticate, emailController.unassignAgent);
   router.post('/setup-webhook', auth.authenticate, auth.authorizeAtLeast('admin'), emailController.setupWebhook);

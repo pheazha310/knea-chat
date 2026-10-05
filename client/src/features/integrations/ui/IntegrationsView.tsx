@@ -9,6 +9,7 @@ import { IntegrationModel } from "../../../entities/integration";
 
 interface IntegrationsViewProps {
   userRole: string;
+  onOpenInbox: (channel: string) => void;
 }
 
 type LoadingState = "idle" | "loading" | "saving" | "error";
@@ -33,7 +34,7 @@ const BrandMark = ({ icon }: { icon: string }) => {
   ) : <Icon name="grid" size={21} strokeWidth={1.8} />;
 };
 
-const IntegrationsView = ({ userRole }: IntegrationsViewProps) => {
+const IntegrationsView = ({ userRole, onOpenInbox }: IntegrationsViewProps) => {
   const [integrations, setIntegrations] = useState<IntegrationConfig[]>([]);
   const [available, setAvailable] = useState<AvailableChannel[]>([]);
   const [state, setState] = useState<LoadingState>("idle");
@@ -81,6 +82,7 @@ const IntegrationsView = ({ userRole }: IntegrationsViewProps) => {
         if (res.data.success) {
           showToast(`${channel} enabled`, { type: "success" });
           await load();
+          onOpenInbox(channel);
         } else {
           showToast(res.data.message || "Failed to enable integration", {
             type: "error",
@@ -184,6 +186,8 @@ const IntegrationsView = ({ userRole }: IntegrationsViewProps) => {
             const isSupported = ch.supported;
             const isSaving = state === "saving";
             const isPopular = popularChannels.has(ch.channel);
+            const canUse = isSupported && !isSaving && (isEnabled || isAdmin);
+            const health = integration?.health;
 
             return (
               <div
@@ -207,6 +211,14 @@ const IntegrationsView = ({ userRole }: IntegrationsViewProps) => {
                 {!isSupported && (
                   <span className="integration-availability">Coming soon</span>
                 )}
+                {isSupported && !isAdmin && (
+                  <span className="integration-availability">Admin access required</span>
+                )}
+                {isSupported && isEnabled && (
+                  <span className={`integration-availability ${health?.connected ? "connected" : "needs-setup"}`}>
+                    {health?.connected ? "Connected" : "Enabled · setup required"}
+                  </span>
+                )}
 
                 <div className="integration-card-actions">
                   {isEnabled && isAdmin && (
@@ -219,18 +231,30 @@ const IntegrationsView = ({ userRole }: IntegrationsViewProps) => {
                       Check health
                     </button>
                   )}
+                  {isEnabled && isAdmin && (
+                    <button
+                      className="integration-mini-button"
+                      type="button"
+                      onClick={() => void handleToggle(ch.channel, false)}
+                      disabled={isSaving}
+                    >
+                      Disable
+                    </button>
+                  )}
                   <button
                     className={`integration-action ${isEnabled ? "manage" : ""}`}
                     type="button"
                     onClick={() => {
                       if (!isSupported) return;
                       if (isAdmin) {
-                        void handleToggle(ch.channel, !isEnabled);
+                        if (isEnabled) onOpenInbox(ch.channel);
+                        else void handleToggle(ch.channel, true);
                       }
                     }}
-                    disabled={!isSupported || isSaving}
+                    disabled={!canUse}
+                    title={!isEnabled && !isAdmin ? "Only workspace admins can add integrations" : undefined}
                   >
-                    {isEnabled ? "Manage" : isSupported ? "Add" : "Coming soon"}
+                    {isEnabled ? "Open inbox" : !isSupported ? "Coming soon" : !isAdmin ? "Admin only" : "Add & open inbox"}
                   </button>
                 </div>
 

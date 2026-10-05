@@ -12,6 +12,12 @@ export interface OmniChannelCapabilities {
 }
 
 export const OmniModel = {
+  /** Start a new customer conversation by sending an outbound email. */
+  startEmail: (input: { to: string; subject: string; text: string }) =>
+    api.post<{
+      success: boolean;
+      data: { conversationId: number; message: Message };
+    }>('/email/compose', input),
   /**
    * Which channels support which outbound features (e.g. `media` — file/voice
    * relay). Read-only and secret-free, so it is fetched without auth concerns

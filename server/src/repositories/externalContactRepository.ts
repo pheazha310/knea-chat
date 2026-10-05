@@ -182,7 +182,15 @@ export class ExternalContactRepository {
     if (conversationIds.length === 0) return [];
     const placeholders = conversationIds.map(() => '?').join(',');
     return this.db.query<ExternalConversationRow[]>(
-      `SELECT * FROM external_conversations WHERE conversation_id IN (${placeholders})`,
+      `SELECT ec.*, ext.username AS external_contact_username,
+              ext.first_name AS external_contact_first_name,
+              ext.last_name AS external_contact_last_name,
+              (SELECT em.metadata FROM external_messages em
+               WHERE em.conversation_id = ec.conversation_id AND em.direction = 'inbound'
+               ORDER BY em.external_timestamp DESC, em.id DESC LIMIT 1) AS latest_inbound_metadata
+       FROM external_conversations ec
+       JOIN external_contacts ext ON ext.id = ec.contact_id
+       WHERE ec.conversation_id IN (${placeholders})`,
       conversationIds,
     );
   }
@@ -195,7 +203,7 @@ export class ExternalContactRepository {
     conversationId: number,
   ): Promise<ExternalConversationWithContact | null> {
     const rows = await this.db.query<ExternalConversationWithContact[]>(
-      `SELECT ec.*, ext.external_contact_id, ext.username, ext.first_name, ext.last_name
+      `SELECT ec.*, ext.external_contact_id, ext.username, ext.first_name, ext.last_name, ext.email_address
        FROM external_conversations ec
        JOIN external_contacts ext ON ext.id = ec.contact_id
        WHERE ec.conversation_id = ? LIMIT 1`,
@@ -213,6 +221,16 @@ export class ExternalContactRepository {
       [conversation_id, contact_id, channel, status || 'open', assigned_agent_id || null],
     );
     return result.insertId;
+  }
+
+  async updateContactIdentity(
+    contactId: number,
+    data: { username: string; firstName: string; lastName: string | null },
+  ): Promise<void> {
+    await this.db.query<ResultSetHeader>(
+      'UPDATE external_contacts SET username = ?, first_name = ?, last_name = ? WHERE id = ?',
+      [data.username, data.firstName, data.lastName, contactId],
+    );
   }
 
   async updateConversationStatus(

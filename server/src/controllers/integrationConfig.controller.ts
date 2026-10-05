@@ -26,9 +26,9 @@ export class IntegrationConfigController {
     }
   };
 
-  listAvailable = async (_req: Request, res: Response): Promise<void> => {
+  listAvailable = async (req: Request, res: Response): Promise<void> => {
     try {
-      const channels = await this.integrationConfigService.listAvailable();
+      const channels = await this.integrationConfigService.listAvailable(req.user!.companyId);
       res.status(200).json({ success: true, data: channels });
     } catch (error) {
       const { statusCode, message } = toClientError(error, 'integrations');
